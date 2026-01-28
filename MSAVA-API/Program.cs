@@ -112,6 +112,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();
 builder.Services.AddScoped<IFileIngestionService, FileIngestionService>();
+builder.Services.AddScoped<IFileDeduplicationService, FileDeduplicationService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IFileQueryService, FileQueryService>();
 builder.Services.AddScoped<ISeedingService, SeedingService>();
