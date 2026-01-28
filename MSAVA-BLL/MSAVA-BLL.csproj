@@ -16,8 +16,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Newtonsoft.Json" />
-    <PackageReference Include="System.Drawing.Common" />
+    <PackageReference Include="NPOI" />
+    <PackageReference Include="SixLabors.ImageSharp" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+    <PackageReference Include="TagLibSharp" />
     <PackageReference Include="YoutubeExplode" />
   </ItemGroup>
 
