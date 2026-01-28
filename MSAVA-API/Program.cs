@@ -3,8 +3,8 @@ using MSAVA_API.Handlers;
 using MSAVA_API.Middleware;
 using MSAVA_BLL.Services;
 using MSAVA_BLL.Services.Interfaces;
-using MSAVA_DAL.Contexts;
-using MSAVA_DAL.Models;
+using MSAVA_INF.Contexts;
+using MSAVA_INF.Models;
 using MSAVA_INF.Environment;
 using MSAVA_INF.Managers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -18,10 +18,9 @@ using System.Text.Json;
 using Serilog;
 using Serilog.Events;
 using MSAVA_BLL.Loggers;
-using MSAVA_BLL.Services.Fetch;
-using MSAVA_BLL.Services.Persistence;
-using MSAVA_BLL.Services.Retrieval;
-using MSAVA_BLL.Services.Access;
+using MSAVA_BLL.Services.Auth;
+using MSAVA_BLL.Services.Files;
+using MSAVA_BLL.Services.Import;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -110,18 +109,18 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 
 // Register services
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IReturnFileService, FileReturnService>();
-builder.Services.AddScoped<IStoreFileService, FileUploadService>();
-builder.Services.AddScoped<ILoginService, LoginService>();
-builder.Services.AddScoped<ISearchFileService, FileSearchService>();
+builder.Services.AddScoped<IUserSessionService, UserSessionService>();
+builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();
+builder.Services.AddScoped<IFileIngestionService, FileIngestionService>();
+builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddScoped<IFileQueryService, FileQueryService>();
 builder.Services.AddScoped<ISeedingService, SeedingService>();
-builder.Services.AddScoped<FileWriteService>();
+builder.Services.AddScoped<FilePersistenceService>();
 builder.Services.AddScoped<AccessGroupService>();
 builder.Services.AddScoped<InviteCodeService>();
-builder.Services.AddScoped<FetchYouTubeFileService>();
-builder.Services.AddScoped<FetchGoogleDriveService>();
-// builder.Services.AddScoped<FetchTwitterFileService>(); // Not ready yet
+builder.Services.AddScoped<YouTubeImportService>();
+builder.Services.AddScoped<GoogleDriveImportService>();
+builder.Services.AddScoped<OneDriveImportService>();
 
 // Register custom loggers
 builder.Services.AddScoped<ServiceLogger>();
@@ -130,6 +129,7 @@ builder.Services.AddScoped<ServiceLogger>();
 builder.Services.AddSingleton<IAuthorizationHandler, NotBannedHandler>();
 
 // Register managers
+builder.Services.AddSingleton<MetadataStore>();
 builder.Services.AddScoped<FileManager>();
 
 // JWT Authentication setup
@@ -180,32 +180,32 @@ app.UseStaticFiles(new StaticFileOptions
     OnPrepareResponse = ctx =>
     {
         var filePath = ctx.File.PhysicalPath;
-        var metaPath = filePath + ".meta.json";
-
-        if (!System.IO.File.Exists(metaPath))
+        if (string.IsNullOrEmpty(filePath))
         {
             ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
             ctx.Context.Abort();
             return;
         }
 
+        var fileName = Path.GetFileName(filePath);
+        var lastDot = fileName.LastIndexOf('.');
+        if (lastDot <= 0)
+        {
+            ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            ctx.Context.Abort();
+            return;
+        }
+
+        var hashHex = fileName[..lastDot].ToUpperInvariant();
+        var extension = fileName[(lastDot + 1)..].ToLowerInvariant();
+
         try
         {
-            var metaJson = System.IO.File.ReadAllText(metaPath);
-            var metaDoc = JsonDocument.Parse(metaJson);
-            bool anyPublic= false;
-            if (metaDoc.RootElement.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var element in metaDoc.RootElement.EnumerateArray())
-                {
-                    if (element.TryGetProperty("PublicDownload", out var publicProp) && publicProp.GetBoolean())
-                    {
-                        anyPublic = true;
-                        break;
-                    }
-                }
-            }
-            if (!anyPublic)
+            var metadataStore = ctx.Context.RequestServices.GetRequiredService<MetadataStore>();
+            var fileHash = Convert.FromHexString(hashHex);
+            var refId = metadataStore.CheckAccess(fileHash, extension, userAccessGroups: null);
+
+            if (refId is null)
             {
                 ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 ctx.Context.Abort();

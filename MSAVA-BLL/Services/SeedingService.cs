@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using MSAVA_DAL.Models;
+using MSAVA_INF.Models;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Environment;
 using System;
 using System.Linq;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Loggers;
-using MSAVA_DAL.Contexts;
+using MSAVA_INF.Contexts;
 using Microsoft.EntityFrameworkCore;
 
 namespace MSAVA_BLL.Services

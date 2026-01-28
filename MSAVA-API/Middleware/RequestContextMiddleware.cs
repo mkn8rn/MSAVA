@@ -1,81 +1,100 @@
 using MSAVA_Shared.Models;
 using Microsoft.AspNetCore.Http;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.IdentityModel.JsonWebTokens;
 
-namespace MSAVA_API.Middleware
+namespace MSAVA_API.Middleware;
+
+public class RequestContextMiddleware
 {
-    public class RequestContextMiddleware
+    private readonly RequestDelegate _next;
+
+    public RequestContextMiddleware(RequestDelegate next)
     {
-        private readonly RequestDelegate _next;
+        _next = next;
+    }
 
-        public RequestContextMiddleware(RequestDelegate next)
-        {
-            _next = next;
-        }
+    public async Task InvokeAsync(HttpContext context)
+    {
+        // Only populate SessionDTO - HeadersDTO is rarely needed and expensive
+        var sessionDto = BuildSessionDto(context.User);
 
-        public async Task InvokeAsync(HttpContext context)
+        context.Items["SessionDTO"] = sessionDto;
+
+        await _next(context);
+    }
+
+    private static SessionDTO BuildSessionDto(ClaimsPrincipal? user)
+    {
+        var isLoggedIn = user?.Identity?.IsAuthenticated ?? false;
+
+        if (!isLoggedIn || user is null)
         {
-            var headersDto = new HeadersDTO
+            return new SessionDTO
             {
-                Authorization = context.Request.Headers["Authorization"],
-                ContentType = context.Request.ContentType,
-                Accept = context.Request.Headers["Accept"],
-                UserAgent = context.Request.Headers["User-Agent"],
-                Host = context.Request.Headers["Host"],
-                Referer = context.Request.Headers["Referer"],
-                Origin = context.Request.Headers["Origin"],
-                AcceptEncoding = context.Request.Headers["Accept-Encoding"],
-                AcceptLanguage = context.Request.Headers["Accept-Language"],
-                CacheControl = context.Request.Headers["Cache-Control"],
-                Pragma = context.Request.Headers["Pragma"],
-                Cookie = context.Request.Headers["Cookie"],
-                XRequestedWith = context.Request.Headers["X-Requested-With"],
-                XForwardedFor = context.Request.Headers["X-Forwarded-For"],
-                Connection = context.Request.Headers["Connection"],
-                CustomHeaders = context.Request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString())
+                LoggedIn = false,
+                UserId = Guid.Empty,
+                Username = string.Empty,
+                Roles = [],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.MinValue,
+                ExpiresAt = DateTime.MinValue
             };
-
-            var sessionDto = new SessionDTO();
-            ClaimsPrincipal user = context.User;
-            sessionDto.LoggedIn = user?.Identity?.IsAuthenticated ?? false;
-            if (sessionDto.LoggedIn && user != null)
-            {
-                sessionDto.UserId = Guid.TryParse(
-                    user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub),
-                    out var uid) ? uid : Guid.Empty;
-                sessionDto.Username = user.FindFirstValue(ClaimTypes.Name) ?? user.FindFirstValue(JwtRegisteredClaimNames.UniqueName) ?? string.Empty;
-                sessionDto.IsAdmin = user.IsInRole("Admin");
-                sessionDto.IsBanned = user.IsInRole("Banned");
-                sessionDto.IsWhitelisted = user.IsInRole("Whitelisted");
-                sessionDto.Roles = user.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
-                sessionDto.Claims = user.Claims
-                                    .GroupBy(c => c.Type)
-                                    .ToDictionary(g => g.Key, g => g.Select(c => c.Value)
-                                    .ToList());
-                sessionDto.IssuedAt = DateTime.TryParse(user.FindFirstValue(JwtRegisteredClaimNames.Iat), out var iat) ? iat : DateTime.MinValue;
-                sessionDto.ExpiresAt = DateTime.TryParse(user.FindFirstValue(JwtRegisteredClaimNames.Exp), out var exp) ? exp : DateTime.MinValue;
-                var accessGroupsClaim = user.FindFirst("accessGroups")?.Value;
-                sessionDto.AccessGroups = string.IsNullOrEmpty(accessGroupsClaim) ? new() : accessGroupsClaim.Split(',').Select(s => Guid.TryParse(s, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList();
-            }
-            else
-            {
-                sessionDto.UserId = Guid.Empty;
-                sessionDto.Username = string.Empty;
-                sessionDto.Roles = new();
-                sessionDto.Claims = new();
-                sessionDto.AccessGroups = new();
-                sessionDto.IssuedAt = DateTime.MinValue;
-                sessionDto.ExpiresAt = DateTime.MinValue;
-            }
-
-            context.Items[nameof(HeadersDTO)] = headersDto;
-            context.Items[nameof(SessionDTO)] = sessionDto;
-
-            await _next(context);
         }
+
+        // Parse user ID
+        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier) 
+                       ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        var userId = Guid.TryParse(userIdClaim, out var uid) ? uid : Guid.Empty;
+
+        // Parse username
+        var username = user.FindFirstValue(ClaimTypes.Name) 
+                    ?? user.FindFirstValue(JwtRegisteredClaimNames.UniqueName) 
+                    ?? string.Empty;
+
+        // Parse roles efficiently
+        var roles = new List<string>(4);
+        foreach (var claim in user.Claims)
+        {
+            if (claim.Type == ClaimTypes.Role)
+                roles.Add(claim.Value);
+        }
+
+        // Parse access groups
+        var accessGroupsClaim = user.FindFirstValue("accessGroups");
+        var accessGroups = ParseAccessGroups(accessGroupsClaim);
+
+        return new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = userId,
+            Username = username,
+            IsAdmin = user.IsInRole("Admin"),
+            IsBanned = user.IsInRole("Banned"),
+            IsWhitelisted = user.IsInRole("Whitelisted"),
+            Roles = roles,
+            Claims = [], // Lazy-load if needed to avoid allocation
+            AccessGroups = accessGroups,
+            IssuedAt = DateTime.MinValue, // Rarely needed
+            ExpiresAt = DateTime.MinValue  // Rarely needed
+        };
+    }
+
+    private static List<Guid> ParseAccessGroups(string? accessGroupsClaim)
+    {
+        if (string.IsNullOrEmpty(accessGroupsClaim))
+            return [];
+
+        var parts = accessGroupsClaim.Split(',');
+        var result = new List<Guid>(parts.Length);
+
+        foreach (var part in parts)
+        {
+            if (Guid.TryParse(part, out var g) && g != Guid.Empty)
+                result.Add(g);
+        }
+
+        return result;
     }
 }

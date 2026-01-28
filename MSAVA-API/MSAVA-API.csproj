@@ -36,7 +36,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\MSAVA-DAL\MSAVA-DAL.csproj" />
 		<ProjectReference Include="..\MSAVA-BLL\MSAVA-BLL.csproj" />
 		<ProjectReference Include="..\MSAVA-INF\MSAVA-INF.csproj" />
 	</ItemGroup>

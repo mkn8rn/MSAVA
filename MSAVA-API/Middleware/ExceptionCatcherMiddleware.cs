@@ -1,5 +1,5 @@
 using MSAVA_Shared.Models;
-using MSAVA_DAL.Models;
+using MSAVA_INF.Models;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
@@ -10,7 +10,7 @@ using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
-using MSAVA_DAL.Contexts;
+using MSAVA_INF.Contexts;
 
 namespace MSAVA_API.Middleware
 {

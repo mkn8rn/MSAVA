@@ -1,173 +1,226 @@
-using MSAVA_DAL.Models;
-using MSAVA_DAL.Contexts;
+using MSAVA_INF.Models;
+using MSAVA_INF.Contexts;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Concurrent;
 using System.Text;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 
-namespace MSAVA_BLL.Loggers
+namespace MSAVA_BLL.Loggers;
+
+public class ServiceLogger : IDisposable
 {
-    public class ServiceLogger
+    private readonly ILogger<ServiceLogger> _logger;
+    private readonly BaseDataContext _context;
+    private readonly ConcurrentQueue<object> _logQueue = new();
+    private readonly Timer _flushTimer;
+    private readonly object _flushLock = new();
+    private bool _disposed;
+
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(5);
+    private const int MaxBatchSize = 100;
+
+    public ServiceLogger(ILogger<ServiceLogger> logger, BaseDataContext context)
     {
-        private readonly ILogger<ServiceLogger> _logger;
-        private readonly BaseDataContext _context;
-        public ServiceLogger(
-            ILogger<ServiceLogger> logger,
-            BaseDataContext context)
-        {
-            _logger = logger;
-            _context = context;
-        }
+        _logger = logger;
+        _context = context;
+        _flushTimer = new Timer(_ => FlushLogs(), null, FlushInterval, FlushInterval);
+    }
 
-        public void LogInformation(string message)
-        {
-            _logger.LogInformation("{Message}", message);
-        }
+    public void LogInformation(string message)
+    {
+        _logger.LogInformation("{Message}", message);
+    }
 
-        public string SanitizeString(string message)
+    public string SanitizeString(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return string.Empty;
+
+        var sb = new StringBuilder(Math.Min(message.Length * 2, 200));
+        int maxLen = Math.Min(message.Length, 200);
+
+        for (int i = 0; i < maxLen; i++)
         {
-            if (string.IsNullOrEmpty(message))
+            char c = message[i];
+            string? replacement = c switch
             {
-                return string.Empty;
+                '<' => "&lt;",
+                '>' => "&gt;",
+                '"' => "&quot;",
+                '\'' => "&#39;",
+                '&' => "&amp;",
+                '\n' or '\r' => " ",
+                '\t' => " ",
+                _ when char.IsControl(c) => "",
+                _ => null
+            };
+
+            if (replacement != null)
+                sb.Append(replacement);
+            else
+                sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    public void WriteLog(int statusCode, string message, Guid? userId)
+    {
+        var errorLog = new ErrorLogDB
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            StatusCode = statusCode,
+            Timestamp = DateTime.UtcNow
+        };
+
+        string sanitizedMessage = SanitizeString(message);
+        _logger.LogError("Status Code: {StatusCode}, Message: {Message}, UserId: {UserId}", statusCode, sanitizedMessage, userId);
+
+        _logQueue.Enqueue(errorLog);
+        TryFlushIfFull();
+    }
+
+    public void WriteLog(InviteLogActions action, string message, Guid userId, Guid codeId)
+    {
+        var inviteLog = new InviteLogDB
+        {
+            Id = Guid.NewGuid(),
+            Action = action,
+            UserId = userId,
+            InviteCodeId = codeId,
+            Timestamp = DateTime.UtcNow
+        };
+
+        string sanitizedMessage = SanitizeString(message);
+        _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, InviteCodeId: {CodeId}", action, sanitizedMessage, userId, codeId);
+
+        _logQueue.Enqueue(inviteLog);
+        TryFlushIfFull();
+    }
+
+    public void WriteLog(GroupLogActions action, string message, Guid userId, Guid groupId)
+    {
+        var groupLog = new GroupLogDB
+        {
+            Id = Guid.NewGuid(),
+            Action = action,
+            UserId = userId,
+            GroupId = groupId,
+            Timestamp = DateTime.UtcNow
+        };
+
+        string sanitizedMessage = SanitizeString(message);
+        _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, GroupId: {GroupId}", action, sanitizedMessage, userId, groupId);
+
+        _logQueue.Enqueue(groupLog);
+        TryFlushIfFull();
+    }
+
+    public void WriteLog(AccessLogActions action, string message, Guid userId, string fileNameWithExtension, Guid refId)
+    {
+        var accessLog = new AccessLogDB
+        {
+            Id = Guid.NewGuid(),
+            Action = action,
+            UserId = userId,
+            FileRefId = refId,
+            Timestamp = DateTime.UtcNow
+        };
+
+        string sanitizedMessage = SanitizeString(message);
+        string sanitizedFileName = SanitizeString(fileNameWithExtension);
+        _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, File: {FileName}, FileRefId: {RefId}", action, sanitizedMessage, userId, sanitizedFileName, refId);
+
+        _logQueue.Enqueue(accessLog);
+        TryFlushIfFull();
+    }
+
+    public void WriteLog(AccessLogActions action, string message, Guid userId, Guid refId)
+    {
+        var accessLog = new AccessLogDB
+        {
+            Id = Guid.NewGuid(),
+            Action = action,
+            UserId = userId,
+            FileRefId = refId,
+            Timestamp = DateTime.UtcNow
+        };
+
+        string sanitizedMessage = SanitizeString(message);
+        _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, FileRefId: {RefId}", action, sanitizedMessage, userId, refId);
+
+        _logQueue.Enqueue(accessLog);
+        TryFlushIfFull();
+    }
+
+    public void WriteLog(UserLogAction action, string message, Guid userId, Guid? adminId)
+    {
+        var userLog = new UserLogDB
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            AdminId = adminId,
+            Action = action,
+            Timestamp = DateTime.UtcNow
+        };
+
+        string sanitizedMessage = SanitizeString(message);
+        _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, AdminId: {AdminId}", action, sanitizedMessage, userId, adminId);
+
+        _logQueue.Enqueue(userLog);
+        TryFlushIfFull();
+    }
+
+    private void TryFlushIfFull()
+    {
+        if (_logQueue.Count >= MaxBatchSize)
+            FlushLogs();
+    }
+
+    private void FlushLogs()
+    {
+        if (_logQueue.IsEmpty) return;
+
+        lock (_flushLock)
+        {
+            if (_logQueue.IsEmpty) return;
+
+            var batch = new List<object>(MaxBatchSize);
+            while (batch.Count < MaxBatchSize && _logQueue.TryDequeue(out var log))
+            {
+                batch.Add(log);
             }
-            string sanitizedMessage = message.Replace(Environment.NewLine, "");
-            sanitizedMessage = message
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;")
-                .Replace("\"", "&quot;")
-                .Replace("'", "&#39;")
-                .Replace("&", "&amp;")
-                .Replace(";", "&#59;")
-                .Replace(":", "&#58;")
-                .Replace("(", "&#40;")
-                .Replace(")", "&#41;")
-                .Replace("{", "&#123;")
-                .Replace("}", "&#125;")
-                .Replace("[", "&#91;")
-                .Replace("]", "&#93;")
-                .Replace("`", "&#96;")
-                .Replace("\\", "&#92;")
-                .Replace("/", "&#47;")
-                .Replace("=", "&#61;")
-                .Replace("+", "&#43;")
-                .Replace("$", "&#36;")
-                .Replace("%", "&#37;")
-                .Replace("!", "&#33;")
-                .Replace("@", "&#64;")
-                .Replace("#", "&#35;")
-                .Replace("^", "&#94;")
-                .Replace("*", "&#42;")
-                .Replace("|", "&#124;")
-                .Replace("~", "&#126;")
-                .Replace(",", "&#44;")
-                .Replace(".", "&#46;")
-                .Replace("?", "&#63;")
-                .Replace("\t", "&#9;");
-            sanitizedMessage = sanitizedMessage.Length > 200 ? sanitizedMessage.Substring(0, 200) : sanitizedMessage;
-            return sanitizedMessage;
-        }
 
-        public void WriteLog(int statusCode, string message, Guid? userId)
-        {
-            var errorLog = new ErrorLogDB
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                StatusCode = statusCode,
-                Timestamp = DateTime.UtcNow
-            };
-            string sanitizedMessage = SanitizeString(message);
-            _logger.LogError("Status Code: {StatusCode}, Message: {Message}, UserId: {UserId}", statusCode, sanitizedMessage, userId);
-            _context.ErrorLogs.Add(errorLog);
-            _context.SaveChanges();
-        }
+            if (batch.Count == 0) return;
 
-        public void WriteLog(InviteLogActions action, string message, Guid userId, Guid codeId)
-        {
-            var inviteLog = new InviteLogDB
+            try
             {
-                Id = Guid.NewGuid(),
-                Action = action,
-                UserId = userId,
-                InviteCodeId = codeId,
-                Timestamp = DateTime.UtcNow
-            };
+                foreach (var log in batch)
+                {
+                    switch (log)
+                    {
+                        case ErrorLogDB e: _context.ErrorLogs.Add(e); break;
+                        case InviteLogDB i: _context.InviteLogs.Add(i); break;
+                        case GroupLogDB g: _context.GroupLogs.Add(g); break;
+                        case AccessLogDB a: _context.AccessLogs.Add(a); break;
+                        case UserLogDB u: _context.UserLogs.Add(u); break;
+                    }
+                }
+                _context.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to flush {Count} log entries to database", batch.Count);
+            }
+        }
+    }
 
-            string sanitizedMessage = SanitizeString(message);
-            string actionString = action.ToString();
-            _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, InviteCodeId: {CodeId}", actionString, sanitizedMessage, userId, codeId);
-            _context.InviteLogs.Add(inviteLog);
-            _context.SaveChanges();
-        }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
 
-        public void WriteLog(GroupLogActions action, string message, Guid userId, Guid groupId)
-        {
-            var groupLog = new GroupLogDB
-            {
-                Id = Guid.NewGuid(),
-                Action = action,
-                UserId = userId,
-                GroupId = groupId,
-                Timestamp = DateTime.UtcNow
-            };
-            string sanitizedMessage = SanitizeString(message);
-            string actionString = action.ToString();
-            _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, GroupId: {GroupId}", actionString, sanitizedMessage, userId, groupId);
-            _context.GroupLogs.Add(groupLog);
-            _context.SaveChanges();
-        }
-
-        public void WriteLog(AccessLogActions action, string message, Guid userId, string fileNameWithExtension, Guid refId)
-        {
-            var accessLog = new AccessLogDB
-            {
-                Id = Guid.NewGuid(),
-                Action = action,
-                UserId = userId,
-                FileRefId = refId,
-                Timestamp = DateTime.UtcNow
-            };
-            string sanitizedMessage = SanitizeString(message);
-            string sanitizedFileName = SanitizeString(fileNameWithExtension);
-            string actionString = action.ToString();
-            _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, File: {fileNameWithExtension}, FileRefId: {refId}", actionString, sanitizedMessage, userId, sanitizedFileName, refId);
-            _context.AccessLogs.Add(accessLog);
-            _context.SaveChanges();
-        }
-        public void WriteLog(AccessLogActions action, string message, Guid userId, Guid refId)
-        {
-            var accessLog = new AccessLogDB
-            {
-                Id = Guid.NewGuid(),
-                Action = action,
-                UserId = userId,
-                FileRefId = refId,
-                Timestamp = DateTime.UtcNow
-            };
-            string sanitizedMessage = SanitizeString(message);
-            string actionString = action.ToString();
-            _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, FileRefId: {refId}", actionString, sanitizedMessage, userId, refId);
-            _context.AccessLogs.Add(accessLog);
-            _context.SaveChanges();
-        }
-
-        public void WriteLog(UserLogAction action, string message, Guid userId, Guid? adminId)
-        {
-            var userLog = new UserLogDB
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                AdminId = adminId,
-                Action = action,
-            };
-            string sanitizedMessage = SanitizeString(message);
-            string actionString = action.ToString();
-            _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, AdminId: {AdminId}", actionString, sanitizedMessage, userId, adminId);
-            _context.UserLogs.Add(userLog);
-            _context.SaveChanges();
-        }
+        _flushTimer.Dispose();
+        FlushLogs(); // Final flush
     }
 }

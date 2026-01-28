@@ -1,216 +1,169 @@
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection.Metadata;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+using MSAVA_INF.Contexts;
 
-namespace MSAVA_INF.Managers
+namespace MSAVA_INF.Managers;
+
+public class FileManager
 {
-    public class FileManager
+    private readonly MetadataStore _metadataStore;
+
+    public FileManager(MetadataStore metadataStore)
     {
-        public FileManager()
+        _metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
+    }
+
+    public async Task SaveFileContentAsync(
+        SavedFileMetaRecord fileMeta,
+        Stream contentStream,
+        CancellationToken cancellationToken = default,
+        bool overwrite = false)
+    {
+        ArgumentNullException.ThrowIfNull(contentStream);
+
+        if (!contentStream.CanSeek)
         {
+            var ms = new MemoryStream();
+            await contentStream.CopyToAsync(ms, cancellationToken);
+            ms.Position = 0;
+            contentStream = ms;
+        }
+        else
+        {
+            contentStream.Position = 0;
         }
 
-        public async Task SaveFileContentAsync(SavedFileMetaJSON fileMeta, byte[] fileHash, string fileExtension, Stream contentStream, CancellationToken cancellationToken = default, bool overwrite = false)
+        if (!FileContentUtils.ValidateFileContent(contentStream, fileMeta.FileExtension))
+            throw new ArgumentException("File content does not match the provided extension.");
+
+        if (contentStream.CanSeek)
+            contentStream.Position = 0;
+
+        string path = FileContentUtils.GetFullPath(fileMeta.FileHash, fileMeta.FileExtension);
+        bool fileExists = File.Exists(path);
+
+        if (overwrite || !fileExists)
         {
-            if (contentStream == null) throw new ArgumentNullException(nameof(contentStream));
-            if (!contentStream.CanSeek)
+            await using var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+            await contentStream.CopyToAsync(fileStream, cancellationToken);
+        }
+
+        _metadataStore.AddMetadata(fileMeta);
+    }
+
+    public async Task SaveTempFileAsync(
+        SavedFileMetaRecord fileMeta,
+        string tempFilePath,
+        CancellationToken cancellationToken = default,
+        bool overwrite = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tempFilePath);
+
+        if (!File.Exists(tempFilePath))
+            throw new FileNotFoundException("Temporary file not found.", tempFilePath);
+
+        string path = FileContentUtils.GetFullPath(fileMeta.FileHash, fileMeta.FileExtension);
+        bool fileExists = File.Exists(path);
+
+        try
+        {
+            await using (var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                MemoryStream ms = new MemoryStream();
-                await contentStream.CopyToAsync(ms, cancellationToken);
-                ms.Position = 0;
-                contentStream = ms;
-            }
-            else
-            {
-                contentStream.Position = 0;
+                if (!FileContentUtils.ValidateFileContent(tempFileStream, fileMeta.FileExtension))
+                    throw new ArgumentException("File content does not match the provided extension.");
             }
 
-            bool isValid = FileContentUtils.ValidateFileContent(contentStream, fileExtension);
-            if (!isValid)
-                throw new ArgumentException("File content does not match the provided extension.");
-
-            if (contentStream.CanSeek)
-                contentStream.Position = 0;
-
-            string path = FileContentUtils.GetFullPath(fileHash, fileExtension);
-            bool fileExists = File.Exists(path);
             if (overwrite || !fileExists)
             {
-                using (FileStream fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-                {
-                    await contentStream.CopyToAsync(fileStream, cancellationToken);
-                }
+                if (fileExists)
+                    File.Delete(path);
+
+                File.Move(tempFilePath, path);
             }
 
-            string metaPath = path + ".meta.json";
-            List<SavedFileMetaJSON> metaList = new List<SavedFileMetaJSON>();
-            if (File.Exists(metaPath))
-            {
-                string existingJson = await File.ReadAllTextAsync(metaPath, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(existingJson))
-                {
-                    try
-                    {
-                        List<SavedFileMetaJSON> existingList = JsonSerializer.Deserialize<List<SavedFileMetaJSON>>(existingJson) ?? new List<SavedFileMetaJSON>();
-                        if (existingList != null)
-                            metaList.AddRange(existingList);
-                    }
-                    catch { /* ignore corrupted data, continue */ }
-                }
-            }
-            metaList.Add(fileMeta);
-            string metaJson = JsonSerializer.Serialize(metaList);
-            await File.WriteAllTextAsync(metaPath, metaJson, cancellationToken);
+            _metadataStore.AddMetadata(fileMeta);
         }
-
-        public async Task SaveTempFileAsync(
-            SavedFileMetaJSON fileMeta,
-            byte[] fileHash,
-            string fileExtension,
-            string tempFilePath,
-            CancellationToken cancellationToken = default,
-            bool overwrite = false)
+        finally
         {
-            if (string.IsNullOrWhiteSpace(tempFilePath))
-                throw new ArgumentNullException(nameof(tempFilePath));
-            if (!File.Exists(tempFilePath))
-                throw new FileNotFoundException("Temporary file not found.", tempFilePath);
-
-            string path = FileContentUtils.GetFullPath(fileHash, fileExtension);
-            bool fileExists = File.Exists(path);
-
-            try
+            if (File.Exists(tempFilePath))
             {
-                using (var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                {
-                    bool isValid = FileContentUtils.ValidateFileContent(tempFileStream, fileExtension);
-                    if (!isValid)
-                        throw new ArgumentException("File content does not match the provided extension.");
-                }
-
-                if (overwrite || !fileExists)
-                {
-                    if (fileExists)
-                        File.Delete(path);
-
-                    File.Move(tempFilePath, path);
-                }
-
-                string metaPath = path + ".meta.json";
-                List<SavedFileMetaJSON> metaList = new List<SavedFileMetaJSON>();
-                if (File.Exists(metaPath))
-                {
-                    string existingJson = await File.ReadAllTextAsync(metaPath, cancellationToken);
-                    if (!string.IsNullOrWhiteSpace(existingJson))
-                    {
-                        try
-                        {
-                            List<SavedFileMetaJSON> existingList = JsonSerializer.Deserialize<List<SavedFileMetaJSON>>(existingJson) ?? new List<SavedFileMetaJSON>();
-                            if (existingList != null)
-                                metaList.AddRange(existingList);
-                        }
-                        catch { /* ignore corrupted data, continue */ }
-                    }
-                }
-                metaList.Add(fileMeta);
-                string metaJson = JsonSerializer.Serialize(metaList);
-                await File.WriteAllTextAsync(metaPath, metaJson, cancellationToken);
-            }
-            finally
-            {
-                if (File.Exists(tempFilePath))
-                {
-                    try { File.Delete(tempFilePath); } catch { /* ignore */ }
-                }
+                try { File.Delete(tempFilePath); } catch { /* ignore */ }
             }
         }
+    }
 
-        public FileStream GetFileStream(string fileNameWithExtension)
+    public FileStream GetFileStream(string fileNameWithExtension)
+    {
+        string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
+        var options = FileStreamUtils.GetDefaultFileStreamOptions();
+        return GetFileStream(fullPath, options);
+    }
+
+    public FileStream GetFileStream(byte[] fileHash, string fileExtension)
+    {
+        string fullPath = FileContentUtils.GetFullPath(fileHash, fileExtension);
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException($"File not found: {fullPath}");
+
+        var options = FileStreamUtils.GetDefaultFileStreamOptions();
+        return GetFileStream(fullPath, options);
+    }
+
+    public FileStream GetFileStream(string fullPath, FileStreamOptions options)
+    {
+        return new FileStream(fullPath, options);
+    }
+
+    public PhysicalFileResult GetPhysicalFile(string fileNameWithExtension, string contentType)
+    {
+        string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
+
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException($"File not found: {fullPath}");
+
+        string fileName = Path.GetFileName(fullPath);
+        return new PhysicalFileResult(fullPath, contentType)
         {
-            string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
+            FileDownloadName = fileName,
+            EnableRangeProcessing = true
+        };
+    }
 
-            FileStreamOptions options = FileStreamUtils.GetDefaultFileStreamOptions();
-            return GetFileStream(fullPath, options);
-        }
-        public FileStream GetFileStream(byte[] fileHash, string fileExtension)
+    public bool FileExists(byte[] fileHash, string fileExtension)
+    {
+        string path = FileContentUtils.GetFullPath(fileHash, fileExtension);
+        return File.Exists(path);
+    }
+
+    public void DeleteFileContent(byte[] fileHash, string fileExtension)
+    {
+        string path = FileContentUtils.GetFullPath(fileHash, fileExtension);
+        if (File.Exists(path))
         {
-            string fullPath = FileContentUtils.GetFullPath(fileHash, fileExtension);
-            if (!File.Exists(fullPath))
-                throw new FileNotFoundException($"File not found: {fullPath}");
-
-            FileStreamOptions options = FileStreamUtils.GetDefaultFileStreamOptions();
-            return GetFileStream(fullPath, options);
-        }
-        public FileStream GetFileStream(string fullPath, FileStreamOptions options)
-        {
-            return new FileStream(fullPath, options);
+            File.Delete(path);
         }
 
-        public PhysicalFileResult GetPhysicalFile(string fileNameWithExtension, string contentType)
-        {
-            string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
+        _metadataStore.DeleteByFileHash(fileHash, fileExtension);
+    }
 
-            if (!File.Exists(fullPath))
-                throw new FileNotFoundException($"File not found: {fullPath}");
+    public Guid CheckFileAccessByPath(string fileNameWithExtension, List<Guid>? userAccessGroups)
+    {
+        string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
 
-            string fileName = Path.GetFileName(fullPath);
-            return new PhysicalFileResult(fullPath, contentType)
-            {
-                FileDownloadName = fileName,
-                EnableRangeProcessing = true
-            };
-        }
+        var (hashHex, extension) = ParseFileName(fileNameWithExtension);
+        return _metadataStore.CheckAccessOrThrow(hashHex, extension, userAccessGroups);
+    }
 
-        public bool FileExists(byte[] fileHash, string fileExtension)
-        {
-            string path = FileContentUtils.GetFullPath(fileHash, fileExtension);
-            return File.Exists(path);
-        }
+    private static (string HashHex, string Extension) ParseFileName(string fileNameWithExtension)
+    {
+        var lastDot = fileNameWithExtension.LastIndexOf('.');
+        if (lastDot <= 0)
+            throw new ArgumentException("Invalid file name format.", nameof(fileNameWithExtension));
 
-        public void DeleteFileContent(byte[] fileHash, string fileExtension)
-        {
-            string path = FileContentUtils.GetFullPath(fileHash, fileExtension);
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
+        var hashHex = fileNameWithExtension[..lastDot].ToUpperInvariant();
+        var extension = fileNameWithExtension[(lastDot + 1)..].ToLowerInvariant();
 
-        public Guid CheckFileAccessByPath(string fileNameWithExtension, List<Guid> userAccessGroups)
-        {
-            string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
-
-            string metaPath = fullPath + ".meta.json";
-
-            if (!File.Exists(metaPath))
-            {
-                throw new UnauthorizedAccessException($"Meta file '{metaPath}' does not exist.");
-            }
-
-            string metaJson = File.ReadAllText(metaPath);
-            List<SavedFileMetaJSON> metaList = JsonSerializer.Deserialize<List<SavedFileMetaJSON>>(metaJson) ?? new List<SavedFileMetaJSON>();
-
-            if (metaList == null || metaList.Count == 0)
-            {
-                throw new FileNotFoundException($"Meta file '{metaPath}' is invalid or empty.");
-            }
-
-            foreach (var meta in metaList)
-            {
-                if (meta.PublicDownload || (userAccessGroups != null && userAccessGroups.Contains(meta.AccessGroupId)))
-                {
-                    return meta.RefId;
-                }
-            }
-            throw new UnauthorizedAccessException("User does not have permission to access this file.");
-        }
+        return (hashHex, extension);
     }
 }

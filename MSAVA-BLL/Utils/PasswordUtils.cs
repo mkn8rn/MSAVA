@@ -1,32 +1,31 @@
 using System.Security.Cryptography;
-using System.Text;
 
-namespace MSAVA_BLL.Utils
+namespace MSAVA_BLL.Utils;
+
+public static class PasswordUtils
 {
-    public static class PasswordUtils
+    private const int SaltSize = 32;
+    private const int HashIterations = 100000;
+    private const int HashByteSize = 32;
+
+    public static byte[] GenerateSalt()
     {
-        private const int SaltSize = 32;
-        private const int HashIterations = 100000;
-        private const int HashByteSize = 32;
+        return RandomNumberGenerator.GetBytes(SaltSize);
+    }
 
-        public static byte[] GenerateSalt()
-        {
-            byte[] salt = new byte[SaltSize];
-            using RandomNumberGenerator rng = RandomNumberGenerator.Create();
-            rng.GetBytes(salt);
-            return salt;
-        }
+    public static byte[] HashPassword(string password, byte[] salt)
+    {
+        return Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            HashIterations,
+            HashAlgorithmName.SHA256,
+            HashByteSize);
+    }
 
-        public static byte[] HashPassword(string password, byte[] salt)
-        {
-            using Rfc2898DeriveBytes pbkdf2 = new Rfc2898DeriveBytes(password, salt, HashIterations, HashAlgorithmName.SHA256);
-            return pbkdf2.GetBytes(HashByteSize);
-        }
-
-        public static bool VerifyPassword(string password, byte[] storedHash, byte[] storedSalt)
-        {
-            byte[] hash = HashPassword(password, storedSalt);
-            return CryptographicOperations.FixedTimeEquals(hash, storedHash);
-        }
+    public static bool VerifyPassword(string password, byte[] storedHash, byte[] storedSalt)
+    {
+        var hash = HashPassword(password, storedSalt);
+        return CryptographicOperations.FixedTimeEquals(hash, storedHash);
     }
 }

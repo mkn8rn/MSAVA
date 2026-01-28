@@ -1,48 +1,42 @@
-using MSAVA_BLL.Services.Access;
-using MSAVA_DAL.Models;
+using MSAVA_BLL.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.Threading.Tasks;
 
-namespace MSAVA_API.Controllers
+namespace MSAVA_API.Controllers;
+
+[Route("api/accessgroups")]
+[ApiController]
+[Authorize]
+public class AccessGroupsController : ControllerBase
 {
-    [Route("api/accessgroups")]
-    [ApiController]
-    [Authorize]
-    public class AccessGroupsController : ControllerBase
+    private readonly AccessGroupService _accessGroupService;
+
+    public AccessGroupsController(AccessGroupService accessGroupService)
     {
-        private readonly AccessGroupService _accessGroupService;
+        _accessGroupService = accessGroupService ?? throw new ArgumentNullException(nameof(accessGroupService));
+    }
 
-        public AccessGroupsController(AccessGroupService accessGroupService)
+    [HttpPost("create")]
+    public ActionResult CreateAccessGroup([FromQuery][Required] string name)
+    {
+        var id = _accessGroupService.CreateAccessGroup(name);
+        return Ok(id);
+    }
+
+    [HttpPost("adduser")]
+    public async Task<ActionResult> AddUserToAccessGroup(
+        [FromQuery][Required] Guid userId,
+        [FromQuery][Required] Guid accessGroupId)
+    {
+        try
         {
-            _accessGroupService = accessGroupService ?? throw new ArgumentNullException(nameof(accessGroupService));
+            await _accessGroupService.AddAccessGroupToUserAsync(userId, accessGroupId);
+            return Ok();
         }
-
-        [HttpPost("create")]
-        public ActionResult CreateAccessGroup(
-            [FromQuery][Required] string name)
+        catch (KeyNotFoundException ex)
         {
-            var id = _accessGroupService.CreateAccessGroup(name);
-            return Ok(id);
-        }
-
-        [HttpPost("adduser")]
-        public async Task<ActionResult> AddUserToAccessGroup(
-            [FromQuery][Required] Guid userId,
-            [FromQuery][Required] Guid accessGroupId)
-        {
-            try
-            {
-                await _accessGroupService.AddAccessGroupToUserAsync(userId, accessGroupId);
-                return Ok();
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(ex.Message);
-            }
+            return NotFound(ex.Message);
         }
     }
 }
