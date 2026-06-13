@@ -182,8 +182,6 @@ public class AuthenticationServiceTests
 
         public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
 
-        public void DeleteUser(Guid id) => throw new NotSupportedException();
-
         public bool IsSessionUserAdmin() => true;
 
         public UserDTO GetSessionUser() => throw new NotSupportedException();

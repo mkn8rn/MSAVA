@@ -98,17 +98,6 @@ public class UserSessionService : IUserSessionService
         return userDbs.Select(MappingUtils.MapUserDTOWithRelationships).ToList();
     }
 
-    public void DeleteUser(Guid id)
-    {
-        var user = _context.Users.SingleOrDefault(u => u.Id == id)
-            ?? throw new KeyNotFoundException($"User with id {id} not found.");
-
-        _context.Users.Remove(user);
-        _context.SaveChanges();
-
-        _serviceLogger.WriteLog(UserLogAction.AccountDeletion, $"User deleted: {id}", id, null);
-    }
-
     private SessionDTO GetTokenSessionDto()
     {
         if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto)

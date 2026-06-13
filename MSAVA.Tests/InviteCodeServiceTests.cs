@@ -111,8 +111,6 @@ public class InviteCodeServiceTests
 
         public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
 
-        public void DeleteUser(Guid id) => throw new NotSupportedException();
-
         public bool IsSessionUserAdmin() => _sessionUser.IsAdmin;
 
         public UserDTO GetSessionUser() => throw new NotSupportedException();

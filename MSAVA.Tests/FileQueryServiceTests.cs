@@ -135,7 +135,6 @@ public class FileQueryServiceTests
 
         public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
         public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
-        public void DeleteUser(Guid id) => throw new NotSupportedException();
         public bool IsSessionUserAdmin() => _session.IsAdmin;
         public UserDTO GetSessionUser() => throw new NotSupportedException();
         public Guid GetSessionUserId() => _session.UserId;

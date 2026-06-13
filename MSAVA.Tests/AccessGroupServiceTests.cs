@@ -170,8 +170,6 @@ public class AccessGroupServiceTests
 
         public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
 
-        public void DeleteUser(Guid id) => throw new NotSupportedException();
-
         public bool IsSessionUserAdmin() => _isAdmin;
 
         public UserDTO GetSessionUser() => throw new NotSupportedException();

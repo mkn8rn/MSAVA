@@ -7,7 +7,6 @@ public interface IUserSessionService
 {
     UserDTO GetUserById(Guid id);
     List<UserDTO> GetAllUsers();
-    void DeleteUser(Guid id);
     bool IsSessionUserAdmin();
     UserDTO GetSessionUser();
     Guid GetSessionUserId();
