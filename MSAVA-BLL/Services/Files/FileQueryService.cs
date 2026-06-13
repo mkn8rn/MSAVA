@@ -21,11 +21,8 @@ public class FileQueryService : IFileQueryService
     public async Task<List<Guid>> GetAllFileGuidsAsync(CancellationToken cancellationToken = default)
     {
         var session = _userService.GetSessionClaims();
-        var groupIds = session.AccessGroups;
 
-        return await _context.FileData
-            .AsNoTracking()
-            .Where(f => f.FileReference != null && groupIds.Contains(f.FileReference.AccessGroupId))
+        return await GetVisibleFileDataQuery(session)
             .Select(f => f.Id)
             .ToListAsync(cancellationToken);
     }
@@ -33,12 +30,9 @@ public class FileQueryService : IFileQueryService
     public async Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(CancellationToken cancellationToken = default)
     {
         var session = _userService.GetSessionClaims();
-        var groupIds = session.AccessGroups;
 
-        var dbList = await _context.FileData
-            .AsNoTracking()
+        var dbList = await GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
-            .Where(f => f.FileReference != null && groupIds.Contains(f.FileReference.AccessGroupId))
             .ToListAsync(cancellationToken);
 
         return dbList.Select(MappingUtils.MapSearchFileDataDTO).ToList();
@@ -52,11 +46,8 @@ public class FileQueryService : IFileQueryService
         CancellationToken cancellationToken = default)
     {
         var session = _userService.GetSessionClaims();
-        var groupIds = session.AccessGroups;
 
-        var query = _context.FileData
-            .AsNoTracking()
-            .Where(f => f.FileReference != null && groupIds.Contains(f.FileReference.AccessGroupId));
+        var query = GetVisibleFileDataQuery(session);
 
         query = ApplySearchFilters(query, tag, category, name, description);
 
@@ -71,17 +62,30 @@ public class FileQueryService : IFileQueryService
         CancellationToken cancellationToken = default)
     {
         var session = _userService.GetSessionClaims();
-        var groupIds = session.AccessGroups;
 
-        var query = _context.FileData
-            .AsNoTracking()
+        var query = GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
-            .Where(f => f.FileReference != null && groupIds.Contains(f.FileReference.AccessGroupId));
+            .AsQueryable();
 
         query = ApplySearchFilters(query, tag, category, name, description);
 
         var dbList = await query.ToListAsync(cancellationToken);
         return dbList.Select(MappingUtils.MapSearchFileDataDTO).ToList();
+    }
+
+    private IQueryable<SavedFileDataDB> GetVisibleFileDataQuery(SessionDTO session)
+    {
+        var query = _context.FileData
+            .AsNoTracking()
+            .Where(fileData => fileData.FileReference != null);
+
+        if (session.IsAdmin)
+            return query;
+
+        var groupIds = session.AccessGroups ?? [];
+        return query.Where(fileData =>
+            fileData.PublicViewing ||
+            groupIds.Contains(fileData.FileReference!.AccessGroupId));
     }
 
     private static IQueryable<SavedFileDataDB> ApplySearchFilters(
