@@ -34,11 +34,19 @@ public static class FileContentUtils
 
     private static char GetHexChar(int value) => (char)(value < 10 ? '0' + value : 'a' + value - 10);
 
-    public static bool IsSafeFilePath(string fullPath)
+    public static bool IsSafeFilePath(string? fullPath)
     {
+        if (string.IsNullOrWhiteSpace(fullPath))
+            return false;
+
         try
         {
-            return fullPath.StartsWith(FilesDirectory, StringComparison.OrdinalIgnoreCase);
+            var filesDirectory = Path.GetFullPath(FilesDirectory);
+            if (!Path.EndsInDirectorySeparator(filesDirectory))
+                filesDirectory += Path.DirectorySeparatorChar;
+
+            var candidatePath = Path.GetFullPath(fullPath);
+            return candidatePath.StartsWith(filesDirectory, StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
