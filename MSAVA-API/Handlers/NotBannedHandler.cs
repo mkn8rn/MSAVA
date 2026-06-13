@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using MSAVA_INF.Contexts;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Threading.Tasks;
-using MSAVA_BLL.Utils;
 
 namespace MSAVA_API.Handlers
 {
@@ -9,13 +10,47 @@ namespace MSAVA_API.Handlers
 
     public class NotBannedHandler : AuthorizationHandler<NotBannedRequirement>
     {
-        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, NotBannedRequirement requirement)
+        private readonly BaseDataContext _context;
+        private readonly ILogger<NotBannedHandler> _logger;
+
+        public NotBannedHandler(BaseDataContext context, ILogger<NotBannedHandler> logger)
         {
-            if (!AuthUtils.IsBanned(context.User))
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, NotBannedRequirement requirement)
+        {
+            Guid? userId = GetAuthenticatedUserId(context.User);
+            if (userId is null)
+                return;
+
+            try
             {
-                context.Succeed(requirement);
+                bool userCanAccess = await _context.Users
+                    .AsNoTracking()
+                    .AnyAsync(user => user.Id == userId.Value && !user.IsBanned);
+
+                if (userCanAccess)
+                    context.Succeed(requirement);
             }
-            return Task.CompletedTask;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to validate ban status for user {UserId}", userId);
+            }
+        }
+
+        private static Guid? GetAuthenticatedUserId(ClaimsPrincipal user)
+        {
+            if (user.Identity?.IsAuthenticated != true)
+                return null;
+
+            string? userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+
+            return Guid.TryParse(userIdClaim, out var userId) && userId != Guid.Empty
+                ? userId
+                : null;
         }
     }
 }

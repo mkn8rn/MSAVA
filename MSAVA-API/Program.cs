@@ -126,8 +126,8 @@ builder.Services.AddScoped<OneDriveImportService>();
 // Register custom loggers
 builder.Services.AddScoped<ServiceLogger>();
 
-// Register singletons
-builder.Services.AddSingleton<IAuthorizationHandler, NotBannedHandler>();
+// Register authorization handlers
+builder.Services.AddScoped<IAuthorizationHandler, NotBannedHandler>();
 
 // Register managers
 builder.Services.AddSingleton<MetadataStore>();
