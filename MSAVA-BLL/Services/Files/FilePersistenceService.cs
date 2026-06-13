@@ -73,7 +73,7 @@ public class FilePersistenceService
 
         string fileName = MappingUtils.GetFileName(savedFileDb);
         string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
-        string fileNameWithExtension = $"{fileName}{fileExtension}";
+        string fileNameWithExtension = $"{fileName}.{fileExtension}";
 
         _serviceLogger.WriteLog(AccessLogActions.NewFileCreated, $"File created: {fileNameWithExtension}", sessionUserId, fileNameWithExtension, savedFileDb.Id);
 
@@ -120,7 +120,7 @@ public class FilePersistenceService
 
             string fileName = MappingUtils.GetFileName(savedFileDb);
             string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
-            string fileNameWithExtension = $"{fileName}{fileExtension}";
+            string fileNameWithExtension = $"{fileName}.{fileExtension}";
 
             _serviceLogger.WriteLog(AccessLogActions.NewFileCreated, $"File created: {fileNameWithExtension}", sessionUserId, fileNameWithExtension, savedFileDb.Id);
 

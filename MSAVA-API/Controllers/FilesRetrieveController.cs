@@ -26,7 +26,7 @@ public class FilesRetrieveController : ControllerBase
         var dto = _downloadService.GetFileStreamById(refId);
         return new FileStreamResult(dto.FileStream, "application/octet-stream")
         {
-            FileDownloadName = $"{dto.FileName}{dto.FileExtension}"
+            FileDownloadName = dto.DownloadFileName
         };
     }
 
@@ -36,7 +36,7 @@ public class FilesRetrieveController : ControllerBase
         var dto = _downloadService.GetFileStreamByPath(fileNameWithExtension);
         return new FileStreamResult(dto.FileStream, "application/octet-stream")
         {
-            FileDownloadName = $"{dto.FileName}{dto.FileExtension}"
+            FileDownloadName = dto.DownloadFileName
         };
     }
 

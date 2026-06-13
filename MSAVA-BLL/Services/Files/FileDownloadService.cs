@@ -41,7 +41,7 @@ public class FileDownloadService : IFileDownloadService
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
-        string fileNameWithExtension = $"{fileName}{extension}";
+        string fileNameWithExtension = $"{fileName}.{extension}";
 
         _serviceLogger.WriteLog(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", claims.UserId, fileNameWithExtension, db.Id);
 
@@ -59,7 +59,7 @@ public class FileDownloadService : IFileDownloadService
         string extension = FileExtensionUtils.GetFileExtension(db);
         string contentType = MetadataUtils.GetContentType(extension);
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileName, extension);
-        string fileNameWithExtension = $"{fileName}{extension}";
+        string fileNameWithExtension = $"{fileName}.{extension}";
 
         var claims = _userService.GetSessionClaims();
         _serviceLogger.WriteLog(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file for fileRefId: {db.Id}", claims.UserId, fileNameWithExtension, db.Id);
@@ -67,7 +67,7 @@ public class FileDownloadService : IFileDownloadService
         return new PhysicalReturnFileDTO
         {
             FilePath = fullPath,
-            FileName = fileName,
+            FileName = fileNameWithExtension,
             ContentType = contentType
         };
     }
@@ -96,8 +96,8 @@ public class FileDownloadService : IFileDownloadService
     {
         Guid refId = CanSessionUserAccessFile(fileNameWithExtension);
 
-        string fileName = Path.GetFileName(fileNameWithExtension);
-        string extension = Path.GetExtension(fileName).TrimStart('.');
+        string fileName = Path.GetFileNameWithoutExtension(fileNameWithExtension);
+        string extension = Path.GetExtension(fileNameWithExtension).TrimStart('.');
         FileStream fileStream = _fileManager.GetFileStream(fileNameWithExtension);
 
         var claims = _userService.GetSessionClaims();
