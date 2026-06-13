@@ -36,7 +36,9 @@ public class FilePersistenceService
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
     {
-        Guid sessionUserId = GetSessionUserId();
+        Guid sessionUserId = GetRequiredSessionUserId();
+        await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, dto.AccessGroupId, cancellationToken);
+
         string tempFilePath = Path.GetTempFileName();
 
         try
@@ -61,11 +63,13 @@ public class FilePersistenceService
 
     public async Task<Guid> CreateFileFromTempFileAsync(SaveFileFromFetchDTO dto, CancellationToken cancellationToken = default)
     {
-        Guid sessionUserId = GetSessionUserId();
         string tempFilePath = dto.TempFilePath;
 
         try
         {
+            Guid sessionUserId = GetRequiredSessionUserId();
+            await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, dto.AccessGroupId, cancellationToken);
+
             long fileLength = new FileInfo(tempFilePath).Length;
             byte[] fileHash = await ComputeFileHashAsync(tempFilePath, cancellationToken);
             var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
@@ -161,12 +165,35 @@ public class FilePersistenceService
         return hashAlgorithm.Hash ?? throw new InvalidOperationException("Hash computation failed.");
     }
 
-    private Guid GetSessionUserId()
+    private async Task EnsureSessionUserCanCreateInAccessGroupAsync(
+        Guid sessionUserId,
+        Guid accessGroupId,
+        CancellationToken cancellationToken)
     {
-        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto)
-            return sessionDto.UserId;
+        if (accessGroupId == Guid.Empty)
+            throw new ArgumentException("AccessGroupId must be provided.", nameof(accessGroupId));
 
-        return Guid.Empty;
+        bool canCreate = await _context.AccessGroups
+            .AsNoTracking()
+            .AnyAsync(
+                accessGroup => accessGroup.Id == accessGroupId &&
+                    (accessGroup.OwnerId == sessionUserId || accessGroup.Users.Any(user => user.Id == sessionUserId)),
+                cancellationToken);
+
+        if (!canCreate)
+            throw new UnauthorizedAccessException("User cannot create a file in the requested access group.");
+    }
+
+    private Guid GetRequiredSessionUserId()
+    {
+        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto &&
+            sessionDto.LoggedIn &&
+            sessionDto.UserId != Guid.Empty)
+        {
+            return sessionDto.UserId;
+        }
+
+        throw new UnauthorizedAccessException("User session not found.");
     }
 
     private void RollbackFileRegistration(SavedFileMetaRecord? metaRecord, bool contentFileCreated)
