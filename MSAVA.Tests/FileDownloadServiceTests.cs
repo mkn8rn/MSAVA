@@ -6,6 +6,7 @@ using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
+using MSAVA_INF.Utils;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
@@ -74,14 +75,65 @@ public class FileDownloadServiceTests
         }
     }
 
+    [Test]
+    public void GetPhysicalFileReturnDataById_ReusesAuthorizedSessionForAccessLog()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var fileReference = CreateFileReference(publicDownload: true);
+        string contentPath = FileContentUtils.GetFullPath(fileReference.FileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "download-session-reuse");
+            context.FileRefs.Add(fileReference);
+            context.SaveChanges();
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var session = new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false
+            };
+            var service = CreateService(context, metadataStore, session, out var userSessionService);
+
+            var result = service.GetPhysicalFileReturnDataById(fileReference.Id);
+
+            result.FilePath.Should().Be(contentPath);
+            userSessionService.SessionClaimsCalls.Should().Be(1);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static FileDownloadService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,
         SessionDTO session)
     {
+        return CreateService(context, metadataStore, session, out _);
+    }
+
+    private static FileDownloadService CreateService(
+        BaseDataContext context,
+        MetadataStore metadataStore,
+        SessionDTO session,
+        out TestUserSessionService userSessionService)
+    {
+        userSessionService = new TestUserSessionService(session);
+
         return new FileDownloadService(
             context,
-            new TestUserSessionService(session),
+            userSessionService,
             new FileManager(metadataStore),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
     }
@@ -120,6 +172,12 @@ public class FileDownloadServiceTests
             Directory.Delete(path, recursive: true);
     }
 
+    private static void DeleteFileIfPresent(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
+    }
+
     private sealed class TestUserSessionService : IUserSessionService
     {
         private readonly SessionDTO _session;
@@ -128,6 +186,8 @@ public class FileDownloadServiceTests
         {
             _session = session;
         }
+
+        public int SessionClaimsCalls { get; private set; }
 
         public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
 
@@ -141,7 +201,11 @@ public class FileDownloadServiceTests
 
         public UserDB GetSessionUserDB() => throw new NotSupportedException();
 
-        public SessionDTO GetSessionClaims() => _session;
+        public SessionDTO GetSessionClaims()
+        {
+            SessionClaimsCalls++;
+            return _session;
+        }
     }
 
     private sealed class TestDataContext : BaseDataContext

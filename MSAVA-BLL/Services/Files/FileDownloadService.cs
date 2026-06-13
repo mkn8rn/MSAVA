@@ -34,16 +34,15 @@ public class FileDownloadService : IFileDownloadService
         var db = _context.FileRefs.AsNoTracking().SingleOrDefault(r => r.Id == id)
             ?? throw new KeyNotFoundException($"File with id {id} not found.");
 
-        CanSessionUserAccessFile(db);
+        SessionDTO session = CanSessionUserAccessFile(db);
 
         FileStream fileStream = _fileManager.GetFileStream(db.FileHash, db.FileExtension.ToString());
-        var claims = _userService.GetSessionClaims();
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
         string fileNameWithExtension = $"{fileName}.{extension}";
 
-        _serviceLogger.WriteLog(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", claims.UserId, fileNameWithExtension, db.Id);
+        _serviceLogger.WriteLog(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
 
         return MappingUtils.MapReturnFileDTO(db, fileStream: fileStream);
     }
@@ -53,7 +52,7 @@ public class FileDownloadService : IFileDownloadService
         var db = _context.FileRefs.AsNoTracking().SingleOrDefault(r => r.Id == id)
             ?? throw new KeyNotFoundException($"File with id {id} not found.");
 
-        CanSessionUserAccessFile(db);
+        SessionDTO session = CanSessionUserAccessFile(db);
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
@@ -61,8 +60,7 @@ public class FileDownloadService : IFileDownloadService
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileName, extension);
         string fileNameWithExtension = $"{fileName}.{extension}";
 
-        var claims = _userService.GetSessionClaims();
-        _serviceLogger.WriteLog(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file for fileRefId: {db.Id}", claims.UserId, fileNameWithExtension, db.Id);
+        _serviceLogger.WriteLog(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
 
         return new PhysicalReturnFileDTO
         {
@@ -74,15 +72,14 @@ public class FileDownloadService : IFileDownloadService
 
     public PhysicalReturnFileDTO GetPhysicalFileReturnDataByPath(string fileNameWithExtension)
     {
-        Guid refId = CanSessionUserAccessFile(fileNameWithExtension);
+        FilePathAccess access = CanSessionUserAccessFile(fileNameWithExtension);
 
         string fileName = Path.GetFileName(fileNameWithExtension);
         string extension = Path.GetExtension(fileName).TrimStart('.');
         string contentType = MetadataUtils.GetContentType(extension);
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
 
-        var claims = _userService.GetSessionClaims();
-        _serviceLogger.WriteLog(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file by path: {fileNameWithExtension}", claims.UserId, fileNameWithExtension, refId);
+        _serviceLogger.WriteLog(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
 
         return new PhysicalReturnFileDTO
         {
@@ -94,14 +91,13 @@ public class FileDownloadService : IFileDownloadService
 
     public StreamReturnFileDTO GetFileStreamByPath(string fileNameWithExtension)
     {
-        Guid refId = CanSessionUserAccessFile(fileNameWithExtension);
+        FilePathAccess access = CanSessionUserAccessFile(fileNameWithExtension);
 
         string fileName = Path.GetFileNameWithoutExtension(fileNameWithExtension);
         string extension = Path.GetExtension(fileNameWithExtension).TrimStart('.');
         FileStream fileStream = _fileManager.GetFileStream(fileNameWithExtension);
 
-        var claims = _userService.GetSessionClaims();
-        _serviceLogger.WriteLog(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", claims.UserId, fileNameWithExtension, refId);
+        _serviceLogger.WriteLog(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
 
         return new StreamReturnFileDTO
         {
@@ -111,12 +107,13 @@ public class FileDownloadService : IFileDownloadService
         };
     }
 
-    private Guid CanSessionUserAccessFile(string fileNameWithExtension)
+    private FilePathAccess CanSessionUserAccessFile(string fileNameWithExtension)
     {
         SessionDTO claims = GetActiveSession();
         try
         {
-            return _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups);
+            Guid refId = _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups);
+            return new FilePathAccess(refId, claims);
         }
         catch (UnauthorizedAccessException)
         {
@@ -124,15 +121,15 @@ public class FileDownloadService : IFileDownloadService
         }
     }
 
-    private bool CanSessionUserAccessFile(SavedFileReferenceDB fileReference)
+    private SessionDTO CanSessionUserAccessFile(SavedFileReferenceDB fileReference)
     {
         SessionDTO claims = GetActiveSession();
 
         if (claims.IsAdmin)
-            return true;
+            return claims;
 
         if (fileReference.PublicDownload)
-            return true;
+            return claims;
 
         List<Guid> userAccessGroups = claims.AccessGroups ?? [];
         bool canAccess = userAccessGroups.Contains(fileReference.AccessGroupId);
@@ -140,7 +137,7 @@ public class FileDownloadService : IFileDownloadService
         if (!canAccess)
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
-        return canAccess;
+        return claims;
     }
 
     private SessionDTO GetActiveSession()
@@ -150,4 +147,6 @@ public class FileDownloadService : IFileDownloadService
             "Session user is required to download files.",
             "Banned users cannot download files.");
     }
+
+    private readonly record struct FilePathAccess(Guid RefId, SessionDTO Session);
 }
