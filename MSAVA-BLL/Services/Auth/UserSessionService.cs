@@ -24,6 +24,8 @@ public class UserSessionService : IUserSessionService
 
     public UserDTO GetUserById(Guid id)
     {
+        RequireCanReadUser(id);
+
         var userDb = _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
@@ -121,6 +123,21 @@ public class UserSessionService : IUserSessionService
 
         if (!session.IsAdmin)
             throw new UnauthorizedAccessException("Only admins can list users.");
+    }
+
+    private SessionDTO RequireCanReadUser(Guid userId)
+    {
+        if (userId == Guid.Empty)
+            throw new ArgumentException("User id must be provided.", nameof(userId));
+
+        SessionDTO session = RequireActiveSession(
+            "Session user is required to access users.",
+            "Banned users cannot access users.");
+
+        if (!session.IsAdmin && session.UserId != userId)
+            throw new UnauthorizedAccessException("Only admins can access other users.");
+
+        return session;
     }
 
     private SessionDTO RequireActiveSession(string missingSessionMessage, string bannedSessionMessage)
