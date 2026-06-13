@@ -54,6 +54,25 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task CreateAccessGroup_RejectsBannedSessionUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner", isBanned: true);
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger, isBanned: true);
+
+        var act = () => service.CreateAccessGroup("Editors");
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot manage access groups.");
+        context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_AddsUserWhenSessionUserOwnsGroup()
     {
         using var context = CreateContext();
@@ -121,6 +140,30 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task AddUserToAccessGroupAsync_RejectsBannedAdminSessionUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        var bannedAdmin = CreateUser("banned-admin", isAdmin: true, isBanned: true);
+        var target = CreateUser("target");
+        var accessGroup = CreateAccessGroup(owner, "Private");
+
+        context.Users.AddRange(owner, bannedAdmin, target);
+        context.AccessGroups.Add(accessGroup);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, bannedAdmin.Id, isAdmin: true, logger, isBanned: true);
+
+        Func<Task> act = () => service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot manage access groups.");
+        target.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_DoesNotDuplicateExistingMembership()
     {
         using var context = CreateContext();
@@ -155,15 +198,16 @@ public class AccessGroupServiceTests
         BaseDataContext context,
         Guid sessionUserId,
         bool isAdmin,
-        ServiceLogger logger)
+        ServiceLogger logger,
+        bool isBanned = false)
     {
         return new AccessGroupService(
             context,
-            new TestUserSessionService(sessionUserId, isAdmin),
+            new TestUserSessionService(sessionUserId, isAdmin, isBanned),
             logger);
     }
 
-    private static UserDB CreateUser(string username, bool isAdmin = false)
+    private static UserDB CreateUser(string username, bool isAdmin = false, bool isBanned = false)
     {
         return new UserDB
         {
@@ -172,7 +216,7 @@ public class AccessGroupServiceTests
             PasswordHash = [1],
             PasswordSalt = [2],
             IsAdmin = isAdmin,
-            IsBanned = false,
+            IsBanned = isBanned,
             IsWhitelisted = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -201,11 +245,13 @@ public class AccessGroupServiceTests
     {
         private readonly Guid _sessionUserId;
         private readonly bool _isAdmin;
+        private readonly bool _isBanned;
 
-        public TestUserSessionService(Guid sessionUserId, bool isAdmin)
+        public TestUserSessionService(Guid sessionUserId, bool isAdmin, bool isBanned)
         {
             _sessionUserId = sessionUserId;
             _isAdmin = isAdmin;
+            _isBanned = isBanned;
         }
 
         public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
@@ -228,7 +274,7 @@ public class AccessGroupServiceTests
                 UserId = _sessionUserId,
                 Username = "test-session",
                 IsAdmin = _isAdmin,
-                IsBanned = false,
+                IsBanned = _isBanned,
                 IsWhitelisted = true,
                 Roles = _isAdmin ? ["Admin"] : [],
                 Claims = [],

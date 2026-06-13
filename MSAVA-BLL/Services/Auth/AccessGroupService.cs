@@ -2,6 +2,7 @@ using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
+using MSAVA_Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace MSAVA_BLL.Services.Auth;
@@ -36,10 +37,10 @@ public class AccessGroupService
     public Guid CreateAccessGroup(string name)
     {
         string accessGroupName = NormalizeAccessGroupName(name);
-        Guid userId = _userService.GetSessionUserId();
+        SessionDTO session = GetActiveSession();
 
-        var user = _context.Users.SingleOrDefault(u => u.Id == userId)
-            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
+        var user = _context.Users.SingleOrDefault(u => u.Id == session.UserId)
+            ?? throw new KeyNotFoundException($"User with id {session.UserId} not found.");
 
         var accessGroup = new AccessGroupDB
         {
@@ -73,13 +74,12 @@ public class AccessGroupService
         if (accessGroupId == Guid.Empty)
             throw new ArgumentException("Access group id must be provided.", nameof(accessGroupId));
 
-        Guid sessionUserId = _userService.GetSessionUserId();
-        bool sessionUserIsAdmin = _userService.IsSessionUserAdmin();
+        SessionDTO session = GetActiveSession();
 
         var accessGroup = await _context.AccessGroups.SingleOrDefaultAsync(g => g.Id == accessGroupId, cancellationToken)
             ?? throw new KeyNotFoundException($"Access group with id {accessGroupId} not found.");
 
-        if (!sessionUserIsAdmin && accessGroup.OwnerId != sessionUserId)
+        if (!session.IsAdmin && accessGroup.OwnerId != session.UserId)
             throw new UnauthorizedAccessException("Only admins and access group owners can add users to an access group.");
 
         var user = await _context.Users
@@ -94,8 +94,20 @@ public class AccessGroupService
             user.AccessGroups.Add(accessGroup);
             await _context.SaveChangesAsync(cancellationToken);
 
-            _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", sessionUserId, accessGroup.Id);
+            _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", session.UserId, accessGroup.Id);
         }
+    }
+
+    private SessionDTO GetActiveSession()
+    {
+        SessionDTO session = _userService.GetSessionClaims();
+        if (!session.LoggedIn || session.UserId == Guid.Empty)
+            throw new UnauthorizedAccessException("Session user is required to manage access groups.");
+
+        if (session.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot manage access groups.");
+
+        return session;
     }
 
     private static string NormalizeAccessGroupName(string name)
