@@ -15,6 +15,56 @@ namespace MSAVA_API.Tests;
 public class FileDeduplicationServiceTests
 {
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForBannedSessionBeforeReferenceLookup()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-banned-session-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "banned",
+                IsAdmin = false,
+                IsBanned = true,
+                IsWhitelisted = true,
+                Roles = ["Whitelisted", "Banned"],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-1),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                FileName = "banned-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("Banned users cannot check file hashes.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+            metadataStore.GetByFileHash(contentHash, "txt").Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_RejectsRequestedAccessGroupOutsideCurrentUserMembership()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-unauthorized-group-{Guid.NewGuid()}"));
@@ -146,8 +196,7 @@ public class FileDeduplicationServiceTests
         MetadataStore metadataStore,
         Guid sessionUserId)
     {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Items["SessionDTO"] = new SessionDTO
+        return CreateService(context, metadataStore, new SessionDTO
         {
             LoggedIn = true,
             UserId = sessionUserId,
@@ -160,7 +209,16 @@ public class FileDeduplicationServiceTests
             AccessGroups = [],
             IssuedAt = DateTime.UtcNow.AddMinutes(-1),
             ExpiresAt = DateTime.UtcNow.AddHours(1)
-        };
+        });
+    }
+
+    private static FileDeduplicationService CreateService(
+        BaseDataContext context,
+        MetadataStore metadataStore,
+        SessionDTO session)
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items["SessionDTO"] = session;
 
         return new FileDeduplicationService(
             context,

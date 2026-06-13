@@ -142,6 +142,41 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_RejectsBannedSessionBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"banned-session-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id, isBanned: true);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("Banned users cannot create files.");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_RejectsAccessGroupOutsideCurrentUserMembership()
     {
         var content = Encoding.UTF8.GetBytes($"unauthorized-group-{Guid.NewGuid()}");
@@ -303,7 +338,8 @@ public class FilePersistenceServiceTests
     private static FilePersistenceService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        Guid? sessionUserId = null)
+        Guid? sessionUserId = null,
+        bool isBanned = false)
     {
         var fileManager = new FileManager(metadataStore);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
@@ -318,7 +354,7 @@ public class FilePersistenceServiceTests
                 UserId = sessionUserId.Value,
                 Username = "session",
                 IsAdmin = false,
-                IsBanned = false,
+                IsBanned = isBanned,
                 IsWhitelisted = true,
                 Roles = ["Whitelisted"],
                 Claims = [],

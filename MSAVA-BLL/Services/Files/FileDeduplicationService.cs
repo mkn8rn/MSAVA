@@ -48,10 +48,9 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.Failed(request.ContentHashHex ?? "", "Invalid hash format. Expected 64 hexadecimal characters.");
         }
 
-        var sessionUserId = GetSessionUserId();
-        if (sessionUserId == Guid.Empty)
+        if (!TryGetActiveSessionUserId(out Guid sessionUserId, out string? sessionError))
         {
-            return HashCheckResult.Failed(request.ContentHashHex, "User session not found.");
+            return HashCheckResult.Failed(request.ContentHashHex, sessionError);
         }
 
         var hashHex = request.ContentHashHex.ToUpperInvariant();
@@ -306,11 +305,27 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         return accessGroup;
     }
 
-    private Guid GetSessionUserId()
+    private bool TryGetActiveSessionUserId(out Guid userId, out string error)
     {
-        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto)
-            return sessionDto.UserId;
-        return Guid.Empty;
+        userId = Guid.Empty;
+        error = string.Empty;
+
+        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is not SessionDTO sessionDto ||
+            !sessionDto.LoggedIn ||
+            sessionDto.UserId == Guid.Empty)
+        {
+            error = "User session not found.";
+            return false;
+        }
+
+        if (sessionDto.IsBanned)
+        {
+            error = "Banned users cannot check file hashes.";
+            return false;
+        }
+
+        userId = sessionDto.UserId;
+        return true;
     }
 
     [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.Compiled)]

@@ -190,6 +190,9 @@ public class FilePersistenceService
             sessionDto.LoggedIn &&
             sessionDto.UserId != Guid.Empty)
         {
+            if (sessionDto.IsBanned)
+                throw new UnauthorizedAccessException("Banned users cannot create files.");
+
             return sessionDto.UserId;
         }
 
