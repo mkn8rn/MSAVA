@@ -1,12 +1,14 @@
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Utils;
-using MSAVA_Shared.Models;
+using MSAVA_INF.Contexts;
+using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
-using MSAVA_INF.Managers;
-using Microsoft.AspNetCore.Http;
-using System.Security.Cryptography;
-using MSAVA_INF.Contexts;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Files;
 
@@ -16,68 +18,45 @@ public class FilePersistenceService
     private readonly FileManager _fileManager;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ServiceLogger _serviceLogger;
+    private readonly ILogger<FilePersistenceService> _logger;
 
     public FilePersistenceService(
         BaseDataContext context,
         FileManager fileManager,
         IHttpContextAccessor httpContextAccessor,
-        ServiceLogger serviceLogger)
+        ServiceLogger serviceLogger,
+        ILogger<FilePersistenceService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
     {
         Guid sessionUserId = GetSessionUserId();
-
         string tempFilePath = Path.GetTempFileName();
-        long fileLength = 0;
-        byte[] fileHash;
 
-        using (var hashAlgorithm = SHA256.Create())
+        try
         {
-            await using (var tempFileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
-            await using (var cryptoStream = new CryptoStream(tempFileStream, hashAlgorithm, CryptoStreamMode.Write))
-            {
-                byte[] buffer = new byte[81920];
-                int bytesRead;
-                while ((bytesRead = await dto.Stream.ReadAsync(buffer, cancellationToken)) > 0)
-                {
-                    await cryptoStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
-                    fileLength += bytesRead;
-                }
-                await cryptoStream.FlushAsync(cancellationToken);
-            }
-            fileHash = hashAlgorithm.Hash ?? throw new InvalidOperationException("Hash computation failed.");
+            var (fileHash, fileLength) = await CopyStreamToTempFileAndHashAsync(dto.Stream, tempFilePath, cancellationToken);
+            var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
+            var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
+
+            return await PersistFileRegistrationAsync(
+                savedFileDb,
+                metaRecord,
+                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId),
+                tempFilePath,
+                sessionUserId,
+                cancellationToken);
         }
-
-        SavedFileReferenceDB savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
-        SavedFileMetaRecord metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
-
-        await _fileManager.SaveTempFileAsync(metaRecord, tempFilePath, cancellationToken);
-
-        SavedFileDataDB savedFileDataDb = MappingUtils.MapSavedFileDataDB(
-            dto,
-            savedFileDb,
-            (ulong)fileLength,
-            sessionUserId,
-            sessionUserId
-        );
-
-        _context.FileRefs.Add(savedFileDb);
-        _context.FileData.Add(savedFileDataDb);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        string fileName = MappingUtils.GetFileName(savedFileDb);
-        string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
-        string fileNameWithExtension = $"{fileName}.{fileExtension}";
-
-        _serviceLogger.WriteLog(AccessLogActions.NewFileCreated, $"File created: {fileNameWithExtension}", sessionUserId, fileNameWithExtension, savedFileDb.Id);
-
-        return savedFileDb.Id;
+        finally
+        {
+            DeleteTempFileIfPresent(tempFilePath);
+        }
     }
 
     public async Task<Guid> CreateFileFromTempFileAsync(SaveFileFromFetchDTO dto, CancellationToken cancellationToken = default)
@@ -88,31 +67,39 @@ public class FilePersistenceService
         try
         {
             long fileLength = new FileInfo(tempFilePath).Length;
-            byte[] fileHash;
+            byte[] fileHash = await ComputeFileHashAsync(tempFilePath, cancellationToken);
+            var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
+            var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
 
-            using (var hashAlgorithm = SHA256.Create())
-            {
-                await using (var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                await using (var cryptoStream = new CryptoStream(tempFileStream, hashAlgorithm, CryptoStreamMode.Read))
-                {
-                    byte[] buffer = new byte[81920];
-                    while (await cryptoStream.ReadAsync(buffer, cancellationToken) > 0) { }
-                }
-                fileHash = hashAlgorithm.Hash ?? throw new InvalidOperationException("Hash computation failed.");
-            }
-
-            SavedFileReferenceDB savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
-            SavedFileMetaRecord metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
-
-            await _fileManager.SaveTempFileAsync(metaRecord, tempFilePath, cancellationToken);
-
-            SavedFileDataDB savedFileDataDb = MappingUtils.MapSavedFileDataDB(
-                dto,
+            return await PersistFileRegistrationAsync(
                 savedFileDb,
-                (ulong)fileLength,
+                metaRecord,
+                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId),
+                tempFilePath,
                 sessionUserId,
-                sessionUserId
-            );
+                cancellationToken);
+        }
+        finally
+        {
+            DeleteTempFileIfPresent(tempFilePath);
+        }
+    }
+
+    private async Task<Guid> PersistFileRegistrationAsync(
+        SavedFileReferenceDB savedFileDb,
+        SavedFileMetaRecord metaRecord,
+        Func<SavedFileDataDB> createFileData,
+        string tempFilePath,
+        Guid sessionUserId,
+        CancellationToken cancellationToken)
+    {
+        SavedFileDataDB? savedFileDataDb = null;
+        bool contentFileCreated = false;
+
+        try
+        {
+            contentFileCreated = await _fileManager.SaveTempFileAsync(metaRecord, tempFilePath, cancellationToken);
+            savedFileDataDb = createFileData();
 
             _context.FileRefs.Add(savedFileDb);
             _context.FileData.Add(savedFileDataDb);
@@ -126,19 +113,98 @@ public class FilePersistenceService
 
             return savedFileDb.Id;
         }
-        finally
+        catch
         {
-            if (File.Exists(tempFilePath))
-            {
-                try { File.Delete(tempFilePath); } catch { /* ignore */ }
-            }
+            RollbackFileRegistration(metaRecord, contentFileCreated);
+            DetachPendingFileEntities(savedFileDb, savedFileDataDb);
+            throw;
         }
+    }
+
+    private static async Task<(byte[] FileHash, long FileLength)> CopyStreamToTempFileAndHashAsync(
+        Stream source,
+        string tempFilePath,
+        CancellationToken cancellationToken)
+    {
+        long fileLength = 0;
+
+        using var hashAlgorithm = SHA256.Create();
+        await using (var tempFileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+        await using (var cryptoStream = new CryptoStream(tempFileStream, hashAlgorithm, CryptoStreamMode.Write))
+        {
+            byte[] buffer = new byte[81920];
+            int bytesRead;
+
+            while ((bytesRead = await source.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                await cryptoStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                fileLength += bytesRead;
+            }
+
+            await cryptoStream.FlushAsync(cancellationToken);
+        }
+
+        return (hashAlgorithm.Hash ?? throw new InvalidOperationException("Hash computation failed."), fileLength);
+    }
+
+    private static async Task<byte[]> ComputeFileHashAsync(string tempFilePath, CancellationToken cancellationToken)
+    {
+        using var hashAlgorithm = SHA256.Create();
+
+        await using (var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        await using (var cryptoStream = new CryptoStream(tempFileStream, hashAlgorithm, CryptoStreamMode.Read))
+        {
+            byte[] buffer = new byte[81920];
+            while (await cryptoStream.ReadAsync(buffer, cancellationToken) > 0) { }
+        }
+
+        return hashAlgorithm.Hash ?? throw new InvalidOperationException("Hash computation failed.");
     }
 
     private Guid GetSessionUserId()
     {
         if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto)
             return sessionDto.UserId;
+
         return Guid.Empty;
+    }
+
+    private void RollbackFileRegistration(SavedFileMetaRecord? metaRecord, bool contentFileCreated)
+    {
+        if (metaRecord is null)
+            return;
+
+        try
+        {
+            _fileManager.RollbackSavedFileRegistration(metaRecord, contentFileCreated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to roll back file registration {FileRefId}", metaRecord.RefId);
+        }
+    }
+
+    private static void DeleteTempFileIfPresent(string tempFilePath)
+    {
+        if (!File.Exists(tempFilePath))
+            return;
+
+        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
+    }
+
+    private void DetachPendingFileEntities(SavedFileReferenceDB fileReference, SavedFileDataDB? fileData)
+    {
+        DetachIfTracked(fileReference);
+        DetachIfTracked(fileData);
+    }
+
+    private void DetachIfTracked(object? entity)
+    {
+        if (entity is null)
+            return;
+
+        var entry = _context.Entry(entity);
+        if (entry.State != EntityState.Detached)
+            entry.State = EntityState.Detached;
     }
 }

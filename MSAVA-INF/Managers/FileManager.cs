@@ -41,17 +41,28 @@ public class FileManager
 
         string path = FileContentUtils.GetFullPath(fileMeta.FileHash, fileMeta.FileExtension);
         bool fileExists = File.Exists(path);
+        bool contentFileCreated = false;
 
         if (overwrite || !fileExists)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
             await contentStream.CopyToAsync(fileStream, cancellationToken);
+            contentFileCreated = !fileExists;
         }
 
-        _metadataStore.AddMetadata(fileMeta);
+        try
+        {
+            _metadataStore.AddMetadata(fileMeta);
+        }
+        catch
+        {
+            RollbackSavedFileRegistration(fileMeta, contentFileCreated);
+            throw;
+        }
     }
 
-    public async Task SaveTempFileAsync(
+    public async Task<bool> SaveTempFileAsync(
         SavedFileMetaRecord fileMeta,
         string tempFilePath,
         CancellationToken cancellationToken = default,
@@ -64,6 +75,7 @@ public class FileManager
 
         string path = FileContentUtils.GetFullPath(fileMeta.FileHash, fileMeta.FileExtension);
         bool fileExists = File.Exists(path);
+        bool contentFileCreated = false;
 
         try
         {
@@ -75,13 +87,26 @@ public class FileManager
 
             if (overwrite || !fileExists)
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
                 if (fileExists)
                     File.Delete(path);
 
                 File.Move(tempFilePath, path);
+                contentFileCreated = !fileExists;
             }
 
-            _metadataStore.AddMetadata(fileMeta);
+            try
+            {
+                _metadataStore.AddMetadata(fileMeta);
+            }
+            catch
+            {
+                RollbackSavedFileRegistration(fileMeta, contentFileCreated);
+                throw;
+            }
+
+            return contentFileCreated;
         }
         finally
         {
@@ -90,6 +115,23 @@ public class FileManager
                 try { File.Delete(tempFilePath); } catch { /* ignore */ }
             }
         }
+    }
+
+    public void RollbackSavedFileRegistration(SavedFileMetaRecord fileMeta, bool deleteContentIfUnreferenced)
+    {
+        ArgumentNullException.ThrowIfNull(fileMeta);
+
+        _metadataStore.Delete(fileMeta.RefId);
+
+        if (!deleteContentIfUnreferenced)
+            return;
+
+        if (_metadataStore.Exists(fileMeta.FileHash, fileMeta.FileExtension))
+            return;
+
+        string path = FileContentUtils.GetFullPath(fileMeta.FileHash, fileMeta.FileExtension);
+        if (File.Exists(path))
+            File.Delete(path);
     }
 
     public FileStream GetFileStream(string fileNameWithExtension)
