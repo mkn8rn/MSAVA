@@ -10,6 +10,8 @@ namespace MSAVA_INF.Environment
 {
     public class LocalEnvironment : ILocalEnvironment
     {
+        private const int MinimumJwtSigningKeyBytes = 32;
+
         public LocalEnvironmentValues Values { get; }
         private readonly Dictionary<string, string> _values;
         private static readonly string EnvFolder = Path.GetDirectoryName(typeof(LocalEnvironment).Assembly.Location)!;
@@ -125,7 +127,15 @@ namespace MSAVA_INF.Environment
             string key = Values.JwtIssuerSigningKey;
             if (string.IsNullOrWhiteSpace(key))
                 throw new InvalidOperationException($"'jwt_issuer_signing_key' is missing or empty in {EnvFileName}");
-            return Encoding.UTF8.GetBytes(key);
+
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+            if (keyBytes.Length < MinimumJwtSigningKeyBytes)
+            {
+                throw new InvalidOperationException(
+                    $"'jwt_issuer_signing_key' must be at least {MinimumJwtSigningKeyBytes} UTF-8 bytes for HMAC SHA-256 signing.");
+            }
+
+            return keyBytes;
         }
     }
 }

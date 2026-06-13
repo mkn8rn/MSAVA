@@ -4,12 +4,51 @@ using Serilog.Events;
 
 namespace MSAVA_App.Tests;
 
+[NonParallelizable]
 public class LocalEnvironmentTests
 {
     [Test]
     public void Constructor_ReadsRequiredValuesFromProcessEnvironment()
     {
-        var values = new Dictionary<string, string>
+        var values = CreateValidEnvironmentValues();
+
+        using var restore = new EnvironmentVariableRestore(values.Keys);
+        SetUpperCaseEnvironmentValues(values);
+
+        var env = new LocalEnvironment();
+
+        env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
+        env.Values.PostgresBaseDbPort.Should().Be(5433);
+        env.Values.SerilogInformationLevel.Should().Be(LogEventLevel.Debug);
+        env.Values.SerilogRollingInterval.Should().Be(RollingInterval.Hour);
+        env.Values.SerilogRetainedFileCountLimit.Should().Be(7);
+        env.Values.SerilogFileSizeLimitBytes.Should().Be(2048);
+        env.Values.SerilogRollOnFileSizeLimit.Should().BeTrue();
+        env.GetSigningKeyBytes().Should().Equal(
+            System.Text.Encoding.UTF8.GetBytes("test-signing-key-with-at-least-32-characters"));
+    }
+
+    [Test]
+    public void GetSigningKeyBytes_RejectsSigningKeyShorterThan32Bytes()
+    {
+        var values = CreateValidEnvironmentValues();
+        values["jwt_issuer_signing_key"] = "too-short";
+
+        using var restore = new EnvironmentVariableRestore(values.Keys);
+        SetUpperCaseEnvironmentValues(values);
+
+        var env = new LocalEnvironment();
+
+        Action act = () => env.GetSigningKeyBytes();
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("'jwt_issuer_signing_key' must be at least 32 UTF-8 bytes for HMAC SHA-256 signing.");
+    }
+
+    private static Dictionary<string, string> CreateValidEnvironmentValues()
+    {
+        return new Dictionary<string, string>
         {
             ["jwt_issuer_signing_key"] = "test-signing-key-with-at-least-32-characters",
             ["jwt_issuer_name"] = "MSAVA Tests",
@@ -28,26 +67,15 @@ public class LocalEnvironmentTests
             ["serilog_file_size_limit_bytes"] = "2048",
             ["serilog_roll_on_file_size_limit"] = "true"
         };
+    }
 
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-
+    private static void SetUpperCaseEnvironmentValues(Dictionary<string, string> values)
+    {
         foreach (var (key, value) in values)
         {
             Environment.SetEnvironmentVariable(key, null);
             Environment.SetEnvironmentVariable(key.ToUpperInvariant(), value);
         }
-
-        var env = new LocalEnvironment();
-
-        env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
-        env.Values.PostgresBaseDbPort.Should().Be(5433);
-        env.Values.SerilogInformationLevel.Should().Be(LogEventLevel.Debug);
-        env.Values.SerilogRollingInterval.Should().Be(RollingInterval.Hour);
-        env.Values.SerilogRetainedFileCountLimit.Should().Be(7);
-        env.Values.SerilogFileSizeLimitBytes.Should().Be(2048);
-        env.Values.SerilogRollOnFileSizeLimit.Should().BeTrue();
-        env.GetSigningKeyBytes().Should().Equal(
-            System.Text.Encoding.UTF8.GetBytes("test-signing-key-with-at-least-32-characters"));
     }
 
     private sealed class EnvironmentVariableRestore : IDisposable
