@@ -31,6 +31,40 @@ public class InviteCodeServiceTests
         inviteCode.ExpiresAt.Should().Be(expiresAt);
     }
 
+    [Test]
+    public async Task CreateNewInviteCode_RejectsNonAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("member", isAdmin: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Func<Task> act = () => service.CreateNewInviteCode(maxUses: 1, DateTime.UtcNow.AddHours(1));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Only active admins can manage invite codes.");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateNewInviteCode_RejectsBannedAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("banned-admin", isAdmin: true, isBanned: true);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Func<Task> act = () => service.CreateNewInviteCode(maxUses: 1, DateTime.UtcNow.AddHours(1));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Only active admins can manage invite codes.");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
     [TestCase(0)]
     [TestCase(-1)]
     public async Task CreateNewInviteCode_RejectsNonPositiveMaxUses(int maxUses)
@@ -47,6 +81,74 @@ public class InviteCodeServiceTests
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
             .WithMessage("Invite code max uses must be greater than zero.*");
         context.InviteCodes.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task GetRemainingUses_RejectsNonAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("member", isAdmin: false);
+        var inviteCode = CreateInviteCode(user.Id);
+        context.Users.Add(user);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Action act = () => service.GetRemainingUses(inviteCode.Id);
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Only active admins can manage invite codes.");
+    }
+
+    [Test]
+    public async Task GetAllInviteCodes_RejectsNonAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("member", isAdmin: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Action act = () => service.GetAllInviteCodes();
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Only active admins can manage invite codes.");
+    }
+
+    [Test]
+    public async Task GetInviteCodeById_RejectsNonAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("member", isAdmin: false);
+        var inviteCode = CreateInviteCode(user.Id);
+        context.Users.Add(user);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Action act = () => service.GetInviteCodeById(inviteCode.Id);
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Only active admins can manage invite codes.");
+    }
+
+    [Test]
+    public async Task IsValidInviteCode_DoesNotRequireSessionUser()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = new InviteCodeService(
+            context,
+            new ThrowingUserSessionService(),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+
+        service.IsValidInviteCode(inviteCode.Id).Should().BeTrue();
     }
 
     [Test]
@@ -83,7 +185,7 @@ public class InviteCodeServiceTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(string username)
+    private static UserDB CreateUser(string username, bool isAdmin = true, bool isBanned = false)
     {
         return new UserDB
         {
@@ -91,10 +193,22 @@ public class InviteCodeServiceTests
             Username = username,
             PasswordHash = [1],
             PasswordSalt = [2],
-            IsAdmin = true,
-            IsBanned = false,
+            IsAdmin = isAdmin,
+            IsBanned = isBanned,
             IsWhitelisted = true,
             CreatedAt = DateTime.UtcNow
+        };
+    }
+
+    private static InviteCodeDB CreateInviteCode(Guid ownerId)
+    {
+        return new InviteCodeDB
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = ownerId,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            MaxUses = 3
         };
     }
 
@@ -136,6 +250,23 @@ public class InviteCodeServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             };
         }
+    }
+
+    private sealed class ThrowingUserSessionService : IUserSessionService
+    {
+        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+
+        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+
+        public bool IsSessionUserAdmin() => throw new NotSupportedException();
+
+        public UserDTO GetSessionUser() => throw new NotSupportedException();
+
+        public Guid GetSessionUserId() => throw new NotSupportedException();
+
+        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+
+        public SessionDTO GetSessionClaims() => throw new NotSupportedException();
     }
 
     private sealed class TestDataContext : BaseDataContext

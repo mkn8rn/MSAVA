@@ -24,13 +24,13 @@ public class InviteCodeService
 
     public async Task<Guid> CreateNewInviteCode(int maxUses, DateTime expiresAt)
     {
+        UserDB user = GetAuthorizedAdminUser();
+
         if (maxUses <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
 
         if (expiresAt <= DateTime.UtcNow)
             throw new ArgumentOutOfRangeException(nameof(expiresAt), expiresAt, "Invite code expiration must be in the future.");
-
-        UserDB user = _userService.GetSessionUserDB();
 
         var inviteCode = new InviteCodeDB
         {
@@ -49,16 +49,13 @@ public class InviteCodeService
         return inviteCode.Id;
     }
 
-    public int GetHowManyUses(Guid inviteCode)
-    {
-        return _context.Users.AsNoTracking().Count(u => u.InviteCodeId == inviteCode);
-    }
-
     /// <summary>
     /// Optimized: Single query to get both MaxUses and current usage count.
     /// </summary>
     public int GetRemainingUses(Guid inviteCodeId)
     {
+        EnsureCurrentUserCanManageInviteCodes();
+
         var result = _context.InviteCodes
             .AsNoTracking()
             .Where(ic => ic.Id == inviteCodeId)
@@ -96,12 +93,30 @@ public class InviteCodeService
 
     public List<InviteCodeDB> GetAllInviteCodes()
     {
+        EnsureCurrentUserCanManageInviteCodes();
+
         return _context.InviteCodes.AsNoTracking().ToList();
     }
 
     public InviteCodeDB GetInviteCodeById(Guid inviteCodeId)
     {
+        EnsureCurrentUserCanManageInviteCodes();
+
         return _context.InviteCodes.AsNoTracking().SingleOrDefault(i => i.Id == inviteCodeId)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
+    }
+
+    private void EnsureCurrentUserCanManageInviteCodes()
+    {
+        _ = GetAuthorizedAdminUser();
+    }
+
+    private UserDB GetAuthorizedAdminUser()
+    {
+        UserDB user = _userService.GetSessionUserDB();
+        if (!user.IsAdmin || user.IsBanned)
+            throw new UnauthorizedAccessException("Only active admins can manage invite codes.");
+
+        return user;
     }
 }
