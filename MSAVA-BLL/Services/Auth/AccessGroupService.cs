@@ -64,14 +64,26 @@ public class AccessGroupService
         return accessGroup.Id;
     }
 
-    public async Task AddAccessGroupToUserAsync(Guid accessGroupId, Guid userId)
+    public async Task AddUserToAccessGroupAsync(Guid userId, Guid accessGroupId, CancellationToken cancellationToken = default)
     {
-        var accessGroup = await _context.AccessGroups.SingleOrDefaultAsync(g => g.Id == accessGroupId)
+        if (userId == Guid.Empty)
+            throw new ArgumentException("User id must be provided.", nameof(userId));
+
+        if (accessGroupId == Guid.Empty)
+            throw new ArgumentException("Access group id must be provided.", nameof(accessGroupId));
+
+        Guid sessionUserId = _userService.GetSessionUserId();
+        bool sessionUserIsAdmin = _userService.IsSessionUserAdmin();
+
+        var accessGroup = await _context.AccessGroups.SingleOrDefaultAsync(g => g.Id == accessGroupId, cancellationToken)
             ?? throw new KeyNotFoundException($"Access group with id {accessGroupId} not found.");
+
+        if (!sessionUserIsAdmin && accessGroup.OwnerId != sessionUserId)
+            throw new UnauthorizedAccessException("Only admins and access group owners can add users to an access group.");
 
         var user = await _context.Users
             .Include(u => u.AccessGroups)
-            .SingleOrDefaultAsync(u => u.Id == userId)
+            .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {userId} not found.");
 
         user.AccessGroups ??= [];
@@ -79,9 +91,9 @@ public class AccessGroupService
         if (!user.AccessGroups.Any(g => g.Id == accessGroupId))
         {
             user.AccessGroups.Add(accessGroup);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
 
-            _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", user.Id, accessGroup.Id);
+            _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", sessionUserId, accessGroup.Id);
         }
     }
 }

@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="NUnit" />
@@ -21,5 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MSAVA-App\MSAVA-App.csproj" />
+    <ProjectReference Include="..\MSAVA-BLL\MSAVA-BLL.csproj" />
+    <ProjectReference Include="..\MSAVA-INF\MSAVA-INF.csproj" />
   </ItemGroup>
 </Project>

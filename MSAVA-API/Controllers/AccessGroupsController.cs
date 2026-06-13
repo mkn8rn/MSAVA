@@ -31,8 +31,12 @@ public class AccessGroupsController : ControllerBase
     {
         try
         {
-            await _accessGroupService.AddAccessGroupToUserAsync(userId, accessGroupId);
+            await _accessGroupService.AddUserToAccessGroupAsync(userId, accessGroupId);
             return Ok();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
         }
         catch (KeyNotFoundException ex)
         {
