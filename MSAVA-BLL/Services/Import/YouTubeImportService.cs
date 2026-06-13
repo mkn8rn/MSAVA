@@ -26,6 +26,8 @@ public class YouTubeImportService
             throw new ArgumentException("YouTubeUrl must be provided.", nameof(dto));
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        if (!dto.DownloadVideo && !dto.DownloadAudio)
+            throw new ArgumentException("At least one YouTube stream type must be selected.", nameof(dto));
 
         var youtube = new YoutubeClient();
         var videoId = VideoId.Parse(dto.YouTubeUrl);
@@ -81,11 +83,6 @@ public class YouTubeImportService
             await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
             await youtube.Videos.Streams.CopyToAsync(audioStream, fileStream, null, cancellationToken);
         }
-        else
-        {
-            throw new InvalidOperationException("Neither DownloadVideo nor DownloadAudio is set to true.");
-        }
-
         var fetchDto = new SaveFileFromFetchDTO
         {
             FileName = fileName,

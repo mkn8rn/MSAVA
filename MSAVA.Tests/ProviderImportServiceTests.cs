@@ -255,6 +255,37 @@ public class ProviderImportServiceTests
         }
     }
 
+    [Test]
+    public async Task YouTubeImportAsync_RejectsEmptyDownloadSelectionBeforeParsingUrl()
+    {
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "not a youtube video id",
+                AccessGroupId = Guid.NewGuid(),
+                DownloadVideo = false,
+                DownloadAudio = false
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("At least one YouTube stream type must be selected.*");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, string contentType, string body)
     {
         var response = new HttpResponseMessage(statusCode)
