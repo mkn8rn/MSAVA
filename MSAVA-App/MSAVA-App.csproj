@@ -54,6 +54,8 @@
     
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
+    <PackageReference Include="Tmds.DBus.Protocol" />
     <PackageReference Include="WinUI.TableView" />
   </ItemGroup>
     
