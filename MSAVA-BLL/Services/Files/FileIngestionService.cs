@@ -1,3 +1,4 @@
+using System.Net;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
 
@@ -78,7 +79,67 @@ public class FileIngestionService : IFileIngestionService
             throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", nameof(fileUrl));
         }
 
+        if (IsUnsafeFileHost(uri))
+            throw new ArgumentException("FileUrl host is not allowed for server-side ingestion.", nameof(fileUrl));
+
         return uri;
+    }
+
+    private static bool IsUnsafeFileHost(Uri uri)
+    {
+        var host = uri.IdnHost.TrimEnd('.').ToLowerInvariant();
+
+        if (host == "localhost" || host.EndsWith(".localhost", StringComparison.Ordinal))
+            return true;
+
+        if (host == "metadata.google.internal")
+            return true;
+
+        return IPAddress.TryParse(host, out var address) && IsPrivateOrReservedAddress(address);
+    }
+
+    private static bool IsPrivateOrReservedAddress(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+
+        if (IPAddress.IsLoopback(address))
+            return true;
+
+        var bytes = address.GetAddressBytes();
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            return IsPrivateOrReservedIPv4(bytes);
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            return IsPrivateOrReservedIPv6(bytes);
+
+        return true;
+    }
+
+    private static bool IsPrivateOrReservedIPv4(byte[] bytes)
+    {
+        return bytes[0] == 0 ||
+               bytes[0] == 10 ||
+               bytes[0] == 127 ||
+               bytes[0] >= 224 ||
+               (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) ||
+               (bytes[0] == 169 && bytes[1] == 254) ||
+               (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+               (bytes[0] == 192 && bytes[1] == 168) ||
+               (bytes[0] == 198 && (bytes[1] == 18 || bytes[1] == 19));
+    }
+
+    private static bool IsPrivateOrReservedIPv6(byte[] bytes)
+    {
+        bool unspecified = bytes.All(b => b == 0);
+        bool uniqueLocal = (bytes[0] & 0xFE) == 0xFC;
+        bool linkLocal = bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80;
+        bool siteLocal = bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0xC0;
+        bool multicast = bytes[0] == 0xFF;
+        bool documentation = bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0D && bytes[3] == 0xB8;
+
+        return unspecified || uniqueLocal || linkLocal || siteLocal || multicast || documentation;
     }
 
     public async Task<Guid> CreateFileFromFormFileAsync(SaveFileFromFormFileDTO dto, CancellationToken cancellationToken = default)

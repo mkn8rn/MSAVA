@@ -64,6 +64,41 @@ public class FileIngestionServiceTests
         }
     }
 
+    [TestCase("http://localhost/file.txt")]
+    [TestCase("http://api.localhost/file.txt")]
+    [TestCase("http://127.0.0.1/file.txt")]
+    [TestCase("http://10.0.0.5/file.txt")]
+    [TestCase("http://172.16.1.5/file.txt")]
+    [TestCase("http://192.168.1.10/file.txt")]
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://[::1]/file.txt")]
+    [TestCase("http://[fd00::1]/file.txt")]
+    [TestCase("https://metadata.google.internal/computeMetadata/v1/")]
+    public async Task CreateFileFromUrlAsync_RejectsUnsafeHostBeforeCreatingHttpClient(string fileUrl)
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, httpClientFactory);
+            var dto = CreateUrlDto(fileUrl);
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl host is not allowed for server-side ingestion.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static SaveFileFromUrlDTO CreateUrlDto(string fileUrl)
     {
         return new SaveFileFromUrlDTO
