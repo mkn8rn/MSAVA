@@ -24,6 +24,12 @@ public class InviteCodeService
 
     public async Task<Guid> CreateNewInviteCode(int maxUses, DateTime expiresAt)
     {
+        if (maxUses <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
+
+        if (expiresAt <= DateTime.UtcNow)
+            throw new ArgumentOutOfRangeException(nameof(expiresAt), expiresAt, "Invite code expiration must be in the future.");
+
         UserDB user = _userService.GetSessionUserDB();
 
         var inviteCode = new InviteCodeDB
