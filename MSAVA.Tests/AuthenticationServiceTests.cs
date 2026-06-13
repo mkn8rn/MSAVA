@@ -186,6 +186,42 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task RegisterAsync_RejectsMissingInviteCodeAsBadRequestInput()
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "new-user",
+            Password = "password",
+            InviteCode = Guid.Empty
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Invite code is required.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task RegisterAsync_RejectsInvalidInviteCodeAsBadRequestInput()
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "new-user",
+            Password = "password",
+            InviteCode = Guid.NewGuid()
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Invalid or expired invite code.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task RegisterAsync_TrimsUsernameBeforePersistingUser()
     {
         using var context = CreateContext();

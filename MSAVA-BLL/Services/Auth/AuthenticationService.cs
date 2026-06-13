@@ -121,10 +121,10 @@ public class AuthenticationService : IAuthenticationService
         EnsurePasswordProvided(request.Password);
 
         if (request.InviteCode == Guid.Empty)
-            throw new InvalidOperationException("Invite code is required.");
+            throw new ArgumentException("Invite code is required.", nameof(RegisterRequestDTO.InviteCode));
 
         if (!_inviteCodeService.IsValidInviteCode(request.InviteCode))
-            throw new InvalidOperationException("Invalid or expired invite code.");
+            throw new ArgumentException("Invalid or expired invite code.", nameof(RegisterRequestDTO.InviteCode));
 
         bool exists = await _context.Users
             .AsNoTracking()
