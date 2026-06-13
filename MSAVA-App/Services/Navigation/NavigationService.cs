@@ -65,6 +65,8 @@ public class NavigationService
         object? data = null,
         CancellationToken ct = default) where TViewModel : class
     {
+        ArgumentNullException.ThrowIfNull(owner);
+
         if (_navigator is null)
         {
             throw new InvalidOperationException("Navigator not initialized. Call NavigationService.SetNavigator at app startup (e.g., from ShellModel).");
@@ -72,11 +74,11 @@ public class NavigationService
 
         var vmType = typeof(TViewModel).FullName;
         _logger.LogInformation("NavigateTo requested: {ViewModel} | Owner={OwnerType} | Qualifier={Qualifier} | DataType={DataType}",
-            vmType, owner?.GetType().FullName, string.IsNullOrWhiteSpace(qualifier) ? "(default)" : qualifier, data?.GetType().FullName ?? "null");
+            vmType, owner.GetType().FullName, string.IsNullOrWhiteSpace(qualifier) ? "(default)" : qualifier, data?.GetType().FullName ?? "null");
 
         var allowed = await EnsureAccessAsync<TViewModel>(ct);
         // When blocked, always navigate relative to root owner and clear back stack
-        var effectiveOwner = _rootOwner ?? owner;
+        var effectiveOwner = GetEffectiveOwner(owner);
         if (!allowed)
         {
             await _navigator.NavigateViewModelAsync<LoginModel>(effectiveOwner, qualifier: Qualifiers.ClearBackStack, cancellation: ct);
@@ -87,5 +89,11 @@ public class NavigationService
 
         await _navigator.NavigateViewModelAsync<TViewModel>(effectiveOwner, qualifier: effectiveQualifier, data: data, cancellation: ct);
         return true;
+    }
+
+    private object GetEffectiveOwner(object owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        return _rootOwner ?? owner;
     }
 }
