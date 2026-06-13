@@ -286,6 +286,45 @@ public class ProviderImportServiceTests
         }
     }
 
+    [Test]
+    public void CreateFfmpegStartInfo_UsesArgumentListWithoutShellExecution()
+    {
+        var videoPath = Path.Combine("C:\\temp", "video input.webm");
+        var audioPath = Path.Combine("C:\\temp", "audio input.webm");
+        var outputPath = Path.Combine("C:\\temp", "muxed output.mp4");
+
+        var startInfo = YouTubeImportService.CreateFfmpegStartInfo(
+            "webm",
+            videoPath,
+            "webm",
+            audioPath,
+            outputPath);
+
+        startInfo.FileName.Should().Be("ffmpeg");
+        startInfo.UseShellExecute.Should().BeFalse();
+        startInfo.RedirectStandardError.Should().BeTrue();
+        startInfo.CreateNoWindow.Should().BeTrue();
+        startInfo.Arguments.Should().BeEmpty();
+        startInfo.ArgumentList.Should().Equal(
+            "-y",
+            "-f",
+            "webm",
+            "-i",
+            videoPath,
+            "-f",
+            "webm",
+            "-i",
+            audioPath,
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-shortest",
+            "-f",
+            "mp4",
+            outputPath);
+    }
+
     private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, string contentType, string body)
     {
         var response = new HttpResponseMessage(statusCode)

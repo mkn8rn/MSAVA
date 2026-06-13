@@ -1,6 +1,7 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_Shared.Models;
+using System.Diagnostics;
 using YoutubeExplode;
 using YoutubeExplode.Videos;
 using YoutubeExplode.Videos.Streams;
@@ -126,19 +127,10 @@ public class YouTubeImportService
             await using (var afs = new FileStream(audioTemp, FileMode.Create, FileAccess.Write, FileShare.None))
                 await youtube.Videos.Streams.CopyToAsync(audioStream, afs, null, cancellationToken);
 
-            string args = $"-y -f {videoFormat} -i \"{videoTemp}\" -f {audioFormat} -i \"{audioTemp}\" -c:v copy -c:a aac -shortest -f mp4 \"{outputPath}\"";
-            _serviceLogger.LogInformation($"Starting FFmpeg mux: {args}");
+            var psi = CreateFfmpegStartInfo(videoFormat, videoTemp, audioFormat, audioTemp, outputPath);
+            _serviceLogger.LogInformation($"Starting FFmpeg mux: {string.Join(' ', psi.ArgumentList)}");
 
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "ffmpeg",
-                Arguments = args,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = System.Diagnostics.Process.Start(psi)
+            using var process = Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start FFmpeg process.");
 
             var stderrTask = process.StandardError.ReadToEndAsync();
@@ -166,6 +158,42 @@ public class YouTubeImportService
             try { if (File.Exists(videoTemp)) File.Delete(videoTemp); } catch { }
             try { if (File.Exists(audioTemp)) File.Delete(audioTemp); } catch { }
         }
+    }
+
+    internal static ProcessStartInfo CreateFfmpegStartInfo(
+        string videoFormat,
+        string videoTemp,
+        string audioFormat,
+        string audioTemp,
+        string outputPath)
+    {
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "ffmpeg",
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        processStartInfo.ArgumentList.Add("-y");
+        processStartInfo.ArgumentList.Add("-f");
+        processStartInfo.ArgumentList.Add(videoFormat);
+        processStartInfo.ArgumentList.Add("-i");
+        processStartInfo.ArgumentList.Add(videoTemp);
+        processStartInfo.ArgumentList.Add("-f");
+        processStartInfo.ArgumentList.Add(audioFormat);
+        processStartInfo.ArgumentList.Add("-i");
+        processStartInfo.ArgumentList.Add(audioTemp);
+        processStartInfo.ArgumentList.Add("-c:v");
+        processStartInfo.ArgumentList.Add("copy");
+        processStartInfo.ArgumentList.Add("-c:a");
+        processStartInfo.ArgumentList.Add("aac");
+        processStartInfo.ArgumentList.Add("-shortest");
+        processStartInfo.ArgumentList.Add("-f");
+        processStartInfo.ArgumentList.Add("mp4");
+        processStartInfo.ArgumentList.Add(outputPath);
+
+        return processStartInfo;
     }
 
     private static IVideoStreamInfo GetBestVideoStream(IEnumerable<IVideoStreamInfo> streams, string? preferredQuality)
