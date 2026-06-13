@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MSAVA_INF.Contexts;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 
 namespace MSAVA_API.Handlers
 {
@@ -21,7 +19,7 @@ namespace MSAVA_API.Handlers
 
         protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, NotBannedRequirement requirement)
         {
-            Guid? userId = GetAuthenticatedUserId(context.User);
+            Guid? userId = AuthorizationUser.GetAuthenticatedUserId(context.User);
             if (userId is null)
                 return;
 
@@ -38,19 +36,6 @@ namespace MSAVA_API.Handlers
             {
                 _logger.LogError(ex, "Failed to validate ban status for user {UserId}", userId);
             }
-        }
-
-        private static Guid? GetAuthenticatedUserId(ClaimsPrincipal user)
-        {
-            if (user.Identity?.IsAuthenticated != true)
-                return null;
-
-            string? userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
-                ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
-
-            return Guid.TryParse(userIdClaim, out var userId) && userId != Guid.Empty
-                ? userId
-                : null;
         }
     }
 }

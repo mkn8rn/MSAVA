@@ -1,3 +1,4 @@
+using MSAVA_API.Authorization;
 using MSAVA_BLL.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,6 @@ public class UsersController : ControllerBase
     public IActionResult GetUserClaims() => Ok(_userService.GetSessionClaims());
 
     [HttpGet("all")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
     public IActionResult GetAll() => Ok(_userService.GetAllUsers());
 }

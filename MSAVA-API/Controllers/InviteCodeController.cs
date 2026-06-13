@@ -1,3 +1,4 @@
+using MSAVA_API.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
@@ -18,11 +19,11 @@ public class InviteCodeController : ControllerBase
     }
 
     [HttpGet("remaining-uses/{inviteCodeId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
     public ActionResult<int> GetRemainingUses(Guid inviteCodeId) => Ok(_inviteCodeService.GetRemainingUses(inviteCodeId));
 
     [HttpPost("create")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
     public async Task<ActionResult<Guid>> CreateInviteCode(
         [FromQuery][Required] int maxUses,
         [FromQuery][Required] int expiresInHours)
@@ -33,11 +34,11 @@ public class InviteCodeController : ControllerBase
     }
 
     [HttpGet("all")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
     public IActionResult GetAllInviteCodes() => Ok(_inviteCodeService.GetAllInviteCodes());
 
     [HttpGet("{inviteCodeId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
     public ActionResult GetInviteCodeById(Guid inviteCodeId)
     {
         var code = _inviteCodeService.GetInviteCodeById(inviteCodeId);

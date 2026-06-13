@@ -1,3 +1,4 @@
+using MSAVA_API.Authorization;
 using MSAVA_API.Filters;
 using MSAVA_API.Handlers;
 using MSAVA_API.Middleware;
@@ -63,6 +64,12 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .AddRequirements(new NotBannedRequirement())
         .Build();
+
+    options.AddPolicy(AuthorizationPolicies.CurrentAdmin, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new NotBannedRequirement(), new CurrentAdminRequirement());
+    });
 });
 
 // Swagger setup WITH JWT SUPPORT
@@ -128,6 +135,7 @@ builder.Services.AddScoped<ServiceLogger>();
 
 // Register authorization handlers
 builder.Services.AddScoped<IAuthorizationHandler, NotBannedHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, CurrentAdminHandler>();
 
 // Register managers
 builder.Services.AddSingleton<MetadataStore>();
