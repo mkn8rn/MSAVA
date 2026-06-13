@@ -163,10 +163,11 @@ public static class MappingUtils
         Guid lastModifiedBy)
     {
         var checksum = BytesToHexString(savedFileDb.FileHash);
-        var mimeType = MetadataUtils.GetContentType(dto.FileExtension);
+        var fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
+        var mimeType = MetadataUtils.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
-        var metadata = MetadataUtils.ExtractMetadataFromFileStream(dto.Stream, dto.FileExtension);
+        var metadata = MetadataUtils.ExtractMetadataFromFileStream(dto.Stream, fileExtension);
         var now = DateTime.UtcNow;
 
         return new SavedFileDataDB
@@ -181,7 +182,7 @@ public static class MappingUtils
             Name = dto.FileName,
             Description = dto.Description ?? string.Empty,
             MimeType = mimeType,
-            FileExtension = dto.FileExtension,
+            FileExtension = fileExtension,
             Tags = tags,
             Categories = categories,
             OriginalCreator = originalCreator,
@@ -199,7 +200,8 @@ public static class MappingUtils
         Guid lastModifiedBy)
     {
         var checksum = BytesToHexString(savedFileDb.FileHash);
-        var mimeType = MetadataUtils.GetContentType(dto.FileExtension);
+        var fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
+        var mimeType = MetadataUtils.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
         var now = DateTime.UtcNow;
@@ -216,7 +218,7 @@ public static class MappingUtils
             Name = dto.FileName,
             Description = dto.Description ?? string.Empty,
             MimeType = mimeType,
-            FileExtension = dto.FileExtension,
+            FileExtension = fileExtension,
             Tags = tags,
             Categories = categories,
             OriginalCreator = originalCreator,
