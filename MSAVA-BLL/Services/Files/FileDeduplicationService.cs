@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Utils;
@@ -20,17 +21,20 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     private readonly MetadataStore _metadataStore;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ServiceLogger _serviceLogger;
+    private readonly ILogger<FileDeduplicationService> _logger;
 
     public FileDeduplicationService(
         BaseDataContext context,
         MetadataStore metadataStore,
         IHttpContextAccessor httpContextAccessor,
-        ServiceLogger serviceLogger)
+        ServiceLogger serviceLogger,
+        ILogger<FileDeduplicationService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<HashCheckResult> CheckAndGetReferenceAsync(
@@ -207,11 +211,54 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 
         _context.FileRefs.Add(newReference);
         _context.FileData.Add(newData);
-        _metadataStore.AddMetadata(metaRecord);
 
-        await _context.SaveChangesAsync(cancellationToken);
+        bool metadataRecorded = false;
+        try
+        {
+            _metadataStore.AddMetadata(metaRecord);
+            metadataRecorded = true;
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            RollbackNewReference(newReference, newData, metaRecord, metadataRecorded);
+            throw;
+        }
 
         return newReference;
+    }
+
+    private void RollbackNewReference(
+        SavedFileReferenceDB newReference,
+        SavedFileDataDB newData,
+        SavedFileMetaRecord metaRecord,
+        bool metadataRecorded)
+    {
+        if (metadataRecorded)
+            DeleteMetadataRecord(metaRecord);
+
+        DetachIfTracked(newData);
+        DetachIfTracked(newReference);
+    }
+
+    private void DeleteMetadataRecord(SavedFileMetaRecord metaRecord)
+    {
+        try
+        {
+            _metadataStore.Delete(metaRecord.RefId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to roll back deduplicated metadata record {FileRefId}", metaRecord.RefId);
+        }
+    }
+
+    private void DetachIfTracked(object entity)
+    {
+        var entry = _context.Entry(entity);
+        if (entry.State != EntityState.Detached)
+            entry.State = EntityState.Detached;
     }
 
     private async Task<Guid> GetDefaultAccessGroupAsync(Guid userId, CancellationToken cancellationToken)
