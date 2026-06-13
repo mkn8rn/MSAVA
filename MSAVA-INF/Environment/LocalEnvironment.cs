@@ -15,7 +15,6 @@ namespace MSAVA_INF.Environment
         private static readonly string EnvFolder = Path.GetDirectoryName(typeof(LocalEnvironment).Assembly.Location)!;
         private static readonly string EnvFileName = IsDevelopment() ? ".env.development" : ".env";
         private static readonly string EnvFilePath = Path.Combine(EnvFolder, EnvFileName);
-        public static LocalEnvironment Instance { get; } = new LocalEnvironment();
 
         public LocalEnvironment()
         {
@@ -43,9 +42,16 @@ namespace MSAVA_INF.Environment
 
         private string GetRequiredValue(string key)
         {
+            var environmentValue = System.Environment.GetEnvironmentVariable(key)
+                ?? System.Environment.GetEnvironmentVariable(key.ToUpperInvariant());
+
+            if (!string.IsNullOrWhiteSpace(environmentValue))
+                return environmentValue;
+
             if (_values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                 return value;
-            throw new InvalidOperationException($"Required environment variable '{key}' is missing or empty in {EnvFileName}");
+
+            throw new InvalidOperationException($"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {EnvFileName}.");
         }
 
         private int ParseRequiredInt(string key)
@@ -87,11 +93,6 @@ namespace MSAVA_INF.Environment
             if (int.TryParse(value, out var i))
                 return i;
             throw new InvalidOperationException($"Environment variable for nullable int could not be parsed: '{value}'");
-        }
-
-        public static LocalEnvironment GetInstance()
-        {
-            return Instance;
         }
 
         public static bool IsDevelopment()

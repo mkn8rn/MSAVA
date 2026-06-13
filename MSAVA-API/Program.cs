@@ -25,8 +25,8 @@ using MSAVA_BLL.Services.Import;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Register local environment
-builder.Services.AddSingleton<ILocalEnvironment, LocalEnvironment>();
-var env = LocalEnvironment.Instance;
+var env = new LocalEnvironment();
+builder.Services.AddSingleton<ILocalEnvironment>(env);
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -146,7 +146,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero, 
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(LocalEnvironment.Instance.GetSigningKeyBytes())
+            IssuerSigningKey = new SymmetricSecurityKey(env.GetSigningKeyBytes())
         };
     });
 
@@ -166,9 +166,9 @@ app.UseSerilogRequestLogging(options =>
     options.MessageTemplate = "Handled {RequestPath}";
     options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
     {
-        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
-        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
-        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value ?? string.Empty);
+        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme ?? string.Empty);
+        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString() ?? string.Empty);
     };
 });
 
