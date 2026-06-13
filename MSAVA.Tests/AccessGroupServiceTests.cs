@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
@@ -11,6 +12,15 @@ namespace MSAVA_App.Tests;
 
 public class AccessGroupServiceTests
 {
+    [Test]
+    public void AccessGroupService_DoesNotExposePublicUserGroupLookupByArbitraryUserId()
+    {
+        typeof(AccessGroupService)
+            .GetMethod("GetUserAccessGroups", BindingFlags.Instance | BindingFlags.Public)
+            .Should()
+            .BeNull();
+    }
+
     [Test]
     public async Task CreateAccessGroup_PersistsTrimmedNameAndAddsSessionUser()
     {

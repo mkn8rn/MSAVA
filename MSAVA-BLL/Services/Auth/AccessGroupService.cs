@@ -23,17 +23,6 @@ public class AccessGroupService
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
     }
 
-    public List<AccessGroupDB> GetUserAccessGroups(Guid userId)
-    {
-        var user = _context.Users
-            .AsNoTracking()
-            .Include(u => u.AccessGroups)
-            .SingleOrDefault(u => u.Id == userId)
-            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
-
-        return user.AccessGroups?.ToList() ?? [];
-    }
-
     public Guid CreateAccessGroup(string name)
     {
         string accessGroupName = NormalizeAccessGroupName(name);
