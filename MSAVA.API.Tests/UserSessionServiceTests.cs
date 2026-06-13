@@ -105,6 +105,93 @@ public class UserSessionServiceTests
         session.Should().BeSameAs(anonymousSession);
     }
 
+    [Test]
+    public async Task GetAllUsers_ReturnsUsersForActiveAdmin()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: true);
+        var user = CreateUser(isAdmin: false, isBanned: false, isWhitelisted: true);
+        context.Users.AddRange(admin, user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = admin.Id,
+                Username = admin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                Roles = ["Admin"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        var users = service.GetAllUsers();
+
+        users.Select(u => u.Id).Should().BeEquivalentTo([admin.Id, user.Id]);
+    }
+
+    [Test]
+    public async Task GetAllUsers_RejectsNonAdminUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var user = CreateUser(isAdmin: false, isBanned: false, isWhitelisted: true);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = user.Id,
+                Username = user.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                Roles = ["Admin"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Action act = () => service.GetAllUsers();
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Only admins can list users.");
+    }
+
+    [Test]
+    public async Task GetAllUsers_RejectsBannedAdminUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var bannedAdmin = CreateUser(isAdmin: true, isBanned: true, isWhitelisted: true);
+        context.Users.Add(bannedAdmin);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = bannedAdmin.Id,
+                Username = bannedAdmin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                Roles = ["Admin"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Action act = () => service.GetAllUsers();
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot list users.");
+    }
+
     private static UserSessionService CreateService(BaseDataContext context, SessionDTO session)
     {
         var httpContext = new DefaultHttpContext();

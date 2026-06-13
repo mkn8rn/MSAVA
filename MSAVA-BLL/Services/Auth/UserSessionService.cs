@@ -90,12 +90,25 @@ public class UserSessionService : IUserSessionService
 
     public List<UserDTO> GetAllUsers()
     {
+        RequireActiveAdminSession();
+
         var userDbs = _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
             .ToList();
 
         return userDbs.Select(MappingUtils.MapUserDTOWithRelationships).ToList();
+    }
+
+    private void RequireActiveAdminSession()
+    {
+        SessionDTO session = SessionGuard.RequireActive(
+            GetSessionClaims(),
+            "Session user is required to list users.",
+            "Banned users cannot list users.");
+
+        if (!session.IsAdmin)
+            throw new UnauthorizedAccessException("Only admins can list users.");
     }
 
     private SessionDTO GetTokenSessionDto()
