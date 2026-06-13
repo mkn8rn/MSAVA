@@ -81,6 +81,26 @@ public class AuthenticationServiceTests
         context.Jwts.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task LoginAsync_TrimsUsernameBeforeLookup()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("trimmed-user", "correct-password", isBanned: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        var response = await service.LoginAsync(new LoginRequestDTO
+        {
+            Username = "  trimmed-user  ",
+            Password = "correct-password"
+        });
+
+        response.Token.Should().NotBeNullOrWhiteSpace();
+        context.Jwts.Should().ContainSingle(jwt => jwt.Username == "trimmed-user");
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task RegisterAsync_RejectsMissingUsername(string username)
@@ -125,6 +145,50 @@ public class AuthenticationServiceTests
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("Password must be provided.*");
         context.Users.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task RegisterAsync_TrimsUsernameBeforePersistingUser()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        await service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "  new-user  ",
+            Password = "password",
+            InviteCode = inviteCode.Id
+        });
+
+        context.Users.Should().ContainSingle(user => user.Username == "new-user");
+    }
+
+    [Test]
+    public async Task RegisterAsync_RejectsDuplicateUsernameAfterTrimming()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        var existingUser = CreateUser("existing-user", "password", isBanned: false);
+        context.InviteCodes.Add(inviteCode);
+        context.Users.Add(existingUser);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "  existing-user  ",
+            Password = "password",
+            InviteCode = inviteCode.Id
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Username already exists.");
+        context.Users.Should().ContainSingle(user => user.Username == "existing-user");
     }
 
     private static AuthenticationService CreateService(BaseDataContext context)

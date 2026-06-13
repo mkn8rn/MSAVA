@@ -38,12 +38,13 @@ public class AuthenticationService : IAuthenticationService
     public async Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        EnsureCredentialsProvided(request.Username, request.Password);
+        string username = NormalizeUsername(request.Username);
+        EnsurePasswordProvided(request.Password);
 
         UserDB? user = await _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
-            .FirstOrDefaultAsync(u => u.Username == request.Username, cancellationToken);
+            .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
 
         if (user == null || !PasswordUtils.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
             throw new InvalidOperationException("Username doesn't exist or password is incorrect.");
@@ -116,7 +117,8 @@ public class AuthenticationService : IAuthenticationService
     public async Task<Guid> RegisterAsync(RegisterRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        EnsureCredentialsProvided(request.Username, request.Password);
+        string username = NormalizeUsername(request.Username);
+        EnsurePasswordProvided(request.Password);
 
         if (request.InviteCode == Guid.Empty)
             throw new InvalidOperationException("Invite code is required.");
@@ -126,7 +128,7 @@ public class AuthenticationService : IAuthenticationService
 
         bool exists = await _context.Users
             .AsNoTracking()
-            .AnyAsync(u => u.Username == request.Username, cancellationToken);
+            .AnyAsync(u => u.Username == username, cancellationToken);
 
         if (exists)
             throw new InvalidOperationException("Username already exists.");
@@ -137,7 +139,7 @@ public class AuthenticationService : IAuthenticationService
         var user = new UserDB
         {
             Id = Guid.NewGuid(),
-            Username = request.Username,
+            Username = username,
             PasswordHash = hash,
             PasswordSalt = salt,
             IsAdmin = false,
@@ -154,11 +156,16 @@ public class AuthenticationService : IAuthenticationService
         return user.Id;
     }
 
-    private static void EnsureCredentialsProvided(string username, string password)
+    private static string NormalizeUsername(string username)
     {
         if (string.IsNullOrWhiteSpace(username))
             throw new ArgumentException("Username must be provided.", nameof(username));
 
+        return username.Trim();
+    }
+
+    private static void EnsurePasswordProvided(string password)
+    {
         if (string.IsNullOrWhiteSpace(password))
             throw new ArgumentException("Password must be provided.", nameof(password));
     }
