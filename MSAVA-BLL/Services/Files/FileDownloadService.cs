@@ -145,13 +145,9 @@ public class FileDownloadService : IFileDownloadService
 
     private SessionDTO GetActiveSession()
     {
-        SessionDTO session = _userService.GetSessionClaims();
-        if (!session.LoggedIn || session.UserId == Guid.Empty)
-            throw new UnauthorizedAccessException("Session user is required to download files.");
-
-        if (session.IsBanned)
-            throw new UnauthorizedAccessException("Banned users cannot download files.");
-
-        return session;
+        return SessionGuard.RequireActive(
+            _userService.GetSessionClaims(),
+            "Session user is required to download files.",
+            "Banned users cannot download files.");
     }
 }

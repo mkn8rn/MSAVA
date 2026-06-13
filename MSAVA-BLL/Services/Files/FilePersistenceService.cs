@@ -186,17 +186,11 @@ public class FilePersistenceService
 
     private Guid GetRequiredSessionUserId()
     {
-        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto &&
-            sessionDto.LoggedIn &&
-            sessionDto.UserId != Guid.Empty)
-        {
-            if (sessionDto.IsBanned)
-                throw new UnauthorizedAccessException("Banned users cannot create files.");
-
-            return sessionDto.UserId;
-        }
-
-        throw new UnauthorizedAccessException("User session not found.");
+        var session = _httpContextAccessor.HttpContext?.Items["SessionDTO"] as SessionDTO;
+        return SessionGuard.RequireActive(
+            session,
+            "User session not found.",
+            "Banned users cannot create files.").UserId;
     }
 
     private void RollbackFileRegistration(SavedFileMetaRecord? metaRecord, bool contentFileCreated)

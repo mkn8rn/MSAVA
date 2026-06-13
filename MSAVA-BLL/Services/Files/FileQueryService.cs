@@ -75,14 +75,10 @@ public class FileQueryService : IFileQueryService
 
     private SessionDTO GetActiveSession()
     {
-        var session = _userService.GetSessionClaims();
-        if (!session.LoggedIn || session.UserId == Guid.Empty)
-            throw new UnauthorizedAccessException("Session user is required to query files.");
-
-        if (session.IsBanned)
-            throw new UnauthorizedAccessException("Banned users cannot query files.");
-
-        return session;
+        return SessionGuard.RequireActive(
+            _userService.GetSessionClaims(),
+            "Session user is required to query files.",
+            "Banned users cannot query files.");
     }
 
     private IQueryable<SavedFileDataDB> GetVisibleFileDataQuery(SessionDTO session)

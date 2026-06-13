@@ -308,23 +308,17 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     private bool TryGetActiveSessionUserId(out Guid userId, out string error)
     {
         userId = Guid.Empty;
-        error = string.Empty;
 
-        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is not SessionDTO sessionDto ||
-            !sessionDto.LoggedIn ||
-            sessionDto.UserId == Guid.Empty)
-        {
-            error = "User session not found.";
+        var session = _httpContextAccessor.HttpContext?.Items["SessionDTO"] as SessionDTO;
+        if (!SessionGuard.TryRequireActive(
+                session,
+                out var activeSession,
+                out error,
+                "User session not found.",
+                "Banned users cannot check file hashes."))
             return false;
-        }
 
-        if (sessionDto.IsBanned)
-        {
-            error = "Banned users cannot check file hashes.";
-            return false;
-        }
-
-        userId = sessionDto.UserId;
+        userId = activeSession.UserId;
         return true;
     }
 

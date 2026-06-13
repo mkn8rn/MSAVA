@@ -1,5 +1,6 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
 using MSAVA_Shared.Models;
@@ -89,14 +90,10 @@ public class AccessGroupService
 
     private SessionDTO GetActiveSession()
     {
-        SessionDTO session = _userService.GetSessionClaims();
-        if (!session.LoggedIn || session.UserId == Guid.Empty)
-            throw new UnauthorizedAccessException("Session user is required to manage access groups.");
-
-        if (session.IsBanned)
-            throw new UnauthorizedAccessException("Banned users cannot manage access groups.");
-
-        return session;
+        return SessionGuard.RequireActive(
+            _userService.GetSessionClaims(),
+            "Session user is required to manage access groups.",
+            "Banned users cannot manage access groups.");
     }
 
     private static string NormalizeAccessGroupName(string name)
