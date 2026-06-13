@@ -10,11 +10,16 @@ public class GoogleDriveImportService
 {
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public GoogleDriveImportService(FilePersistenceService persistenceService, ServiceLogger serviceLogger)
+    public GoogleDriveImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        IHttpClientFactory httpClientFactory)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
     }
 
     public async Task<Guid> ImportAsync(FetchFileGoogleDriveDTO dto, CancellationToken cancellationToken = default)
@@ -31,7 +36,7 @@ public class GoogleDriveImportService
 
         string baseDownloadUrl = $"https://drive.google.com/uc?export=download&id={WebUtility.UrlEncode(fileId)}";
 
-        using var http = new HttpClient();
+        var http = _httpClientFactory.CreateClient();
         using var initialResp = await http.GetAsync(baseDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         if (!initialResp.IsSuccessStatusCode)

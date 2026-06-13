@@ -9,11 +9,16 @@ public class OneDriveImportService
 {
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public OneDriveImportService(FilePersistenceService persistenceService, ServiceLogger serviceLogger)
+    public OneDriveImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        IHttpClientFactory httpClientFactory)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
     }
 
     public async Task<Guid> ImportAsync(FetchFileFromOneDriveDTO dto, CancellationToken cancellationToken = default)
@@ -25,7 +30,7 @@ public class OneDriveImportService
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
-        using var http = new HttpClient();
+        var http = _httpClientFactory.CreateClient();
         var shareId = "u!" + Base64UrlEncode(dto.FileUrl);
         var downloadUrl = $"https://api.onedrive.com/v1.0/shares/{shareId}/root/content";
 
