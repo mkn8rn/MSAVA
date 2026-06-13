@@ -81,7 +81,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 
         // File exists but user has no access - create a new reference for them
         var newReference = await CreateNewReferenceAsync(
-            request, fileHash, extension, anyExistingReference, sessionUserId, cancellationToken);
+            request, fileHash, extension, anyExistingReference, sessionUserId, userAccessGroups, cancellationToken);
 
         _serviceLogger.WriteLog(
             AccessLogActions.NewReferenceAddedToExistingFile,
@@ -157,6 +157,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         string extension,
         SavedFileReferenceDB existingReference,
         Guid userId,
+        List<Guid> userAccessGroups,
         CancellationToken cancellationToken)
     {
         // Get existing file data for metadata
@@ -164,8 +165,11 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             .Where(fd => fd.FileReferenceId == existingReference.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        // Determine access group - use provided or user's first access group
-        var accessGroupId = request.AccessGroupId ?? await GetDefaultAccessGroupAsync(userId, cancellationToken);
+        var accessGroupId = await ResolveReferenceAccessGroupAsync(
+            request.AccessGroupId,
+            userId,
+            userAccessGroups,
+            cancellationToken);
 
         // Create new reference
         var newReference = new SavedFileReferenceDB
@@ -227,6 +231,24 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         return newReference;
+    }
+
+    private async Task<Guid> ResolveReferenceAccessGroupAsync(
+        Guid? requestedAccessGroupId,
+        Guid userId,
+        List<Guid> userAccessGroups,
+        CancellationToken cancellationToken)
+    {
+        if (requestedAccessGroupId is null)
+            return await GetDefaultAccessGroupAsync(userId, cancellationToken);
+
+        if (requestedAccessGroupId == Guid.Empty)
+            throw new ArgumentException("Access group id must be provided.", nameof(requestedAccessGroupId));
+
+        if (userAccessGroups.Contains(requestedAccessGroupId.Value))
+            return requestedAccessGroupId.Value;
+
+        throw new UnauthorizedAccessException("User cannot create a file reference in the requested access group.");
     }
 
     private void RollbackNewReference(

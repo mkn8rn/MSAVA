@@ -15,6 +15,69 @@ namespace MSAVA_API.Tests;
 public class FileDeduplicationServiceTests
 {
     [Test]
+    public async Task CheckAndGetReferenceAsync_RejectsRequestedAccessGroupOutsideCurrentUserMembership()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-unauthorized-group-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var otherOwner = CreateUser("other-owner");
+            var sessionGroup = CreateAccessGroup(sessionUser, "session");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var unauthorizedGroup = CreateAccessGroup(otherOwner, "unauthorized");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner, otherOwner);
+            context.AccessGroups.AddRange(sessionGroup, existingGroup, unauthorizedGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = unauthorizedGroup.Id,
+                FileName = "unauthorized-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            Func<Task> act = () => service.CheckAndGetReferenceAsync(request);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User cannot create a file reference in the requested access group.");
+
+            metadataStore.GetByFileHash(contentHash, "txt")
+                .Should()
+                .ContainSingle(record => record.RefId == existingReference.Id);
+            metadataStore.GetByAccessGroup(unauthorizedGroup.Id).Should().BeEmpty();
+            context.FileRefs.Count().Should().Be(1);
+            context.FileData.Count().Should().Be(1);
+            context.ChangeTracker.Entries<SavedFileReferenceDB>()
+                .Should()
+                .NotContain(entry => entry.State == EntityState.Added);
+            context.ChangeTracker.Entries<SavedFileDataDB>()
+                .Should()
+                .NotContain(entry => entry.State == EntityState.Added);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_RemovesNewMetadataAndPendingEntitiesWhenDatabaseSaveFails()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-rollback-{Guid.NewGuid()}"));
@@ -114,6 +177,15 @@ public class FileDeduplicationServiceTests
             .Options;
 
         return new ThrowingDataContext(options);
+    }
+
+    private static BaseDataContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<BaseDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new TestDataContext(options);
     }
 
     private static UserDB CreateUser(string username)
@@ -222,6 +294,19 @@ public class FileDeduplicationServiceTests
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromException<int>(new InvalidOperationException("Simulated database failure."));
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
+    }
+
+    private sealed class TestDataContext : BaseDataContext
+    {
+        public TestDataContext(DbContextOptions<BaseDataContext> options) : base(options)
+        {
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
