@@ -1,28 +1,20 @@
 using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 
 namespace MSAVA_BLL.Loggers;
 
-public class ServiceLogger : IDisposable
+public class ServiceLogger
 {
     private readonly ILogger<ServiceLogger> _logger;
     private readonly BaseDataContext _context;
-    private readonly ConcurrentQueue<object> _logQueue = new();
-    private readonly Timer _flushTimer;
-    private readonly object _flushLock = new();
-    private bool _disposed;
-
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(5);
-    private const int MaxBatchSize = 100;
 
     public ServiceLogger(ILogger<ServiceLogger> logger, BaseDataContext context)
     {
         _logger = logger;
         _context = context;
-        _flushTimer = new Timer(_ => FlushLogs(), null, FlushInterval, FlushInterval);
     }
 
     public void LogInformation(string message)
@@ -76,8 +68,7 @@ public class ServiceLogger : IDisposable
         string sanitizedMessage = SanitizeString(message);
         _logger.LogError("Status Code: {StatusCode}, Message: {Message}, UserId: {UserId}", statusCode, sanitizedMessage, userId);
 
-        _logQueue.Enqueue(errorLog);
-        TryFlushIfFull();
+        PersistLog(errorLog);
     }
 
     public void WriteLog(InviteLogActions action, string message, Guid userId, Guid codeId)
@@ -94,8 +85,7 @@ public class ServiceLogger : IDisposable
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, InviteCodeId: {CodeId}", action, sanitizedMessage, userId, codeId);
 
-        _logQueue.Enqueue(inviteLog);
-        TryFlushIfFull();
+        PersistLog(inviteLog);
     }
 
     public void WriteLog(GroupLogActions action, string message, Guid userId, Guid groupId)
@@ -112,8 +102,7 @@ public class ServiceLogger : IDisposable
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, GroupId: {GroupId}", action, sanitizedMessage, userId, groupId);
 
-        _logQueue.Enqueue(groupLog);
-        TryFlushIfFull();
+        PersistLog(groupLog);
     }
 
     public void WriteLog(AccessLogActions action, string message, Guid userId, string fileNameWithExtension, Guid refId)
@@ -131,8 +120,7 @@ public class ServiceLogger : IDisposable
         string sanitizedFileName = SanitizeString(fileNameWithExtension);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, File: {FileName}, FileRefId: {RefId}", action, sanitizedMessage, userId, sanitizedFileName, refId);
 
-        _logQueue.Enqueue(accessLog);
-        TryFlushIfFull();
+        PersistLog(accessLog);
     }
 
     public void WriteLog(AccessLogActions action, string message, Guid userId, Guid refId)
@@ -149,8 +137,7 @@ public class ServiceLogger : IDisposable
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, FileRefId: {RefId}", action, sanitizedMessage, userId, refId);
 
-        _logQueue.Enqueue(accessLog);
-        TryFlushIfFull();
+        PersistLog(accessLog);
     }
 
     public void WriteLog(UserLogAction action, string message, Guid userId, Guid? adminId)
@@ -167,60 +154,37 @@ public class ServiceLogger : IDisposable
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, AdminId: {AdminId}", action, sanitizedMessage, userId, adminId);
 
-        _logQueue.Enqueue(userLog);
-        TryFlushIfFull();
+        PersistLog(userLog);
     }
 
-    private void TryFlushIfFull()
+    private void PersistLog(object log)
     {
-        if (_logQueue.Count >= MaxBatchSize)
-            FlushLogs();
-    }
-
-    private void FlushLogs()
-    {
-        if (_logQueue.IsEmpty) return;
-
-        lock (_flushLock)
+        try
         {
-            if (_logQueue.IsEmpty) return;
-
-            var batch = new List<object>(MaxBatchSize);
-            while (batch.Count < MaxBatchSize && _logQueue.TryDequeue(out var log))
+            switch (log)
             {
-                batch.Add(log);
+                case ErrorLogDB e: _context.ErrorLogs.Add(e); break;
+                case InviteLogDB i: _context.InviteLogs.Add(i); break;
+                case GroupLogDB g: _context.GroupLogs.Add(g); break;
+                case AccessLogDB a: _context.AccessLogs.Add(a); break;
+                case UserLogDB u: _context.UserLogs.Add(u); break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(log), log.GetType().FullName, "Unsupported service log type.");
             }
 
-            if (batch.Count == 0) return;
-
-            try
-            {
-                foreach (var log in batch)
-                {
-                    switch (log)
-                    {
-                        case ErrorLogDB e: _context.ErrorLogs.Add(e); break;
-                        case InviteLogDB i: _context.InviteLogs.Add(i); break;
-                        case GroupLogDB g: _context.GroupLogs.Add(g); break;
-                        case AccessLogDB a: _context.AccessLogs.Add(a); break;
-                        case UserLogDB u: _context.UserLogs.Add(u); break;
-                    }
-                }
-                _context.SaveChanges();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to flush {Count} log entries to database", batch.Count);
-            }
+            _context.SaveChanges();
+        }
+        catch (Exception ex)
+        {
+            DetachLog(log);
+            _logger.LogError(ex, "Failed to persist {LogType} to database", log.GetType().Name);
         }
     }
 
-    public void Dispose()
+    private void DetachLog(object log)
     {
-        if (_disposed) return;
-        _disposed = true;
-
-        _flushTimer.Dispose();
-        FlushLogs(); // Final flush
+        var entry = _context.Entry(log);
+        if (entry.State != EntityState.Detached)
+            entry.State = EntityState.Detached;
     }
 }

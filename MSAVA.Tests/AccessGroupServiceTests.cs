@@ -24,7 +24,7 @@ public class AccessGroupServiceTests
         context.AccessGroups.Add(accessGroup);
         await context.SaveChangesAsync();
 
-        using var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, owner.Id, isAdmin: false, logger);
 
         await service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
@@ -46,7 +46,7 @@ public class AccessGroupServiceTests
         context.AccessGroups.Add(accessGroup);
         await context.SaveChangesAsync();
 
-        using var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, admin.Id, isAdmin: true, logger);
 
         await service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
@@ -68,7 +68,7 @@ public class AccessGroupServiceTests
         context.AccessGroups.Add(accessGroup);
         await context.SaveChangesAsync();
 
-        using var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, stranger.Id, isAdmin: false, logger);
 
         Func<Task> act = () => service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
@@ -91,7 +91,7 @@ public class AccessGroupServiceTests
         context.AccessGroups.Add(accessGroup);
         await context.SaveChangesAsync();
 
-        using var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, owner.Id, isAdmin: false, logger);
 
         await service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
