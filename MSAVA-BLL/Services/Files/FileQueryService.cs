@@ -20,7 +20,7 @@ public class FileQueryService : IFileQueryService
 
     public async Task<List<Guid>> GetAllFileGuidsAsync(CancellationToken cancellationToken = default)
     {
-        var session = _userService.GetSessionClaims();
+        var session = GetActiveSession();
 
         return await GetVisibleFileDataQuery(session)
             .Select(f => f.Id)
@@ -29,7 +29,7 @@ public class FileQueryService : IFileQueryService
 
     public async Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(CancellationToken cancellationToken = default)
     {
-        var session = _userService.GetSessionClaims();
+        var session = GetActiveSession();
 
         var dbList = await GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
@@ -45,7 +45,7 @@ public class FileQueryService : IFileQueryService
         string? description,
         CancellationToken cancellationToken = default)
     {
-        var session = _userService.GetSessionClaims();
+        var session = GetActiveSession();
 
         var query = GetVisibleFileDataQuery(session);
 
@@ -61,7 +61,7 @@ public class FileQueryService : IFileQueryService
         string? description,
         CancellationToken cancellationToken = default)
     {
-        var session = _userService.GetSessionClaims();
+        var session = GetActiveSession();
 
         var query = GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
@@ -71,6 +71,18 @@ public class FileQueryService : IFileQueryService
 
         var dbList = await query.ToListAsync(cancellationToken);
         return dbList.Select(MappingUtils.MapSearchFileDataDTO).ToList();
+    }
+
+    private SessionDTO GetActiveSession()
+    {
+        var session = _userService.GetSessionClaims();
+        if (!session.LoggedIn || session.UserId == Guid.Empty)
+            throw new UnauthorizedAccessException("Session user is required to query files.");
+
+        if (session.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot query files.");
+
+        return session;
     }
 
     private IQueryable<SavedFileDataDB> GetVisibleFileDataQuery(SessionDTO session)

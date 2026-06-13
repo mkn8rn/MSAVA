@@ -68,6 +68,59 @@ public class FileQueryServiceTests
         ids.Should().BeEquivalentTo([firstFile.Id, secondFile.Id, publicFile.Id]);
     }
 
+    [Test]
+    public async Task GetAllFileMetadataAsync_RejectsAnonymousSession()
+    {
+        using var context = CreateContext();
+        var publicFile = CreateFileData("public", Guid.NewGuid(), publicViewing: true);
+        context.FileRefs.Add(publicFile.FileReference!);
+        context.FileData.Add(publicFile);
+        await context.SaveChangesAsync();
+
+        var service = new FileQueryService(
+            context,
+            new TestUserSessionService(new SessionDTO
+            {
+                LoggedIn = false,
+                UserId = Guid.Empty,
+                Username = string.Empty,
+                AccessGroups = [],
+                IsAdmin = false
+            }));
+
+        Func<Task> act = () => service.GetAllFileMetadataAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Session user is required to query files.");
+    }
+
+    [Test]
+    public async Task GetAllFileMetadataAsync_RejectsBannedSession()
+    {
+        using var context = CreateContext();
+        var publicFile = CreateFileData("public", Guid.NewGuid(), publicViewing: true);
+        context.FileRefs.Add(publicFile.FileReference!);
+        context.FileData.Add(publicFile);
+        await context.SaveChangesAsync();
+
+        var service = new FileQueryService(
+            context,
+            new TestUserSessionService(new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "banned",
+                AccessGroups = [],
+                IsAdmin = false,
+                IsBanned = true
+            }));
+
+        Func<Task> act = () => service.GetAllFileMetadataAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot query files.");
+    }
+
     private static SavedFileDataDB CreateFileData(string name, Guid accessGroupId, bool publicViewing)
     {
         var reference = new SavedFileReferenceDB
