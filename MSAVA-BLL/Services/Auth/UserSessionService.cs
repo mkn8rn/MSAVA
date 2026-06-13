@@ -33,18 +33,52 @@ public class UserSessionService : IUserSessionService
         return MappingUtils.MapUserDTOWithRelationships(userDb);
     }
 
-    public Guid GetSessionUserId() => GetSessionDto().UserId;
+    public Guid GetSessionUserId() => GetTokenSessionDto().UserId;
 
-    public SessionDTO GetSessionClaims() => GetSessionDto();
+    public SessionDTO GetSessionClaims()
+    {
+        SessionDTO tokenSession = GetTokenSessionDto();
+        if (!tokenSession.LoggedIn || tokenSession.UserId == Guid.Empty)
+            return tokenSession;
 
-    public bool IsSessionUserAdmin() => GetSessionDto().IsAdmin;
+        UserDB userDb = GetSessionUserDb(tokenSession.UserId);
+        var roles = new List<string>(3);
+
+        if (userDb.IsAdmin)
+            roles.Add("Admin");
+        if (userDb.IsBanned)
+            roles.Add("Banned");
+        if (userDb.IsWhitelisted)
+            roles.Add("Whitelisted");
+
+        return new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = userDb.Id,
+            Username = userDb.Username,
+            IsAdmin = userDb.IsAdmin,
+            IsBanned = userDb.IsBanned,
+            IsWhitelisted = userDb.IsWhitelisted,
+            Roles = roles,
+            Claims = tokenSession.Claims,
+            AccessGroups = userDb.AccessGroups.Select(group => group.Id).ToList(),
+            IssuedAt = tokenSession.IssuedAt,
+            ExpiresAt = tokenSession.ExpiresAt
+        };
+    }
+
+    public bool IsSessionUserAdmin() => GetSessionClaims().IsAdmin;
 
     public UserDTO GetSessionUser() => MappingUtils.MapUserDTOWithRelationships(GetSessionUserDB());
 
     public UserDB GetSessionUserDB()
     {
         Guid sessionUserId = GetSessionUserId();
+        return GetSessionUserDb(sessionUserId);
+    }
 
+    private UserDB GetSessionUserDb(Guid sessionUserId)
+    {
         var userDb = _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
@@ -75,7 +109,7 @@ public class UserSessionService : IUserSessionService
         _serviceLogger.WriteLog(UserLogAction.AccountDeletion, $"User deleted: {id}", id, null);
     }
 
-    private SessionDTO GetSessionDto()
+    private SessionDTO GetTokenSessionDto()
     {
         if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto)
             return sessionDto;
