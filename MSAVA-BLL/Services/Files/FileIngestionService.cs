@@ -47,8 +47,10 @@ public class FileIngestionService : IFileIngestionService
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
+        Uri fileUri = ParseFileUrl(dto.FileUrl);
+
         var httpClient = _httpClientFactory.CreateClient();
-        using var response = await httpClient.GetAsync(dto.FileUrl, cancellationToken);
+        using var response = await httpClient.GetAsync(fileUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
@@ -66,6 +68,17 @@ public class FileIngestionService : IFileIngestionService
         };
 
         return await _persistenceService.CreateFileFromStreamAsync(streamDto, cancellationToken);
+    }
+
+    private static Uri ParseFileUrl(string fileUrl)
+    {
+        if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", nameof(fileUrl));
+        }
+
+        return uri;
     }
 
     public async Task<Guid> CreateFileFromFormFileAsync(SaveFileFromFormFileDTO dto, CancellationToken cancellationToken = default)
