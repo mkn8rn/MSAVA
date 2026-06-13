@@ -94,6 +94,76 @@ public class ProviderImportServiceTests
         }
     }
 
+    [Test]
+    public async Task OneDriveImportAsync_RejectsRelativeUrlBeforeCreatingHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "shared/file.txt",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl must be an absolute HTTP or HTTPS URL.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_RejectsNonHttpUrlBeforeCreatingHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "file:///C:/temp/shared.txt",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl must be an absolute HTTP or HTTPS URL.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static FilePersistenceService CreatePersistenceService(BaseDataContext context, MetadataStore metadataStore)
     {
         return new FilePersistenceService(

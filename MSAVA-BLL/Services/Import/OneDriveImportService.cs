@@ -30,8 +30,10 @@ public class OneDriveImportService
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
+        Uri fileUri = ParseFileUrl(dto.FileUrl);
+
         var http = _httpClientFactory.CreateClient();
-        var shareId = "u!" + Base64UrlEncode(dto.FileUrl);
+        var shareId = "u!" + Base64UrlEncode(fileUri.AbsoluteUri);
         var downloadUrl = $"https://api.onedrive.com/v1.0/shares/{shareId}/root/content";
 
         _serviceLogger.LogInformation($"Starting OneDrive download. URL: {downloadUrl}");
@@ -91,6 +93,17 @@ public class OneDriveImportService
         };
 
         return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
+    }
+
+    private static Uri ParseFileUrl(string fileUrl)
+    {
+        if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", nameof(fileUrl));
+        }
+
+        return uri;
     }
 
     private static string Base64UrlEncode(string input)
