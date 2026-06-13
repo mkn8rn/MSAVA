@@ -108,7 +108,23 @@ public class InviteCodeControllerTests
 
         public UserDB GetSessionUserDB() => _sessionUser;
 
-        public SessionDTO GetSessionClaims() => throw new NotSupportedException();
+        public SessionDTO GetSessionClaims()
+        {
+            return new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = _sessionUser.Id,
+                Username = _sessionUser.Username,
+                IsAdmin = _sessionUser.IsAdmin,
+                IsBanned = _sessionUser.IsBanned,
+                IsWhitelisted = _sessionUser.IsWhitelisted,
+                Roles = _sessionUser.IsAdmin ? ["Admin"] : [],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            };
+        }
     }
 
     private sealed class TestDataContext : BaseDataContext

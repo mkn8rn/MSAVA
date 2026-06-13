@@ -168,6 +168,27 @@ public class InviteCodeServiceTests
         context.InviteCodes.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task CreateNewInviteCode_UsesSessionClaimsWithoutLoadingSessionUserEntity()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("claims-admin");
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+
+        var service = new InviteCodeService(
+            context,
+            new ClaimsOnlyUserSessionService(admin),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+
+        var inviteCodeId = await service.CreateNewInviteCode(maxUses: 2, DateTime.UtcNow.AddHours(1));
+
+        context.InviteCodes.Should().ContainSingle(inviteCode =>
+            inviteCode.Id == inviteCodeId &&
+            inviteCode.OwnerId == admin.Id &&
+            inviteCode.MaxUses == 2);
+    }
+
     private static InviteCodeService CreateService(BaseDataContext context, UserDB sessionUser)
     {
         return new InviteCodeService(
@@ -267,6 +288,46 @@ public class InviteCodeServiceTests
         public UserDB GetSessionUserDB() => throw new NotSupportedException();
 
         public SessionDTO GetSessionClaims() => throw new NotSupportedException();
+    }
+
+    private sealed class ClaimsOnlyUserSessionService : IUserSessionService
+    {
+        private readonly UserDB _sessionUser;
+
+        public ClaimsOnlyUserSessionService(UserDB sessionUser)
+        {
+            _sessionUser = sessionUser;
+        }
+
+        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+
+        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+
+        public bool IsSessionUserAdmin() => throw new NotSupportedException();
+
+        public UserDTO GetSessionUser() => throw new NotSupportedException();
+
+        public Guid GetSessionUserId() => throw new NotSupportedException();
+
+        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+
+        public SessionDTO GetSessionClaims()
+        {
+            return new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = _sessionUser.Id,
+                Username = _sessionUser.Username,
+                IsAdmin = _sessionUser.IsAdmin,
+                IsBanned = _sessionUser.IsBanned,
+                IsWhitelisted = _sessionUser.IsWhitelisted,
+                Roles = ["Admin"],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            };
+        }
     }
 
     private sealed class TestDataContext : BaseDataContext

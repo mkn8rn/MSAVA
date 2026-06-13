@@ -1,8 +1,10 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
 using Microsoft.EntityFrameworkCore;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Auth;
 
@@ -24,7 +26,7 @@ public class InviteCodeService
 
     public async Task<Guid> CreateNewInviteCode(int maxUses, DateTime expiresAt)
     {
-        UserDB user = GetAuthorizedAdminUser();
+        SessionDTO session = GetAuthorizedAdminSession();
 
         if (maxUses <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
@@ -35,7 +37,7 @@ public class InviteCodeService
         var inviteCode = new InviteCodeDB
         {
             Id = Guid.NewGuid(),
-            OwnerId = user.Id,
+            OwnerId = session.UserId,
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = expiresAt,
             MaxUses = maxUses
@@ -44,7 +46,7 @@ public class InviteCodeService
         _context.InviteCodes.Add(inviteCode);
         await _context.SaveChangesAsync();
 
-        _serviceLogger.WriteLog(InviteLogActions.InviteCodeCreated, $"Invite code created by user {user.Username}.", user.Id, inviteCode.Id);
+        _serviceLogger.WriteLog(InviteLogActions.InviteCodeCreated, $"Invite code created by user {session.Username}.", session.UserId, inviteCode.Id);
 
         return inviteCode.Id;
     }
@@ -108,15 +110,19 @@ public class InviteCodeService
 
     private void EnsureCurrentUserCanManageInviteCodes()
     {
-        _ = GetAuthorizedAdminUser();
+        _ = GetAuthorizedAdminSession();
     }
 
-    private UserDB GetAuthorizedAdminUser()
+    private SessionDTO GetAuthorizedAdminSession()
     {
-        UserDB user = _userService.GetSessionUserDB();
-        if (!user.IsAdmin || user.IsBanned)
+        SessionDTO session = SessionGuard.RequireActive(
+            _userService.GetSessionClaims(),
+            "Only active admins can manage invite codes.",
+            "Only active admins can manage invite codes.");
+
+        if (!session.IsAdmin)
             throw new UnauthorizedAccessException("Only active admins can manage invite codes.");
 
-        return user;
+        return session;
     }
 }
