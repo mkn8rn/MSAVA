@@ -51,13 +51,13 @@ public class AuthenticationService : IAuthenticationService
         if (user.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot log in.");
 
-        JwtDB token = await GenerateJwtTokenAsync(user);
+        JwtDB token = await GenerateJwtTokenAsync(user, cancellationToken);
         _serviceLogger.WriteLog(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
 
         return new LoginResponseDTO { Token = token.TokenString };
     }
 
-    public async Task<JwtDB> GenerateJwtTokenAsync(UserDB user)
+    private async Task<JwtDB> GenerateJwtTokenAsync(UserDB user, CancellationToken cancellationToken)
     {
         Guid jwtId = Guid.NewGuid();
         DateTime issuedAt = DateTime.UtcNow;
@@ -108,7 +108,7 @@ public class AuthenticationService : IAuthenticationService
         };
 
         _context.Jwts.Add(jwtDb);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
         return jwtDb;
     }

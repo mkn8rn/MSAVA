@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
@@ -14,6 +15,15 @@ namespace MSAVA_App.Tests;
 
 public class AuthenticationServiceTests
 {
+    [Test]
+    public void AuthenticationService_DoesNotExposePublicJwtMintingMethod()
+    {
+        typeof(AuthenticationService)
+            .GetMethod("GenerateJwtTokenAsync", BindingFlags.Instance | BindingFlags.Public)
+            .Should()
+            .BeNull();
+    }
+
     [Test]
     public async Task LoginAsync_RejectsBannedUserBeforeJwtIsPersisted()
     {
