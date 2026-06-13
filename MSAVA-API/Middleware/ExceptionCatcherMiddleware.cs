@@ -38,32 +38,40 @@ namespace MSAVA_API.Middleware
                 DateTime timestamp = DateTime.UtcNow;
                 int statusCode = GetStatusCode(ex);
                 logger.LogError(ex, "Unhandled exception occurred: " + errorId);
-                LogErrorToDb(errorId, timestamp, context, ex, dbContext, statusCode);
+                TryLogErrorToDb(errorId, timestamp, context, dbContext, statusCode, logger);
                 await HandleExceptionAsync(errorId, timestamp, context, ex, env.IsDevelopment(), statusCode);
             }
         }
 
-        private void LogErrorToDb(Guid errorId, DateTime timestamp, HttpContext context, Exception exception, BaseDataContext dbContext, int statusCode)
+        private static void TryLogErrorToDb(
+            Guid errorId,
+            DateTime timestamp,
+            HttpContext context,
+            BaseDataContext dbContext,
+            int statusCode,
+            ILogger<ExceptionCatcherMiddleware> logger)
         {
-            Guid? userId = null;
-            if (context.User?.Identity?.IsAuthenticated == true)
-            {
-                var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (Guid.TryParse(userIdStr, out var parsedId))
-                {
-                    userId = parsedId;
-                }
-            }
-
             var errorLog = new ErrorLogDB
             {
                 Id = errorId,
                 StatusCode = statusCode,
                 Timestamp = timestamp,
-                UserId = userId
+                UserId = GetAuthenticatedUserId(context)
             };
-            dbContext.ErrorLogs.Add(errorLog);
-            dbContext.SaveChanges();
+
+            try
+            {
+                dbContext.ErrorLogs.Add(errorLog);
+                dbContext.SaveChanges();
+            }
+            catch (Exception logException)
+            {
+                var entry = dbContext.Entry(errorLog);
+                if (entry.State != EntityState.Detached)
+                    entry.State = EntityState.Detached;
+
+                logger.LogError(logException, "Failed to persist error log {ErrorId}", errorId);
+            }
         }
 
         private static int GetStatusCode(Exception exception)
@@ -186,28 +194,27 @@ namespace MSAVA_API.Middleware
                 stack = exception.ToString();
             }
 
-            Guid? userId = null;
-            if (context.User?.Identity?.IsAuthenticated == true)
-            {
-                var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (Guid.TryParse(userIdStr, out var parsedId))
-                {
-                    userId = parsedId;
-                }
-            }
-
             ErrorLogDTO responseDto = new ErrorLogDTO
             {
                 Id = errorId,
                 Message = message,
                 StackTrace = stack,
                 Timestamp = timestamp,
-                UserId = userId
+                UserId = GetAuthenticatedUserId(context)
             };
 
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
             await context.Response.WriteAsync(JsonSerializer.Serialize(responseDto));
+        }
+
+        private static Guid? GetAuthenticatedUserId(HttpContext context)
+        {
+            if (context.User?.Identity?.IsAuthenticated != true)
+                return null;
+
+            var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return Guid.TryParse(userIdStr, out var parsedId) ? parsedId : null;
         }
 
     }

@@ -1,0 +1,143 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using MSAVA_API.Middleware;
+using MSAVA_INF.Contexts;
+using MSAVA_INF.Models;
+using MSAVA_Shared.Models;
+
+namespace MSAVA_API.Tests;
+
+public class ExceptionCatcherMiddlewareTests
+{
+    [Test]
+    public async Task InvokeAsync_ReturnsOriginalErrorResponseWhenDatabaseLoggingFails()
+    {
+        using var dbContext = CreateContext(throwOnSave: true);
+        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new KeyNotFoundException("File reference missing."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        context.Response.ContentType.Should().Be("application/json");
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("File reference missing.");
+        response.StackTrace.Should().BeNull();
+        dbContext.ChangeTracker.Entries<ErrorLogDB>().Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task InvokeAsync_PersistsErrorLogWithAuthenticatedUserWhenDatabaseLoggingSucceeds()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var userId = Guid.NewGuid();
+        var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new ArgumentException("Bad query."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        response.Should().NotBeNull();
+        response!.UserId.Should().Be(userId);
+        errorLog.Id.Should().Be(response.Id);
+        errorLog.UserId.Should().Be(userId);
+        errorLog.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    private static TestDataContext CreateContext(bool throwOnSave)
+    {
+        var options = new DbContextOptionsBuilder<BaseDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new TestDataContext(options, throwOnSave);
+    }
+
+    private static DefaultHttpContext CreateHttpContext(
+        BaseDataContext dbContext,
+        bool isDevelopment,
+        Guid? userId = null)
+    {
+        var services = new ServiceCollection()
+            .AddSingleton<IHostEnvironment>(new TestHostEnvironment(isDevelopment ? Environments.Development : Environments.Production))
+            .AddSingleton<ILogger<ExceptionCatcherMiddleware>>(NullLogger<ExceptionCatcherMiddleware>.Instance)
+            .AddSingleton(dbContext)
+            .BuildServiceProvider();
+
+        var context = new DefaultHttpContext
+        {
+            RequestServices = services
+        };
+        context.Response.Body = new MemoryStream();
+
+        if (userId is not null)
+        {
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())],
+                authenticationType: "Test"));
+        }
+
+        return context;
+    }
+
+    private static async Task<string> ReadResponseBodyAsync(HttpContext context)
+    {
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
+        return await reader.ReadToEndAsync();
+    }
+
+    private sealed class TestDataContext : BaseDataContext
+    {
+        private readonly bool _throwOnSave;
+
+        public TestDataContext(DbContextOptions<BaseDataContext> options, bool throwOnSave) : base(options)
+        {
+            _throwOnSave = throwOnSave;
+        }
+
+        public override int SaveChanges()
+        {
+            if (_throwOnSave)
+                throw new InvalidOperationException("Simulated error-log persistence failure.");
+
+            return base.SaveChanges();
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public TestHostEnvironment(string environmentName)
+        {
+            EnvironmentName = environmentName;
+        }
+
+        public string EnvironmentName { get; set; }
+
+        public string ApplicationName { get; set; } = "MSAVA.API.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+}
