@@ -38,6 +38,7 @@ public class AuthenticationService : IAuthenticationService
     public async Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        EnsureCredentialsProvided(request.Username, request.Password);
 
         UserDB? user = await _context.Users
             .AsNoTracking()
@@ -46,6 +47,9 @@ public class AuthenticationService : IAuthenticationService
 
         if (user == null || !PasswordUtils.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
             throw new InvalidOperationException("Username doesn't exist or password is incorrect.");
+
+        if (user.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot log in.");
 
         JwtDB token = await GenerateJwtTokenAsync(user);
         _serviceLogger.WriteLog(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
@@ -112,6 +116,7 @@ public class AuthenticationService : IAuthenticationService
     public async Task<Guid> RegisterAsync(RegisterRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        EnsureCredentialsProvided(request.Username, request.Password);
 
         if (request.InviteCode == Guid.Empty)
             throw new InvalidOperationException("Invite code is required.");
@@ -147,5 +152,14 @@ public class AuthenticationService : IAuthenticationService
         _serviceLogger.WriteLog(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
 
         return user.Id;
+    }
+
+    private static void EnsureCredentialsProvided(string username, string password)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+            throw new ArgumentException("Username must be provided.", nameof(username));
+
+        if (string.IsNullOrWhiteSpace(password))
+            throw new ArgumentException("Password must be provided.", nameof(password));
     }
 }
