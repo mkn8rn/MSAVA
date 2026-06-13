@@ -63,16 +63,6 @@ public class MetadataStore : IDisposable
     }
 
     /// <summary>
-    /// Updates an existing metadata record.
-    /// </summary>
-    public bool UpdateMetadata(SavedFileMetaRecord record)
-    {
-        var result = _files.Update(record);
-        if (result) InvalidateCache(record.FileHashHex, record.FileExtension);
-        return result;
-    }
-
-    /// <summary>
     /// Gets a metadata record by its reference ID.
     /// </summary>
     public SavedFileMetaRecord? GetByRefId(Guid refId)
@@ -87,15 +77,6 @@ public class MetadataStore : IDisposable
     {
         var hashHex = Convert.ToHexString(fileHash);
         return _files.Find(x => x.FileHashHex == hashHex && x.FileExtension == fileExtension);
-    }
-
-    /// <summary>
-    /// Gets all metadata records for a file hash (any extension).
-    /// </summary>
-    public IEnumerable<SavedFileMetaRecord> GetByFileHash(byte[] fileHash)
-    {
-        var hashHex = Convert.ToHexString(fileHash);
-        return _files.Find(x => x.FileHashHex == hashHex);
     }
 
     /// <summary>
@@ -185,17 +166,6 @@ public class MetadataStore : IDisposable
     }
 
     /// <summary>
-    /// Deletes all metadata records for a file hash and extension.
-    /// </summary>
-    public int DeleteByFileHash(byte[] fileHash, string fileExtension)
-    {
-        var hashHex = Convert.ToHexString(fileHash);
-        var count = _files.DeleteMany(x => x.FileHashHex == hashHex && x.FileExtension == fileExtension);
-        if (count > 0) InvalidateCache(hashHex, fileExtension);
-        return count;
-    }
-
-    /// <summary>
     /// Checks if any metadata exists for a file hash and extension.
     /// </summary>
     public bool Exists(byte[] fileHash, string fileExtension)
@@ -203,11 +173,6 @@ public class MetadataStore : IDisposable
         var hashHex = Convert.ToHexString(fileHash);
         return _files.Exists(x => x.FileHashHex == hashHex && x.FileExtension == fileExtension);
     }
-
-    /// <summary>
-    /// Gets the total count of metadata records.
-    /// </summary>
-    public int Count() => _files.Count();
 
     private void InvalidateCache(string hashHex, string fileExtension)
     {
