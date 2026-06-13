@@ -12,6 +12,48 @@ namespace MSAVA_App.Tests;
 public class AccessGroupServiceTests
 {
     [Test]
+    public async Task CreateAccessGroup_PersistsTrimmedNameAndAddsSessionUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        var accessGroupId = service.CreateAccessGroup("  Editors  ");
+
+        var accessGroup = context.AccessGroups
+            .Include(group => group.Users)
+            .Single(group => group.Id == accessGroupId);
+        accessGroup.Name.Should().Be("Editors");
+        accessGroup.OwnerId.Should().Be(owner.Id);
+        accessGroup.Users.Should().ContainSingle(user => user.Id == owner.Id);
+    }
+
+    [TestCase("")]
+    [TestCase(" ")]
+    public async Task CreateAccessGroup_RejectsBlankName(string name)
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        var act = () => service.CreateAccessGroup(name);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Access group name must be provided.*");
+        context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_AddsUserWhenSessionUserOwnsGroup()
     {
         using var context = CreateContext();

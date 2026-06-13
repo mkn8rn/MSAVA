@@ -35,6 +35,7 @@ public class AccessGroupService
 
     public Guid CreateAccessGroup(string name)
     {
+        string accessGroupName = NormalizeAccessGroupName(name);
         Guid userId = _userService.GetSessionUserId();
 
         var user = _context.Users.SingleOrDefault(u => u.Id == userId)
@@ -45,7 +46,7 @@ public class AccessGroupService
             Id = Guid.NewGuid(),
             OwnerId = user.Id,
             CreatedAt = DateTime.UtcNow,
-            Name = name,
+            Name = accessGroupName,
             Users = [],
             SubGroups = []
         };
@@ -58,8 +59,8 @@ public class AccessGroupService
 
         _context.SaveChanges(); // Single save for both operations
 
-        _serviceLogger.WriteLog(GroupLogActions.AccessGroupCreated, $"Access group '{name}' created by user {user.Username}.", user.Id, accessGroup.Id);
-        _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{name}'.", user.Id, accessGroup.Id);
+        _serviceLogger.WriteLog(GroupLogActions.AccessGroupCreated, $"Access group '{accessGroupName}' created by user {user.Username}.", user.Id, accessGroup.Id);
+        _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroupName}'.", user.Id, accessGroup.Id);
 
         return accessGroup.Id;
     }
@@ -95,5 +96,13 @@ public class AccessGroupService
 
             _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", sessionUserId, accessGroup.Id);
         }
+    }
+
+    private static string NormalizeAccessGroupName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Access group name must be provided.", nameof(name));
+
+        return name.Trim();
     }
 }
