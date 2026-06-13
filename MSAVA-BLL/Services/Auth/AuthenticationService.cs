@@ -47,7 +47,7 @@ public class AuthenticationService : IAuthenticationService
             .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
 
         if (user == null || !PasswordUtils.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
-            throw new InvalidOperationException("Username doesn't exist or password is incorrect.");
+            throw new UnauthorizedAccessException("Username doesn't exist or password is incorrect.");
 
         if (user.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot log in.");

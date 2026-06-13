@@ -82,6 +82,44 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_RejectsUnknownUsernameAsUnauthorized()
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = "missing-user",
+            Password = "password"
+        });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Username doesn't exist or password is incorrect.");
+        context.Jwts.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task LoginAsync_RejectsWrongPasswordAsUnauthorized()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("existing-user", "correct-password", isBanned: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = user.Username,
+            Password = "wrong-password"
+        });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Username doesn't exist or password is incorrect.");
+        context.Jwts.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task LoginAsync_TrimsUsernameBeforeLookup()
     {
         using var context = CreateContext();
