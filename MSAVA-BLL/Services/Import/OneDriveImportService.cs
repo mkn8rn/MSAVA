@@ -53,46 +53,53 @@ public class OneDriveImportService
         var tempFilePath = Path.GetTempFileName();
         _serviceLogger.LogInformation($"Downloading OneDrive content to temp path {tempFilePath}");
 
-        await using (var contentStream = await resp.Content.ReadAsStreamAsync(cancellationToken))
-        await using (var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+        try
         {
-            await contentStream.CopyToAsync(fs, cancellationToken);
-        }
-
-        string finalFileName = dto.Description ?? "OneDrive File";
-        string inferredExtension = GetExtensionFromResponse(resp);
-
-        if (resp.Content.Headers.ContentDisposition != null)
-        {
-            var cd = resp.Content.Headers.ContentDisposition;
-            var fileName = cd.FileNameStar ?? cd.FileName;
-            if (!string.IsNullOrWhiteSpace(fileName))
+            await using (var contentStream = await resp.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                fileName = fileName.Trim('"');
-                finalFileName = Path.GetFileNameWithoutExtension(fileName);
-                var fileExt = Path.GetExtension(fileName).TrimStart('.');
-                if (!string.IsNullOrWhiteSpace(fileExt))
-                    inferredExtension = fileExt;
+                await contentStream.CopyToAsync(fs, cancellationToken);
             }
+
+            string finalFileName = dto.Description ?? "OneDrive File";
+            string inferredExtension = GetExtensionFromResponse(resp);
+
+            if (resp.Content.Headers.ContentDisposition != null)
+            {
+                var cd = resp.Content.Headers.ContentDisposition;
+                var fileName = cd.FileNameStar ?? cd.FileName;
+                if (!string.IsNullOrWhiteSpace(fileName))
+                {
+                    fileName = fileName.Trim('"');
+                    finalFileName = Path.GetFileNameWithoutExtension(fileName);
+                    var fileExt = Path.GetExtension(fileName).TrimStart('.');
+                    if (!string.IsNullOrWhiteSpace(fileExt))
+                        inferredExtension = fileExt;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(inferredExtension))
+                inferredExtension = "bin";
+
+            var fetchDto = new SaveFileFromFetchDTO
+            {
+                FileName = finalFileName,
+                FileExtension = inferredExtension,
+                TempFilePath = tempFilePath,
+                AccessGroupId = dto.AccessGroupId,
+                Tags = dto.Tags ?? [],
+                Categories = dto.Categories ?? [],
+                Description = dto.Description ?? string.Empty,
+                PublicViewing = dto.PublicViewing,
+                PublicDownload = dto.PublicDownload
+            };
+
+            return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
         }
-
-        if (string.IsNullOrWhiteSpace(inferredExtension))
-            inferredExtension = "bin";
-
-        var fetchDto = new SaveFileFromFetchDTO
+        finally
         {
-            FileName = finalFileName,
-            FileExtension = inferredExtension,
-            TempFilePath = tempFilePath,
-            AccessGroupId = dto.AccessGroupId,
-            Tags = dto.Tags ?? [],
-            Categories = dto.Categories ?? [],
-            Description = dto.Description ?? string.Empty,
-            PublicViewing = dto.PublicViewing,
-            PublicDownload = dto.PublicDownload
-        };
-
-        return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
+            DeleteTempFileIfPresent(tempFilePath);
+        }
     }
 
     private static Uri ParseFileUrl(string fileUrl)
@@ -159,5 +166,13 @@ public class OneDriveImportService
             _ when contentType.Contains("png") => "png",
             _ => string.Empty
         };
+    }
+
+    private static void DeleteTempFileIfPresent(string tempFilePath)
+    {
+        if (!File.Exists(tempFilePath))
+            return;
+
+        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
     }
 }

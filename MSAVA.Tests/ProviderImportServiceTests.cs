@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
@@ -164,13 +165,122 @@ public class ProviderImportServiceTests
         }
     }
 
-    private static FilePersistenceService CreatePersistenceService(BaseDataContext context, MetadataStore metadataStore)
+    [Test]
+    public async Task GoogleDriveImportAsync_DeletesTempFileWhenDownloadReturnsHtml()
+    {
+        var responseIndex = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateResponse(HttpStatusCode.OK, "application/octet-stream", "initial ok");
+
+            return CreateResponse(HttpStatusCode.OK, "text/html", "<html>not a file</html>");
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger),
+                new ServiceLogger(logger, context),
+                httpClientFactory);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Google Drive returned HTML instead of file content.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_DeletesTempFileWhenContentCopyFails()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new ThrowingReadStream())
+            };
+            response.Content.Headers.ContentType = new("text/plain");
+            return response;
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger),
+                new ServiceLogger(logger, context),
+                httpClientFactory);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<IOException>()
+                .WithMessage("Simulated provider stream failure.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().ContainSingle();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, string contentType, string body)
+    {
+        var response = new HttpResponseMessage(statusCode)
+        {
+            Content = new StringContent(body)
+        };
+        response.Content.Headers.ContentType = new(contentType);
+        return response;
+    }
+
+    private static string GetLoggedTempFilePath(CapturingLogger<ServiceLogger> logger)
+    {
+        var logMessage = logger.Messages.Single(message => message.Contains("temp path ", StringComparison.Ordinal));
+        return logMessage[(logMessage.LastIndexOf("temp path ", StringComparison.Ordinal) + "temp path ".Length)..];
+    }
+
+    private static FilePersistenceService CreatePersistenceService(
+        BaseDataContext context,
+        MetadataStore metadataStore,
+        ILogger<ServiceLogger>? serviceLogger = null)
     {
         return new FilePersistenceService(
             context,
             new FileManager(metadataStore),
             new NullHttpContextAccessor(),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            new ServiceLogger(serviceLogger ?? NullLogger<ServiceLogger>.Instance, context),
             NullLogger<FilePersistenceService>.Instance);
     }
 
@@ -232,6 +342,58 @@ public class ProviderImportServiceTests
             Requests.Add(request);
             return Task.FromResult(_responseFactory(request));
         }
+    }
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
+        }
+    }
+
+    private sealed class ThrowingReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            throw new IOException("Simulated provider stream failure.");
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromException<int>(new IOException("Simulated provider stream failure."));
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private sealed class NullHttpContextAccessor : IHttpContextAccessor

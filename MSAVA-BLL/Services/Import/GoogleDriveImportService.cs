@@ -83,37 +83,44 @@ public class GoogleDriveImportService
         var tempFilePath = Path.GetTempFileName();
         _serviceLogger.LogInformation($"Downloading Google Drive file {fileId} to temp path {tempFilePath}");
 
-        string finalExtension;
-        using (var downloadResp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        try
         {
-            downloadResp.EnsureSuccessStatusCode();
+            string finalExtension;
+            using (var downloadResp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+            {
+                downloadResp.EnsureSuccessStatusCode();
 
-            var respMediaType = downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-            if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Google Drive returned HTML instead of file content.");
+                var respMediaType = downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty;
+                if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Google Drive returned HTML instead of file content.");
 
-            await using var ms = await downloadResp.Content.ReadAsStreamAsync(cancellationToken);
-            await using var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-            await ms.CopyToAsync(fs, cancellationToken);
+                await using var ms = await downloadResp.Content.ReadAsStreamAsync(cancellationToken);
+                await using var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await ms.CopyToAsync(fs, cancellationToken);
 
-            var inferredExtension = GetExtensionFromContentType(downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty);
-            finalExtension = string.IsNullOrWhiteSpace(inferredExtension) ? "bin" : inferredExtension;
+                var inferredExtension = GetExtensionFromContentType(downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty);
+                finalExtension = string.IsNullOrWhiteSpace(inferredExtension) ? "bin" : inferredExtension;
+            }
+
+            var fetchDto = new SaveFileFromFetchDTO
+            {
+                FileName = "Google Drive File",
+                FileExtension = finalExtension,
+                TempFilePath = tempFilePath,
+                AccessGroupId = dto.AccessGroupId,
+                Tags = dto.Tags ?? [],
+                Categories = dto.Categories ?? [],
+                Description = dto.Description ?? string.Empty,
+                PublicViewing = dto.PublicViewing,
+                PublicDownload = dto.PublicDownload
+            };
+
+            return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
         }
-
-        var fetchDto = new SaveFileFromFetchDTO
+        finally
         {
-            FileName = "Google Drive File",
-            FileExtension = finalExtension,
-            TempFilePath = tempFilePath,
-            AccessGroupId = dto.AccessGroupId,
-            Tags = dto.Tags ?? [],
-            Categories = dto.Categories ?? [],
-            Description = dto.Description ?? string.Empty,
-            PublicViewing = dto.PublicViewing,
-            PublicDownload = dto.PublicDownload
-        };
-
-        return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
+            DeleteTempFileIfPresent(tempFilePath);
+        }
     }
 
     private static string? ExtractDriveFileId(string urlOrId)
@@ -165,5 +172,13 @@ public class GoogleDriveImportService
             _ when contentType.Contains("png") => "png",
             _ => string.Empty
         };
+    }
+
+    private static void DeleteTempFileIfPresent(string tempFilePath)
+    {
+        if (!File.Exists(tempFilePath))
+            return;
+
+        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
     }
 }
