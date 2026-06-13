@@ -113,7 +113,7 @@ public class FileDownloadService : IFileDownloadService
 
     private Guid CanSessionUserAccessFile(string fileNameWithExtension)
     {
-        SessionDTO claims = _userService.GetSessionClaims();
+        SessionDTO claims = GetActiveSession();
         try
         {
             return _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups);
@@ -126,7 +126,7 @@ public class FileDownloadService : IFileDownloadService
 
     private bool CanSessionUserAccessFile(SavedFileReferenceDB fileReference)
     {
-        SessionDTO claims = _userService.GetSessionClaims();
+        SessionDTO claims = GetActiveSession();
 
         if (claims.IsAdmin)
             return true;
@@ -141,5 +141,17 @@ public class FileDownloadService : IFileDownloadService
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
         return canAccess;
+    }
+
+    private SessionDTO GetActiveSession()
+    {
+        SessionDTO session = _userService.GetSessionClaims();
+        if (!session.LoggedIn || session.UserId == Guid.Empty)
+            throw new UnauthorizedAccessException("Session user is required to download files.");
+
+        if (session.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot download files.");
+
+        return session;
     }
 }
