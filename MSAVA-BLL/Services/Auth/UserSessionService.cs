@@ -33,7 +33,12 @@ public class UserSessionService : IUserSessionService
         return MappingUtils.MapUserDTOWithRelationships(userDb);
     }
 
-    public Guid GetSessionUserId() => GetTokenSessionDto().UserId;
+    public Guid GetSessionUserId()
+    {
+        return RequireActiveSession(
+            "Session user is required to access the current user.",
+            "Banned users cannot access the current user.").UserId;
+    }
 
     public SessionDTO GetSessionClaims()
     {
@@ -67,14 +72,22 @@ public class UserSessionService : IUserSessionService
         };
     }
 
-    public bool IsSessionUserAdmin() => GetSessionClaims().IsAdmin;
+    public bool IsSessionUserAdmin()
+    {
+        return RequireActiveSession(
+            "Session user is required to check admin status.",
+            "Banned users cannot check admin status.").IsAdmin;
+    }
 
     public UserDTO GetSessionUser() => MappingUtils.MapUserDTOWithRelationships(GetSessionUserDB());
 
     public UserDB GetSessionUserDB()
     {
-        Guid sessionUserId = GetSessionUserId();
-        return GetSessionUserDb(sessionUserId);
+        SessionDTO session = RequireActiveSession(
+            "Session user is required to access the current user.",
+            "Banned users cannot access the current user.");
+
+        return GetSessionUserDb(session.UserId);
     }
 
     private UserDB GetSessionUserDb(Guid sessionUserId)
@@ -102,13 +115,20 @@ public class UserSessionService : IUserSessionService
 
     private void RequireActiveAdminSession()
     {
-        SessionDTO session = SessionGuard.RequireActive(
-            GetSessionClaims(),
+        SessionDTO session = RequireActiveSession(
             "Session user is required to list users.",
             "Banned users cannot list users.");
 
         if (!session.IsAdmin)
             throw new UnauthorizedAccessException("Only admins can list users.");
+    }
+
+    private SessionDTO RequireActiveSession(string missingSessionMessage, string bannedSessionMessage)
+    {
+        return SessionGuard.RequireActive(
+            GetSessionClaims(),
+            missingSessionMessage,
+            bannedSessionMessage);
     }
 
     private SessionDTO GetTokenSessionDto()

@@ -192,6 +192,87 @@ public class UserSessionServiceTests
             .WithMessage("Banned users cannot list users.");
     }
 
+    [Test]
+    public async Task GetSessionUserId_RejectsBannedUserUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var bannedUser = CreateUser(isAdmin: false, isBanned: true, isWhitelisted: true);
+        context.Users.Add(bannedUser);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = bannedUser.Id,
+                Username = bannedUser.Username,
+                IsBanned = false,
+                Roles = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Action act = () => service.GetSessionUserId();
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot access the current user.");
+    }
+
+    [Test]
+    public void GetSessionUser_RejectsAnonymousSession()
+    {
+        using var context = CreateContext();
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = false,
+                UserId = Guid.Empty,
+                Username = string.Empty,
+                Roles = [],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.MinValue,
+                ExpiresAt = DateTime.MinValue
+            });
+
+        Action act = () => service.GetSessionUser();
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Session user is required to access the current user.");
+    }
+
+    [Test]
+    public async Task IsSessionUserAdmin_RejectsBannedAdminUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var bannedAdmin = CreateUser(isAdmin: true, isBanned: true, isWhitelisted: true);
+        context.Users.Add(bannedAdmin);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = bannedAdmin.Id,
+                Username = bannedAdmin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                Roles = ["Admin"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Action act = () => service.IsSessionUserAdmin();
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot check admin status.");
+    }
+
     private static UserSessionService CreateService(BaseDataContext context, SessionDTO session)
     {
         var httpContext = new DefaultHttpContext();
