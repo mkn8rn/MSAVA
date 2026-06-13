@@ -1,6 +1,5 @@
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
-using Microsoft.AspNetCore.Mvc;
 using MSAVA_INF.Contexts;
 
 namespace MSAVA_INF.Managers;
@@ -113,21 +112,6 @@ public class FileManager
     public FileStream GetFileStream(string fullPath, FileStreamOptions options)
     {
         return new FileStream(fullPath, options);
-    }
-
-    public PhysicalFileResult GetPhysicalFile(string fileNameWithExtension, string contentType)
-    {
-        string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
-
-        if (!File.Exists(fullPath))
-            throw new FileNotFoundException($"File not found: {fullPath}");
-
-        string fileName = Path.GetFileName(fullPath);
-        return new PhysicalFileResult(fullPath, contentType)
-        {
-            FileDownloadName = fileName,
-            EnableRangeProcessing = true
-        };
     }
 
     public bool FileExists(byte[] fileHash, string fileExtension)
