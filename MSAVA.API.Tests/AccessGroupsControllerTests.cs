@@ -13,6 +13,16 @@ namespace MSAVA_API.Tests;
 
 public class AccessGroupsControllerTests
 {
+    [Test]
+    public void AccessGroupsController_DependsOnAccessGroupServiceInterface()
+    {
+        var constructor = typeof(AccessGroupsController).GetConstructors().Should().ContainSingle().Subject;
+
+        constructor.GetParameters()
+            .Should()
+            .ContainSingle(parameter => parameter.ParameterType == typeof(IAccessGroupService));
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task CreateAccessGroup_RejectsBlankNameBeforeServiceMutation(string name)

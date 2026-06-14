@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace MSAVA_BLL.Services.Auth;
 
 public class AccessGroupService
+    : IAccessGroupService
 {
     private readonly BaseDataContext _context;
     private readonly IUserSessionService _userService;

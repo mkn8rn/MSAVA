@@ -1,6 +1,6 @@
-using MSAVA_BLL.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MSAVA_BLL.Services.Interfaces;
 using System.ComponentModel.DataAnnotations;
 
 namespace MSAVA_API.Controllers;
@@ -14,9 +14,9 @@ public class AccessGroupsController : ControllerBase
     private const string UserIdRequiredMessage = "User id must be provided.";
     private const string AccessGroupIdRequiredMessage = "Access group id must be provided.";
 
-    private readonly AccessGroupService _accessGroupService;
+    private readonly IAccessGroupService _accessGroupService;
 
-    public AccessGroupsController(AccessGroupService accessGroupService)
+    public AccessGroupsController(IAccessGroupService accessGroupService)
     {
         _accessGroupService = accessGroupService ?? throw new ArgumentNullException(nameof(accessGroupService));
     }

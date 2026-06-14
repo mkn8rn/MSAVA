@@ -121,8 +121,8 @@ builder.Services.AddScoped<IFileDeduplicationService, FileDeduplicationService>(
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IFileQueryService, FileQueryService>();
 builder.Services.AddScoped<ISeedingService, SeedingService>();
+builder.Services.AddScoped<IAccessGroupService, AccessGroupService>();
 builder.Services.AddScoped<FilePersistenceService>();
-builder.Services.AddScoped<AccessGroupService>();
 builder.Services.AddScoped<InviteCodeService>();
 builder.Services.AddScoped<YouTubeImportService>();
 builder.Services.AddScoped<GoogleDriveImportService>();
