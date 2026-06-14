@@ -255,6 +255,52 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_ExtractsMetadataFromTempFileForNonSeekableInput()
+    {
+        var content = Encoding.UTF8.GetBytes("metadata from non seekable stream");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            await using var stream = new NonSeekableReadStream(content);
+            var dto = new SaveFileFromStreamDTO
+            {
+                FileName = "metadata-test",
+                FileExtension = "txt",
+                Stream = stream,
+                AccessGroupId = accessGroup.Id,
+                Tags = [],
+                Categories = [],
+                Description = string.Empty,
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            Guid fileRefId = await service.CreateFileFromStreamAsync(dto);
+
+            var fileData = context.ChangeTracker.Entries<SavedFileDataDB>()
+                .Select(entry => entry.Entity)
+                .Single(fileData => fileData.FileReferenceId == fileRefId);
+            fileData.Metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeTrue();
+            fileData.Metadata.RootElement.GetProperty("Type").GetString().Should().Be("Text");
+            fileData.Metadata.RootElement.GetProperty("WordCount").GetInt32().Should().Be(5);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromTempFileAsync_DeletesTempFileWhenAccessGroupIsRejected()
     {
         var content = Encoding.UTF8.GetBytes($"unauthorized-temp-{Guid.NewGuid()}");
@@ -572,6 +618,26 @@ public class FilePersistenceServiceTests
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
+    }
+
+    private sealed class NonSeekableReadStream : MemoryStream
+    {
+        public NonSeekableReadStream(byte[] buffer) : base(buffer)
+        {
+        }
+
+        public override bool CanSeek => false;
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin loc)
+        {
+            throw new NotSupportedException();
         }
     }
 }

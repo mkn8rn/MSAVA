@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Utils;
+using MSAVA_BLL.Utils.Metadata;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
@@ -48,11 +50,13 @@ public class FilePersistenceService
             var (fileHash, fileLength) = await CopyStreamToTempFileAndHashAsync(dto.Stream, tempFilePath, cancellationToken);
             var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
             var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
+            string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
+            JsonDocument metadata = ExtractMetadataFromTempFile(tempFilePath, fileExtension, fileLength);
 
             return await PersistFileRegistrationAsync(
                 savedFileDb,
                 metaRecord,
-                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId),
+                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId, metadata),
                 tempFilePath,
                 sessionUserId,
                 cancellationToken);
@@ -194,6 +198,12 @@ public class FilePersistenceService
         }
 
         return hashAlgorithm.Hash ?? throw new InvalidOperationException("Hash computation failed.");
+    }
+
+    private static JsonDocument ExtractMetadataFromTempFile(string tempFilePath, string fileExtension, long fileLength)
+    {
+        using var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return MetadataExtractor.ExtractMetadata(tempFileStream, fileExtension, fileLength);
     }
 
     private async Task EnsureSessionUserCanCreateInAccessGroupAsync(

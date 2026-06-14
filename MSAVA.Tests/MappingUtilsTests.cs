@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MSAVA_BLL.Utils;
+using MSAVA_BLL.Utils.Metadata;
 using MSAVA_INF.Models;
 using MSAVA_Shared.Models;
 
@@ -109,7 +110,8 @@ public class MappingUtilsTests
             fileReference,
             (ulong)content.Length,
             Guid.NewGuid(),
-            Guid.NewGuid());
+            Guid.NewGuid(),
+            MetadataExtractor.ExtractMetadata(stream, "txt", content.Length));
 
         data.FileExtension.Should().Be("txt");
         data.MimeType.Should().Be("text/plain");

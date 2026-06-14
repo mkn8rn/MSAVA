@@ -172,14 +172,16 @@ public static class MappingUtils
         SavedFileReferenceDB savedFileDb,
         ulong sizeInBytes,
         Guid originalCreator,
-        Guid lastModifiedBy)
+        Guid lastModifiedBy,
+        JsonDocument metadata)
     {
+        ArgumentNullException.ThrowIfNull(metadata);
+
         var checksum = BytesToHexString(savedFileDb.FileHash);
         var fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
         var mimeType = MetadataExtractor.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
-        var metadata = MetadataExtractor.ExtractMetadata(dto.Stream, fileExtension);
         var now = DateTime.UtcNow;
 
         return new SavedFileDataDB
