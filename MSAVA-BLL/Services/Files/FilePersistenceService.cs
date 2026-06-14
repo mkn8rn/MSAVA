@@ -36,6 +36,8 @@ public class FilePersistenceService
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
     {
+        ValidateStreamDto(dto);
+
         Guid sessionUserId = GetRequiredSessionUserId();
         await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, dto.AccessGroupId, cancellationToken);
 
@@ -63,10 +65,13 @@ public class FilePersistenceService
 
     public async Task<Guid> CreateFileFromTempFileAsync(SaveFileFromFetchDTO dto, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(dto);
         string tempFilePath = dto.TempFilePath;
 
         try
         {
+            ValidateFetchDto(dto);
+
             Guid sessionUserId = GetRequiredSessionUserId();
             await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, dto.AccessGroupId, cancellationToken);
 
@@ -123,6 +128,32 @@ public class FilePersistenceService
             DetachPendingFileEntities(savedFileDb, savedFileDataDb);
             throw;
         }
+    }
+
+    private static void ValidateStreamDto(SaveFileFromStreamDTO dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (string.IsNullOrWhiteSpace(dto.FileName))
+            throw new ArgumentException("FileName must be provided.", nameof(dto));
+        if (string.IsNullOrWhiteSpace(dto.FileExtension))
+            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
+        if (dto.Stream is null)
+            throw new ArgumentException("File content must be provided as a stream.", nameof(dto));
+        if (dto.AccessGroupId == Guid.Empty)
+            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+    }
+
+    private static void ValidateFetchDto(SaveFileFromFetchDTO dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.FileName))
+            throw new ArgumentException("FileName must be provided.", nameof(dto));
+        if (string.IsNullOrWhiteSpace(dto.FileExtension))
+            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
+        if (string.IsNullOrWhiteSpace(dto.TempFilePath))
+            throw new ArgumentException("TempFilePath must be provided.", nameof(dto));
+        if (dto.AccessGroupId == Guid.Empty)
+            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
     }
 
     private static async Task<(byte[] FileHash, long FileLength)> CopyStreamToTempFileAndHashAsync(

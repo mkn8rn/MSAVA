@@ -218,6 +218,42 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_RejectsMissingFileNameBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"missing-name-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+            dto.FileName = " ";
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileName must be provided.*");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromTempFileAsync_DeletesTempFileWhenAccessGroupIsRejected()
     {
         var content = Encoding.UTF8.GetBytes($"unauthorized-temp-{Guid.NewGuid()}");
@@ -248,6 +284,47 @@ public class FilePersistenceServiceTests
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("User cannot create a file in the requested access group.");
+
+            File.Exists(tempFilePath).Should().BeFalse();
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(tempFilePath);
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromTempFileAsync_DeletesTempFileWhenDtoValidationFails()
+    {
+        var content = Encoding.UTF8.GetBytes($"invalid-fetch-dto-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var tempFilePath = Path.GetTempFileName();
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            await File.WriteAllBytesAsync(tempFilePath, content);
+
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateFetchDto(tempFilePath, accessGroup.Id);
+            dto.FileExtension = " ";
+
+            Func<Task> act = () => service.CreateFileFromTempFileAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileExtension must be provided.*");
 
             File.Exists(tempFilePath).Should().BeFalse();
             File.Exists(contentPath).Should().BeFalse();
