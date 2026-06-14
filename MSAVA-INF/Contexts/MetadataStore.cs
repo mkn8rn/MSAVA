@@ -83,36 +83,39 @@ public class MetadataStore : IDisposable
     /// Checks if a user has access to a file. Uses in-memory cache for repeated checks.
     /// Returns null if access is denied.
     /// </summary>
-    public Guid? CheckAccess(byte[] fileHash, string fileExtension, List<Guid>? userAccessGroups)
+    public Guid? CheckAccess(byte[] fileHash, string fileExtension, List<Guid>? userAccessGroups, bool isAdmin = false)
     {
         var hashHex = Convert.ToHexString(fileHash);
-        return CheckAccessInternal(hashHex, fileExtension, userAccessGroups);
+        return CheckAccessInternal(hashHex, fileExtension, userAccessGroups, isAdmin);
     }
 
-    private Guid? CheckAccessInternal(string hashHex, string fileExtension, List<Guid>? userAccessGroups)
+    private Guid? CheckAccessInternal(string hashHex, string fileExtension, List<Guid>? userAccessGroups, bool isAdmin)
     {
         // For public access check (userAccessGroups is null), use cache
-        if (userAccessGroups is null)
+        if (!isAdmin && userAccessGroups is null)
         {
             var cacheKey = $"public:{hashHex}:{fileExtension}";
             if (_accessCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
                 return cached.RefId;
 
-            var result = CheckAccessFromDb(hashHex, fileExtension, null);
+            var result = CheckAccessFromDb(hashHex, fileExtension, null, isAdmin: false);
             _accessCache[cacheKey] = new CachedAccessResult(result, DateTime.UtcNow.Add(CacheExpiry));
             return result;
         }
 
         // For user-specific checks, query directly (access groups vary per user)
-        return CheckAccessFromDb(hashHex, fileExtension, userAccessGroups);
+        return CheckAccessFromDb(hashHex, fileExtension, userAccessGroups, isAdmin);
     }
 
-    private Guid? CheckAccessFromDb(string hashHex, string fileExtension, List<Guid>? userAccessGroups)
+    private Guid? CheckAccessFromDb(string hashHex, string fileExtension, List<Guid>? userAccessGroups, bool isAdmin)
     {
         var records = _files.Find(x => x.FileHashHex == hashHex && x.FileExtension == fileExtension);
 
         foreach (var record in records)
         {
+            if (isAdmin)
+                return record.RefId;
+
             if (record.PublicDownload)
                 return record.RefId;
 
@@ -127,9 +130,9 @@ public class MetadataStore : IDisposable
     /// Checks if a user has access to a file by filename (hash.extension format).
     /// Returns the RefId if allowed, throws if denied.
     /// </summary>
-    public Guid CheckAccessOrThrow(string fileHashHex, string fileExtension, List<Guid>? userAccessGroups)
+    public Guid CheckAccessOrThrow(string fileHashHex, string fileExtension, List<Guid>? userAccessGroups, bool isAdmin = false)
     {
-        var refId = CheckAccessInternal(fileHashHex.ToUpperInvariant(), fileExtension, userAccessGroups);
+        var refId = CheckAccessInternal(fileHashHex.ToUpperInvariant(), fileExtension, userAccessGroups, isAdmin);
 
         if (refId is null)
         {

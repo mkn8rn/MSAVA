@@ -158,6 +158,55 @@ public class FileDownloadServiceTests
         }
     }
 
+    [Test]
+    public void GetFileStreamByPath_AllowsAdminWithoutAccessGroup()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string fileNameWithExtension = $"{Convert.ToHexString(fileHash).ToLowerInvariant()}.txt";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "admin-path-download");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = Guid.NewGuid(),
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                PublicDownload = false
+            });
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "admin-user",
+                AccessGroups = [],
+                IsAdmin = true
+            });
+
+            var result = service.GetFileStreamByPath(fileNameWithExtension);
+
+            result.FileName.Should().Be(Path.GetFileNameWithoutExtension(fileNameWithExtension));
+            result.FileExtension.Should().Be("txt");
+            using var fileStream = result.FileStream;
+            using var reader = new StreamReader(fileStream);
+            reader.ReadToEnd().Should().Be("admin-path-download");
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static FileDownloadService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,

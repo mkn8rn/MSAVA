@@ -103,12 +103,12 @@ public class FileManager
         return new FileStream(fullPath, options);
     }
 
-    public Guid CheckFileAccessByPath(string fileNameWithExtension, List<Guid>? userAccessGroups)
+    public Guid CheckFileAccessByPath(string fileNameWithExtension, List<Guid>? userAccessGroups, bool isAdmin = false)
     {
         EnsureSafeFileName(fileNameWithExtension);
 
         var (hashHex, extension) = ParseFileName(fileNameWithExtension);
-        return _metadataStore.CheckAccessOrThrow(hashHex, extension, userAccessGroups);
+        return _metadataStore.CheckAccessOrThrow(hashHex, extension, userAccessGroups, isAdmin);
     }
 
     private static void EnsureSafeFileName(string fileNameWithExtension)

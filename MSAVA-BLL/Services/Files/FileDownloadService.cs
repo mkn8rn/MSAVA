@@ -112,7 +112,7 @@ public class FileDownloadService : IFileDownloadService
         SessionDTO claims = GetActiveSession();
         try
         {
-            Guid refId = _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups);
+            Guid refId = _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups, claims.IsAdmin);
             return new FilePathAccess(refId, claims);
         }
         catch (UnauthorizedAccessException)
