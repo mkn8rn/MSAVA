@@ -1,5 +1,3 @@
-using System.Buffers;
-
 namespace MSAVA_INF.Utils;
 
 public static class FileContentUtils
@@ -118,20 +116,6 @@ public static class FileContentUtils
 
         if (contentStream.CanSeek)
             contentStream.Position = originalPosition;
-
-        return IsFileContentValid(header, read, extension);
-    }
-
-    public static bool IsFileContentValid(FileStream fileStream, string extension)
-    {
-        if (string.IsNullOrWhiteSpace(extension))
-            return false;
-
-        extension = extension.Trim().TrimStart('.').ToLowerInvariant();
-        fileStream.Position = 0;
-        Span<byte> header = stackalloc byte[16];
-        int read = fileStream.Read(header);
-        fileStream.Position = 0;
 
         return IsFileContentValid(header, read, extension);
     }
