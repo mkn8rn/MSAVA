@@ -12,6 +12,7 @@ namespace MSAVA_API.Controllers;
 public class InviteCodeController : ControllerBase
 {
     private const int MaximumInviteCodeLifetimeHours = 24 * 365;
+    private const string InvalidMaxUsesMessage = "Invite code max uses must be greater than zero.";
 
     private readonly InviteCodeService _inviteCodeService;
 
@@ -30,6 +31,9 @@ public class InviteCodeController : ControllerBase
         [FromQuery][Required] int maxUses,
         [FromQuery][Required] int expiresInHours)
     {
+        if (maxUses <= 0)
+            return BadRequest(InvalidMaxUsesMessage);
+
         if (expiresInHours <= 0 || expiresInHours > MaximumInviteCodeLifetimeHours)
             return BadRequest($"Invite code expiration must be between 1 and {MaximumInviteCodeLifetimeHours} hours.");
 
@@ -47,6 +51,6 @@ public class InviteCodeController : ControllerBase
     public ActionResult GetInviteCodeById(Guid inviteCodeId)
     {
         var code = _inviteCodeService.GetInviteCodeById(inviteCodeId);
-        return code == null ? NotFound() : Ok(code);
+        return Ok(code);
     }
 }

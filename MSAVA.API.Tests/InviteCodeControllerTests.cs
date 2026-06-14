@@ -15,6 +15,23 @@ public class InviteCodeControllerTests
 {
     [TestCase(0)]
     [TestCase(-1)]
+    public async Task CreateInviteCode_RejectsInvalidMaxUsesBeforeServiceCreatesInviteCode(int maxUses)
+    {
+        using var context = CreateContext();
+        var admin = CreateUser(isAdmin: true, isBanned: false);
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, admin);
+
+        var response = await controller.CreateInviteCode(maxUses, expiresInHours: 1);
+
+        var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().Be("Invite code max uses must be greater than zero.");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
     [TestCase(8761)]
     [TestCase(int.MaxValue)]
     public async Task CreateInviteCode_RejectsInvalidExpirationHoursBeforeServiceCreatesInviteCode(int expiresInHours)
@@ -51,6 +68,22 @@ public class InviteCodeControllerTests
         inviteCode.MaxUses.Should().Be(2);
         inviteCode.ExpiresAt.Should().BeAfter(DateTime.UtcNow.AddHours(23));
         inviteCode.ExpiresAt.Should().BeBefore(DateTime.UtcNow.AddHours(25));
+    }
+
+    [Test]
+    public async Task GetInviteCodeById_LetsMissingInviteCodeReachExceptionMiddleware()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser(isAdmin: true, isBanned: false);
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, admin);
+        var missingInviteCodeId = Guid.NewGuid();
+
+        Action act = () => controller.GetInviteCodeById(missingInviteCodeId);
+
+        act.Should().Throw<KeyNotFoundException>()
+            .WithMessage($"Invite code with id {missingInviteCodeId} not found.");
     }
 
     private static InviteCodeController CreateController(BaseDataContext context, UserDB sessionUser)
