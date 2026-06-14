@@ -1,5 +1,6 @@
 using MSAVA_API.Authorization;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_Shared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,12 +19,12 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("me")]
-    public IActionResult GetCurrentUser() => Ok(_userService.GetSessionUser());
+    public ActionResult<UserDTO> GetCurrentUser() => Ok(_userService.GetSessionUser());
 
     [HttpGet("claims")]
-    public IActionResult GetUserClaims() => Ok(_userService.GetSessionClaims());
+    public ActionResult<SessionDTO> GetUserClaims() => Ok(_userService.GetSessionClaims());
 
     [HttpGet("all")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public IActionResult GetAll() => Ok(_userService.GetAllUsers());
+    public ActionResult<List<UserDTO>> GetAll() => Ok(_userService.GetAllUsers());
 }
