@@ -89,6 +89,10 @@ public class FileUploadClientService
                 var id = await resp.Content.ReadFromJsonAsync<Guid>(cancellationToken: ct);
                 return new UploadOutcome(true, status, id.ToString(), null);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to parse GUID from upload response");
@@ -100,6 +104,10 @@ public class FileUploadClientService
         {
             string error;
             try { error = await resp.Content.ReadAsStringAsync(ct); }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch { error = resp.ReasonPhrase ?? "Unknown error"; }
             return new UploadOutcome(false, status, null, error);
         }
