@@ -107,6 +107,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 
 // Register services
+builder.Services.AddScoped<IRequestSessionAccessor, HttpContextRequestSessionAccessor>();
 builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();
 builder.Services.AddScoped<IFileIngestionService, FileIngestionService>();

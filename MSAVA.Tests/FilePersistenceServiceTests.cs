@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
@@ -420,12 +421,11 @@ public class FilePersistenceServiceTests
     {
         var fileManager = new FileManager(metadataStore);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
-        var httpContextAccessor = new TestHttpContextAccessor();
+        SessionDTO? session = null;
 
         if (sessionUserId is not null)
         {
-            httpContextAccessor.HttpContext = new TestHttpContext();
-            httpContextAccessor.HttpContext.Items["SessionDTO"] = new SessionDTO
+            session = new SessionDTO
             {
                 LoggedIn = true,
                 UserId = sessionUserId.Value,
@@ -444,7 +444,7 @@ public class FilePersistenceServiceTests
         return new FilePersistenceService(
             context,
             fileManager,
-            httpContextAccessor,
+            new TestRequestSessionAccessor(session),
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance);
     }
@@ -532,39 +532,16 @@ public class FilePersistenceServiceTests
             Directory.Delete(path, recursive: true);
     }
 
-    private sealed class TestHttpContextAccessor : IHttpContextAccessor
+    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
     {
-        public HttpContext? HttpContext { get; set; }
-    }
+        private readonly SessionDTO? _session;
 
-    private sealed class TestHttpContext : HttpContext
-    {
-        public override IFeatureCollection Features { get; } = new FeatureCollection();
-        public override HttpRequest Request => throw new NotSupportedException();
-        public override HttpResponse Response => throw new NotSupportedException();
-        public override ConnectionInfo Connection => throw new NotSupportedException();
-        public override WebSocketManager WebSockets => throw new NotSupportedException();
-        public override ClaimsPrincipal User { get; set; } = new();
-        public override IDictionary<object, object?> Items { get; set; } = new Dictionary<object, object?>();
-        public override IServiceProvider RequestServices { get; set; } = EmptyServiceProvider.Instance;
-        public override CancellationToken RequestAborted { get; set; }
-        public override string TraceIdentifier { get; set; } = Guid.NewGuid().ToString("N");
-        public override ISession Session { get; set; } = null!;
-#pragma warning disable CS0618
-        [Obsolete]
-        public override AuthenticationManager Authentication => throw new NotSupportedException();
-#pragma warning restore CS0618
-
-        public override void Abort()
+        public TestRequestSessionAccessor(SessionDTO? session)
         {
+            _session = session;
         }
-    }
 
-    private sealed class EmptyServiceProvider : IServiceProvider
-    {
-        public static readonly EmptyServiceProvider Instance = new();
-
-        public object? GetService(Type serviceType) => null;
+        public SessionDTO? GetSession() => _session;
     }
 
     private sealed class TestDataContext : BaseDataContext

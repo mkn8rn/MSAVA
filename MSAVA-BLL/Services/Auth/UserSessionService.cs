@@ -1,7 +1,6 @@
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Models;
-using Microsoft.AspNetCore.Http;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Loggers;
 using MSAVA_INF.Contexts;
@@ -12,13 +11,13 @@ namespace MSAVA_BLL.Services.Auth;
 public class UserSessionService : IUserSessionService
 {
     private readonly BaseDataContext _context;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IRequestSessionAccessor _requestSessionAccessor;
     private readonly ServiceLogger _serviceLogger;
 
-    public UserSessionService(BaseDataContext context, IHttpContextAccessor httpContextAccessor, ServiceLogger serviceLogger)
+    public UserSessionService(BaseDataContext context, IRequestSessionAccessor requestSessionAccessor, ServiceLogger serviceLogger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
     }
 
@@ -150,7 +149,7 @@ public class UserSessionService : IUserSessionService
 
     private SessionDTO GetTokenSessionDto()
     {
-        if (_httpContextAccessor.HttpContext?.Items["SessionDTO"] is SessionDTO sessionDto)
+        if (_requestSessionAccessor.GetSession() is SessionDTO sessionDto)
             return sessionDto;
 
         throw new UnauthorizedAccessException("Session not found in HttpContext.");

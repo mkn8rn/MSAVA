@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Import;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
@@ -388,7 +389,7 @@ public class ProviderImportServiceTests
         return new FilePersistenceService(
             context,
             new FileManager(metadataStore),
-            new NullHttpContextAccessor(),
+            new TestRequestSessionAccessor(),
             new ServiceLogger(serviceLogger ?? NullLogger<ServiceLogger>.Instance, context),
             NullLogger<FilePersistenceService>.Instance);
     }
@@ -533,9 +534,9 @@ public class ProviderImportServiceTests
         }
     }
 
-    private sealed class NullHttpContextAccessor : IHttpContextAccessor
+    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
     {
-        public HttpContext? HttpContext { get; set; }
+        public SessionDTO? GetSession() => null;
     }
 
     private sealed class TestDataContext : BaseDataContext

@@ -1,4 +1,5 @@
 using MSAVA_API.Handlers;
+using MSAVA_BLL.Services.Auth;
 using MSAVA_Shared.Models;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
@@ -20,7 +21,7 @@ public class RequestContextMiddleware
         // Only populate SessionDTO - HeadersDTO is rarely needed and expensive
         var sessionDto = BuildSessionDto(context.User);
 
-        context.Items["SessionDTO"] = sessionDto;
+        context.Items[HttpContextRequestSessionAccessor.SessionItemKey] = sessionDto;
 
         await _next(context);
     }

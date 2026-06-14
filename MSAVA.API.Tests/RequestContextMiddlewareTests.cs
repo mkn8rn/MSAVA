@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using MSAVA_API.Middleware;
+using MSAVA_BLL.Services.Auth;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Tests;
@@ -26,7 +27,7 @@ public class RequestContextMiddlewareTests
 
         await middleware.InvokeAsync(context);
 
-        var session = context.Items["SessionDTO"].Should().BeOfType<SessionDTO>().Subject;
+        var session = context.Items[HttpContextRequestSessionAccessor.SessionItemKey].Should().BeOfType<SessionDTO>().Subject;
         session.LoggedIn.Should().BeTrue();
         session.UserId.Should().Be(userId);
         session.Username.Should().Be("session-user");
@@ -43,7 +44,7 @@ public class RequestContextMiddlewareTests
 
         await middleware.InvokeAsync(context);
 
-        var session = context.Items["SessionDTO"].Should().BeOfType<SessionDTO>().Subject;
+        var session = context.Items[HttpContextRequestSessionAccessor.SessionItemKey].Should().BeOfType<SessionDTO>().Subject;
         session.LoggedIn.Should().BeFalse();
         session.UserId.Should().Be(Guid.Empty);
         session.Username.Should().BeEmpty();

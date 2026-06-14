@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MSAVA_BLL.Loggers;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
@@ -16,20 +16,20 @@ public class FilePersistenceService
 {
     private readonly BaseDataContext _context;
     private readonly FileManager _fileManager;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IRequestSessionAccessor _requestSessionAccessor;
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FilePersistenceService> _logger;
 
     public FilePersistenceService(
         BaseDataContext context,
         FileManager fileManager,
-        IHttpContextAccessor httpContextAccessor,
+        IRequestSessionAccessor requestSessionAccessor,
         ServiceLogger serviceLogger,
         ILogger<FilePersistenceService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
-        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -217,9 +217,8 @@ public class FilePersistenceService
 
     private Guid GetRequiredSessionUserId()
     {
-        var session = _httpContextAccessor.HttpContext?.Items["SessionDTO"] as SessionDTO;
         return SessionGuard.RequireActive(
-            session,
+            _requestSessionAccessor.GetSession(),
             "User session not found.",
             "Banned users cannot create files.").UserId;
     }

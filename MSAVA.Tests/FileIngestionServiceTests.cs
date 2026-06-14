@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
@@ -125,7 +126,7 @@ public class FileIngestionServiceTests
         var persistenceService = new FilePersistenceService(
             context,
             fileManager,
-            new NullHttpContextAccessor(),
+            new TestRequestSessionAccessor(),
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance);
 
@@ -165,9 +166,9 @@ public class FileIngestionServiceTests
         }
     }
 
-    private sealed class NullHttpContextAccessor : IHttpContextAccessor
+    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
     {
-        public HttpContext? HttpContext { get; set; }
+        public SessionDTO? GetSession() => null;
     }
 
     private sealed class TestDataContext : BaseDataContext

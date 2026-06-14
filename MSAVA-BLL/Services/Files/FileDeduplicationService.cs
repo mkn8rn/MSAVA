@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MSAVA_BLL.Loggers;
@@ -19,20 +18,20 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 {
     private readonly BaseDataContext _context;
     private readonly MetadataStore _metadataStore;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IRequestSessionAccessor _requestSessionAccessor;
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FileDeduplicationService> _logger;
 
     public FileDeduplicationService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        IHttpContextAccessor httpContextAccessor,
+        IRequestSessionAccessor requestSessionAccessor,
         ServiceLogger serviceLogger,
         ILogger<FileDeduplicationService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
-        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -360,9 +359,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     {
         userId = Guid.Empty;
 
-        var session = _httpContextAccessor.HttpContext?.Items["SessionDTO"] as SessionDTO;
         if (!SessionGuard.TryRequireActive(
-                session,
+                _requestSessionAccessor.GetSession(),
                 out var activeSession,
                 out error,
                 "User session not found.",

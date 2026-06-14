@@ -1,8 +1,8 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Auth;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
 using MSAVA_Shared.Models;
@@ -394,13 +394,22 @@ public class UserSessionServiceTests
 
     private static UserSessionService CreateService(BaseDataContext context, SessionDTO session)
     {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Items["SessionDTO"] = session;
-
         return new UserSessionService(
             context,
-            new HttpContextAccessor { HttpContext = httpContext },
+            new TestRequestSessionAccessor(session),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+    }
+
+    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
+    {
+        private readonly SessionDTO _session;
+
+        public TestRequestSessionAccessor(SessionDTO session)
+        {
+            _session = session;
+        }
+
+        public SessionDTO? GetSession() => _session;
     }
 
     private static BaseDataContext CreateContext()
