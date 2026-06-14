@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -58,6 +59,25 @@ public class ExceptionCatcherMiddlewareTests
         errorLog.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
     }
 
+    [Test]
+    public async Task InvokeAsync_PersistsErrorLogWithJwtSubjectWhenNameIdentifierIsMissing()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var userId = Guid.NewGuid();
+        var context = CreateHttpContext(dbContext, isDevelopment: false, userId, JwtRegisteredClaimNames.Sub);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new ArgumentException("Bad query."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        response.Should().NotBeNull();
+        response!.UserId.Should().Be(userId);
+        errorLog.UserId.Should().Be(userId);
+    }
+
     private static TestDataContext CreateContext(bool throwOnSave)
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()
@@ -70,7 +90,8 @@ public class ExceptionCatcherMiddlewareTests
     private static DefaultHttpContext CreateHttpContext(
         BaseDataContext dbContext,
         bool isDevelopment,
-        Guid? userId = null)
+        Guid? userId = null,
+        string userIdClaimType = ClaimTypes.NameIdentifier)
     {
         var services = new ServiceCollection()
             .AddSingleton<IHostEnvironment>(new TestHostEnvironment(isDevelopment ? Environments.Development : Environments.Production))
@@ -87,7 +108,7 @@ public class ExceptionCatcherMiddlewareTests
         if (userId is not null)
         {
             context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())],
+                [new Claim(userIdClaimType, userId.Value.ToString())],
                 authenticationType: "Test"));
         }
 

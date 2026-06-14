@@ -1,10 +1,10 @@
+using MSAVA_API.Handlers;
 using MSAVA_Shared.Models;
 using MSAVA_INF.Models;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Runtime.Serialization;
-using System.Security.Claims;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
@@ -210,11 +210,7 @@ namespace MSAVA_API.Middleware
 
         private static Guid? GetAuthenticatedUserId(HttpContext context)
         {
-            if (context.User?.Identity?.IsAuthenticated != true)
-                return null;
-
-            var userIdStr = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(userIdStr, out var parsedId) ? parsedId : null;
+            return AuthorizationUser.GetAuthenticatedUserId(context.User);
         }
 
     }
