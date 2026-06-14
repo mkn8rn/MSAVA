@@ -39,13 +39,19 @@ public static class MetadataExtractor
                     
                 return entry.Extractor(fileStream, size);
             }
-            catch
+            catch (Exception ex) when (IsRecoverableExtractionFailure(ex))
             {
                 return CreateInvalidMetadata(size, "Extraction failed");
             }
         }
         
         return CreateInvalidMetadata(size, "Unsupported format");
+    }
+
+    private static bool IsRecoverableExtractionFailure(Exception exception)
+    {
+        return exception is not OperationCanceledException
+            and not OutOfMemoryException;
     }
 
     /// <summary>
