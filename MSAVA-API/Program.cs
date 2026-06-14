@@ -179,39 +179,7 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/api/files/public",
     OnPrepareResponse = ctx =>
     {
-        var filePath = ctx.File.PhysicalPath;
-        if (string.IsNullOrEmpty(filePath))
-        {
-            ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            ctx.Context.Abort();
-            return;
-        }
-
-        var fileName = Path.GetFileName(filePath);
-        var lastDot = fileName.LastIndexOf('.');
-        if (lastDot <= 0)
-        {
-            ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            ctx.Context.Abort();
-            return;
-        }
-
-        var hashHex = fileName[..lastDot].ToUpperInvariant();
-        var extension = fileName[(lastDot + 1)..].ToLowerInvariant();
-
-        try
-        {
-            var metadataStore = ctx.Context.RequestServices.GetRequiredService<MetadataStore>();
-            var fileHash = Convert.FromHexString(hashHex);
-            var refId = metadataStore.CheckAccess(fileHash, extension, userAccessGroups: null);
-
-            if (refId is null)
-            {
-                ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                ctx.Context.Abort();
-            }
-        }
-        catch
+        if (!PublicFileAccessGuard.CanServePublicFile(ctx.Context, ctx.File.PhysicalPath))
         {
             ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
             ctx.Context.Abort();
