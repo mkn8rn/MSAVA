@@ -18,6 +18,37 @@ namespace MSAVA_App.Tests;
 public class ProviderImportServiceTests
 {
     [Test]
+    public async Task ProviderHttpFailure_UsesReasonPhraseWhenBodyIsMissing()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.NotFound);
+
+        Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider request", response, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage("Provider request failed 404 (Not Found)");
+
+        exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task ProviderHttpFailure_TruncatesLongErrorBody()
+    {
+        string errorBody = new('x', 2050);
+        using var response = new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            Content = new StringContent(errorBody)
+        };
+        string expectedBody = new('x', 2048);
+
+        Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider download", response, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage($"Provider download failed 502: {expectedBody}");
+
+        exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+    }
+
+    [Test]
     public async Task GoogleDriveImportAsync_UsesInjectedHttpClientFactory()
     {
         var handler = new RecordingHttpMessageHandler(_ =>

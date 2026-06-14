@@ -7,8 +7,6 @@ namespace MSAVA_BLL.Services.Import;
 
 public class OneDriveImportService
 {
-    private const int MaximumProviderErrorBodyLength = 2048;
-
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -44,7 +42,7 @@ public class OneDriveImportService
 
         if (!resp.IsSuccessStatusCode)
         {
-            await ThrowProviderHttpFailureAsync("OneDrive download", resp, cancellationToken);
+            await ProviderHttpFailure.ThrowAsync("OneDrive download", resp, cancellationToken);
         }
 
         var respMediaType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
@@ -101,34 +99,6 @@ public class OneDriveImportService
         {
             DeleteTempFileIfPresent(tempFilePath);
         }
-    }
-
-    private static async Task ThrowProviderHttpFailureAsync(
-        string operation,
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        string body = await ReadProviderErrorBodyAsync(response, cancellationToken);
-        string message = string.IsNullOrWhiteSpace(body)
-            ? $"{operation} failed {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()})"
-            : $"{operation} failed {(int)response.StatusCode}: {body}";
-
-        throw new HttpRequestException(message, null, response.StatusCode);
-    }
-
-    private static async Task<string> ReadProviderErrorBodyAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        if (response.Content is null)
-            return string.Empty;
-
-        string body = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
-
-        if (body.Length <= MaximumProviderErrorBodyLength)
-            return body;
-
-        return body[..MaximumProviderErrorBodyLength];
     }
 
     private static Uri ParseFileUrl(string fileUrl)
