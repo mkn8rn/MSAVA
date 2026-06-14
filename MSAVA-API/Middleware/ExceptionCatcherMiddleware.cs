@@ -36,7 +36,7 @@ namespace MSAVA_API.Middleware
             {
                 Guid errorId = Guid.NewGuid();
                 DateTime timestamp = DateTime.UtcNow;
-                int statusCode = GetStatusCode(ex);
+                int statusCode = GetStatusCode(ex, context.User?.Identity?.IsAuthenticated == true);
                 logger.LogError(ex, "Unhandled exception occurred: " + errorId);
                 TryLogErrorToDb(errorId, timestamp, context, dbContext, statusCode, logger);
                 await HandleExceptionAsync(errorId, timestamp, context, ex, env.IsDevelopment(), statusCode);
@@ -74,7 +74,7 @@ namespace MSAVA_API.Middleware
             }
         }
 
-        private static int GetStatusCode(Exception exception)
+        private static int GetStatusCode(Exception exception, bool userIsAuthenticated)
         {
             int statusCode = StatusCodes.Status500InternalServerError;
 
@@ -114,8 +114,12 @@ namespace MSAVA_API.Middleware
                 case NotFiniteNumberException:
                     statusCode = StatusCodes.Status400BadRequest;
                     break;
-                // --- 401 Unauthorized ---
                 case UnauthorizedAccessException _:
+                    statusCode = userIsAuthenticated
+                        ? StatusCodes.Status403Forbidden
+                        : StatusCodes.Status401Unauthorized;
+                    break;
+                // --- 401 Unauthorized ---
                 case System.Security.Authentication.AuthenticationException _:
                 case SecurityTokenException _:
                     statusCode = StatusCodes.Status401Unauthorized;

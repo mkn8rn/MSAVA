@@ -78,6 +78,47 @@ public class ExceptionCatcherMiddlewareTests
         errorLog.UserId.Should().Be(userId);
     }
 
+    [Test]
+    public async Task InvokeAsync_ReturnsUnauthorizedForAnonymousUnauthorizedAccess()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new UnauthorizedAccessException("Session user is required."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        response.Should().NotBeNull();
+        response!.UserId.Should().BeNull();
+        errorLog.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        errorLog.UserId.Should().BeNull();
+    }
+
+    [Test]
+    public async Task InvokeAsync_ReturnsForbiddenForAuthenticatedUnauthorizedAccess()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var userId = Guid.NewGuid();
+        var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new UnauthorizedAccessException("Only admins can access this resource."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        response.Should().NotBeNull();
+        response!.UserId.Should().Be(userId);
+        errorLog.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        errorLog.UserId.Should().Be(userId);
+    }
+
     private static TestDataContext CreateContext(bool throwOnSave)
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()
