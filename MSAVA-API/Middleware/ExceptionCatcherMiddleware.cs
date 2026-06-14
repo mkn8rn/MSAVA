@@ -40,12 +40,12 @@ namespace MSAVA_API.Middleware
                 DateTime timestamp = DateTime.UtcNow;
                 int statusCode = GetStatusCode(ex, context.User?.Identity?.IsAuthenticated == true);
                 logger.LogError(ex, "Unhandled exception occurred: " + errorId);
-                TryLogErrorToDb(errorId, timestamp, context, dbContext, statusCode, logger);
+                await TryLogErrorToDbAsync(errorId, timestamp, context, dbContext, statusCode, logger);
                 await HandleExceptionAsync(errorId, timestamp, context, ex, env.IsDevelopment(), statusCode);
             }
         }
 
-        private static void TryLogErrorToDb(
+        private static async Task TryLogErrorToDbAsync(
             Guid errorId,
             DateTime timestamp,
             HttpContext context,
@@ -64,7 +64,7 @@ namespace MSAVA_API.Middleware
             try
             {
                 dbContext.ErrorLogs.Add(errorLog);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
             catch (Exception logException)
             {

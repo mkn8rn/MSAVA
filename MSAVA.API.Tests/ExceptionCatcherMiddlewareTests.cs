@@ -57,6 +57,8 @@ public class ExceptionCatcherMiddlewareTests
         errorLog.Id.Should().Be(response.Id);
         errorLog.UserId.Should().Be(userId);
         errorLog.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        dbContext.SaveChangesCalls.Should().Be(0);
+        dbContext.SaveChangesAsyncCalls.Should().Be(1);
     }
 
     [Test]
@@ -210,12 +212,27 @@ public class ExceptionCatcherMiddlewareTests
             _throwOnSave = throwOnSave;
         }
 
+        public int SaveChangesCalls { get; private set; }
+        public int SaveChangesAsyncCalls { get; private set; }
+
         public override int SaveChanges()
         {
+            SaveChangesCalls++;
+
             if (_throwOnSave)
                 throw new InvalidOperationException("Simulated error-log persistence failure.");
 
             return base.SaveChanges();
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            SaveChangesAsyncCalls++;
+
+            if (_throwOnSave)
+                throw new InvalidOperationException("Simulated error-log persistence failure.");
+
+            return base.SaveChangesAsync(cancellationToken);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
