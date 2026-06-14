@@ -85,7 +85,7 @@ public sealed record MsavaSignature
 
         // Parse remaining fields
         var contentHash = parts[2];
-        if (string.IsNullOrEmpty(contentHash) || contentHash.Length != 64) // SHA-256 = 64 hex chars
+        if (!IsSha256Hex(contentHash))
             return false;
 
         if (!long.TryParse(parts[3], out var fileId))
@@ -103,6 +103,27 @@ public sealed record MsavaSignature
         };
 
         return true;
+    }
+
+    private static bool IsSha256Hex(string contentHash)
+    {
+        if (contentHash.Length != 64)
+            return false;
+
+        foreach (char c in contentHash)
+        {
+            if (!IsAsciiHexDigit(c))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiHexDigit(char c)
+    {
+        return c is >= '0' and <= '9'
+            or >= 'a' and <= 'f'
+            or >= 'A' and <= 'F';
     }
 
     /// <summary>
