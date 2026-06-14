@@ -98,6 +98,24 @@ public class PublicFileAccessGuardTests
         }
     }
 
+    [Test]
+    public void CanServePublicFile_DeniesWhenMetadataStoreIsNotRegistered()
+    {
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var services = new ServiceCollection().BuildServiceProvider();
+        var context = new DefaultHttpContext
+        {
+            RequestServices = services
+        };
+        string physicalPath = Path.Combine(
+            Path.GetTempPath(),
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+
+        bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
     private static DefaultHttpContext CreateContext(MetadataStore metadataStore)
     {
         var services = new ServiceCollection()

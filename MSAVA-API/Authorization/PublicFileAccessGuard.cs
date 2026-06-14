@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MSAVA_INF.Contexts;
 
 namespace MSAVA_API.Authorization;
@@ -12,13 +13,20 @@ public static class PublicFileAccessGuard
         if (!TryParsePublicFileName(physicalPath, out var fileHash, out var extension))
             return false;
 
+        var metadataStore = context.RequestServices.GetService<MetadataStore>();
+        if (metadataStore is null)
+        {
+            LogDeniedRequest(context, physicalPath, "metadata store is not registered");
+            return false;
+        }
+
         try
         {
-            var metadataStore = context.RequestServices.GetRequiredService<MetadataStore>();
             return metadataStore.CheckAccess(fileHash, extension, userAccessGroups: null) is not null;
         }
-        catch
+        catch (Exception ex)
         {
+            LogDeniedRequest(context, physicalPath, "metadata lookup failed", ex);
             return false;
         }
     }
@@ -51,5 +59,34 @@ public static class PublicFileAccessGuard
         {
             return false;
         }
+    }
+
+    private static void LogDeniedRequest(
+        HttpContext context,
+        string? physicalPath,
+        string reason,
+        Exception? exception = null)
+    {
+        var logger = context.RequestServices
+            .GetService<ILoggerFactory>()
+            ?.CreateLogger(typeof(PublicFileAccessGuard).FullName!);
+
+        if (logger is null)
+            return;
+
+        if (exception is null)
+        {
+            logger.LogWarning(
+                "Denied public file request because {Reason}. Physical path: {PhysicalPath}",
+                reason,
+                physicalPath);
+            return;
+        }
+
+        logger.LogWarning(
+            exception,
+            "Denied public file request because {Reason}. Physical path: {PhysicalPath}",
+            reason,
+            physicalPath);
     }
 }
