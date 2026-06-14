@@ -103,19 +103,12 @@ public class ApiService
             _logger.LogWarning("API call {Method} {Url} failed with status {Status}", method, relativeUrl, resp.StatusCode);
             return default;
         }
-        try
-        {
-            return await resp.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to deserialize API response for {Url}", relativeUrl);
-            return default;
-        }
+
+        return await ReadJsonResponseAsync<T>(
+            resp,
+            relativeUrl,
+            ApiResponseKind.Json,
+            cancellationToken);
     }
 
     public async Task<T?> SendMultipartForAsync<T>(HttpMethod method, string relativeUrl, MultipartFormDataContent content, CancellationToken cancellationToken = default, bool anonymous = false)
@@ -127,9 +120,23 @@ public class ApiService
             _logger.LogWarning("API multipart call {Method} {Url} failed with status {Status}", method, relativeUrl, resp.StatusCode);
             return default;
         }
+
+        return await ReadJsonResponseAsync<T>(
+            resp,
+            relativeUrl,
+            ApiResponseKind.Multipart,
+            cancellationToken);
+    }
+
+    private async Task<T?> ReadJsonResponseAsync<T>(
+        HttpResponseMessage response,
+        string relativeUrl,
+        ApiResponseKind responseKind,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            return await resp.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
+            return await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -137,8 +144,25 @@ public class ApiService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to deserialize multipart API response for {Url}", relativeUrl);
+            LogDeserializationFailure(ex, responseKind, relativeUrl);
             return default;
         }
+    }
+
+    private void LogDeserializationFailure(Exception exception, ApiResponseKind responseKind, string relativeUrl)
+    {
+        if (responseKind == ApiResponseKind.Multipart)
+        {
+            _logger.LogError(exception, "Failed to deserialize multipart API response for {Url}", relativeUrl);
+            return;
+        }
+
+        _logger.LogError(exception, "Failed to deserialize API response for {Url}", relativeUrl);
+    }
+
+    private enum ApiResponseKind
+    {
+        Json,
+        Multipart
     }
 }

@@ -49,6 +49,20 @@ public class ApiServiceTests
         result.Should().BeNull();
     }
 
+    [Test]
+    public async Task SendMultipartForAsync_ReturnsDefaultForInvalidJson()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{not-json", Encoding.UTF8, "application/json")
+        });
+        using var content = new MultipartFormDataContent();
+
+        var result = await api.SendMultipartForAsync<TestPayload>(HttpMethod.Post, "api/test", content);
+
+        result.Should().BeNull();
+    }
+
     private static ApiService CreateApi(HttpResponseMessage response)
     {
         return new ApiService(
