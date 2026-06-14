@@ -6,6 +6,8 @@ namespace MSAVA_API.Authorization;
 
 public static class PublicFileAccessGuard
 {
+    private const int Sha256HashByteLength = 32;
+
     public static bool CanServePublicFile(HttpContext context, string? physicalPath)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -53,7 +55,7 @@ public static class PublicFileAccessGuard
         try
         {
             fileHash = Convert.FromHexString(hashHex);
-            return true;
+            return fileHash.Length == Sha256HashByteLength;
         }
         catch (FormatException)
         {

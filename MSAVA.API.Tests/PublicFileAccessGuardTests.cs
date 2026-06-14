@@ -77,6 +77,29 @@ public class PublicFileAccessGuardTests
     }
 
     [Test]
+    public void CanServePublicFile_DeniesHexFileNameThatIsNotSha256Length()
+    {
+        string metadataDirectory = CreateTempDirectory();
+        byte[] shortHash = Guid.NewGuid().ToByteArray();
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(CreateMetadata(shortHash, publicDownload: true));
+            var context = CreateContext(metadataStore);
+            string physicalPath = Path.Combine(metadataDirectory, $"{Convert.ToHexString(shortHash).ToLowerInvariant()}.txt");
+
+            bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+
+            result.Should().BeFalse();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public void CanServePublicFile_DeniesMissingMetadata()
     {
         string metadataDirectory = CreateTempDirectory();
