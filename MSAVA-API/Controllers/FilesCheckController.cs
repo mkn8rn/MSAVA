@@ -37,7 +37,7 @@ public class FilesCheckController : ControllerBase
     [ProducesResponseType(typeof(HashCheckResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<HashCheckResult>> CheckHash(
-        [FromBody][Required] HashCheckRequest request,
+        [FromBody][Required] HashCheckRequest? request,
         CancellationToken cancellationToken = default)
     {
         var result = await _deduplicationService.CheckAndGetReferenceAsync(request, cancellationToken);
@@ -59,13 +59,14 @@ public class FilesCheckController : ControllerBase
     [ProducesResponseType(typeof(List<HashCheckResult>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<List<HashCheckResult>>> CheckHashBatch(
-        [FromBody][Required] List<HashCheckRequest> requests,
+        [FromBody][Required] List<HashCheckRequest>? requests,
         CancellationToken cancellationToken = default)
     {
-        if (requests.Count > 100)
-            return BadRequest("Maximum 100 hashes per batch request.");
-
         var results = await _deduplicationService.CheckAndGetReferenceBatchAsync(requests, cancellationToken);
+
+        if (results.Any(result => result.Error != null))
+            return BadRequest(results);
+
         return Ok(results);
     }
 }
