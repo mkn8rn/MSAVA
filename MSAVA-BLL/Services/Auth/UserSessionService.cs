@@ -20,13 +20,12 @@ public class UserSessionService : IUserSessionService
 
     public async Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await RequireCanReadUserAsync(id, cancellationToken);
+        ActiveSessionUser currentUser = await RequireCanReadUserAsync(id, cancellationToken);
 
-        var userDb = await _context.Users
-            .AsNoTracking()
-            .Include(u => u.AccessGroups)
-            .SingleOrDefaultAsync(u => u.Id == id, cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {id} not found.");
+        if (currentUser.Session.UserId == id)
+            return MappingUtils.MapUserDTOWithRelationships(currentUser.User);
+
+        var userDb = await GetUserDbAsync(id, cancellationToken);
 
         return MappingUtils.MapUserDTOWithRelationships(userDb);
     }
@@ -41,11 +40,21 @@ public class UserSessionService : IUserSessionService
 
     public async Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
     {
+        return (await GetCurrentSessionAsync(cancellationToken)).Session;
+    }
+
+    private async Task<CurrentSession> GetCurrentSessionAsync(CancellationToken cancellationToken)
+    {
         SessionDTO tokenSession = GetTokenSessionDto();
         if (!tokenSession.LoggedIn || tokenSession.UserId == Guid.Empty)
-            return tokenSession;
+            return new CurrentSession(tokenSession, null);
 
-        UserDB userDb = await GetSessionUserDbAsync(tokenSession.UserId, cancellationToken);
+        UserDB userDb = await GetUserDbAsync(tokenSession.UserId, cancellationToken);
+        return new CurrentSession(BuildSessionDto(tokenSession, userDb), userDb);
+    }
+
+    private static SessionDTO BuildSessionDto(SessionDTO tokenSession, UserDB userDb)
+    {
         var roles = new List<string>(3);
 
         if (userDb.IsAdmin)
@@ -84,21 +93,19 @@ public class UserSessionService : IUserSessionService
 
     public async Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default)
     {
-        SessionDTO session = await RequireActiveSessionAsync(
+        return (await RequireActiveSessionUserAsync(
             "Session user is required to access the current user.",
             "Banned users cannot access the current user.",
-            cancellationToken);
-
-        return await GetSessionUserDbAsync(session.UserId, cancellationToken);
+            cancellationToken)).User;
     }
 
-    private async Task<UserDB> GetSessionUserDbAsync(Guid sessionUserId, CancellationToken cancellationToken)
+    private async Task<UserDB> GetUserDbAsync(Guid userId, CancellationToken cancellationToken)
     {
         var userDb = await _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
-            .SingleOrDefaultAsync(u => u.Id == sessionUserId, cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {sessionUserId} not found.");
+            .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken)
+            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
 
         return userDb;
     }
@@ -126,20 +133,20 @@ public class UserSessionService : IUserSessionService
             throw new UnauthorizedAccessException("Only admins can list users.");
     }
 
-    private async Task<SessionDTO> RequireCanReadUserAsync(Guid userId, CancellationToken cancellationToken)
+    private async Task<ActiveSessionUser> RequireCanReadUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         if (userId == Guid.Empty)
             throw new ArgumentException("User id must be provided.", nameof(userId));
 
-        SessionDTO session = await RequireActiveSessionAsync(
+        ActiveSessionUser currentUser = await RequireActiveSessionUserAsync(
             "Session user is required to access users.",
             "Banned users cannot access users.",
             cancellationToken);
 
-        if (!session.IsAdmin && session.UserId != userId)
+        if (!currentUser.Session.IsAdmin && currentUser.Session.UserId != userId)
             throw new UnauthorizedAccessException("Only admins can access other users.");
 
-        return session;
+        return currentUser;
     }
 
     private async Task<SessionDTO> RequireActiveSessionAsync(
@@ -148,9 +155,25 @@ public class UserSessionService : IUserSessionService
         CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActive(
-            await GetSessionClaimsAsync(cancellationToken),
+            (await GetCurrentSessionAsync(cancellationToken)).Session,
             missingSessionMessage,
             bannedSessionMessage);
+    }
+
+    private async Task<ActiveSessionUser> RequireActiveSessionUserAsync(
+        string missingSessionMessage,
+        string bannedSessionMessage,
+        CancellationToken cancellationToken)
+    {
+        CurrentSession currentSession = await GetCurrentSessionAsync(cancellationToken);
+        SessionDTO activeSession = SessionGuard.RequireActive(
+            currentSession.Session,
+            missingSessionMessage,
+            bannedSessionMessage);
+
+        return new ActiveSessionUser(
+            activeSession,
+            currentSession.User ?? throw new InvalidOperationException("Active session did not include a loaded user."));
     }
 
     private SessionDTO GetTokenSessionDto()
@@ -160,4 +183,8 @@ public class UserSessionService : IUserSessionService
 
         throw new UnauthorizedAccessException("Session not found in HttpContext.");
     }
+
+    private sealed record CurrentSession(SessionDTO Session, UserDB? User);
+
+    private sealed record ActiveSessionUser(SessionDTO Session, UserDB User);
 }

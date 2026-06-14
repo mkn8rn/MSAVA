@@ -162,6 +162,47 @@ public class UserSessionServiceTests
     }
 
     [Test]
+    public async Task GetSessionUser_ReturnsCurrentDatabaseUserWithRelationships()
+    {
+        using var context = CreateContext();
+        var currentGroup = CreateAccessGroup("session-group");
+        var user = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: true);
+        user.AccessGroups.Add(currentGroup);
+
+        context.Users.Add(user);
+        context.AccessGroups.Add(currentGroup);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = user.Id,
+                Username = "stale-session-name",
+                IsAdmin = false,
+                IsBanned = false,
+                IsWhitelisted = false,
+                Roles = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        var result = await service.GetSessionUserAsync();
+
+        result.Id.Should().Be(user.Id);
+        result.Username.Should().Be(user.Username);
+        result.IsAdmin.Should().BeTrue();
+        result.IsBanned.Should().BeFalse();
+        result.IsWhitelisted.Should().BeTrue();
+        result.AccessGroups.Should().ContainSingle(group =>
+            group.Id == currentGroup.Id &&
+            group.Name == currentGroup.Name &&
+            group.OwnerId == currentGroup.OwnerId);
+    }
+
+    [Test]
     public async Task GetUserById_ReturnsOtherUserForActiveAdmin()
     {
         using var context = CreateContext();
