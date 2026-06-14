@@ -13,12 +13,12 @@ namespace MSAVA_App.Tests;
 public class SeedingServiceTests
 {
     [Test]
-    public void Seed_CreatesConfiguredAdminWhenMissing()
+    public async Task SeedAsync_CreatesConfiguredAdminWhenMissing()
     {
         using var context = CreateContext();
         var service = CreateService(context);
 
-        service.Seed();
+        await service.SeedAsync();
 
         var admin = context.Users.Single(user => user.Username == TestEnvironment.AdminUsernameValue);
         admin.IsAdmin.Should().BeTrue();
@@ -30,7 +30,7 @@ public class SeedingServiceTests
     }
 
     [Test]
-    public async Task Seed_RepairsExistingConfiguredAdminAccessFlagsWithoutChangingPassword()
+    public async Task SeedAsync_RepairsExistingConfiguredAdminAccessFlagsWithoutChangingPassword()
     {
         using var context = CreateContext();
         byte[] originalSalt = PasswordUtils.GenerateSalt();
@@ -50,7 +50,7 @@ public class SeedingServiceTests
         await context.SaveChangesAsync();
         var service = CreateService(context);
 
-        service.Seed();
+        await service.SeedAsync();
 
         var admin = context.Users.Single(user => user.Id == existingAdmin.Id);
         admin.IsAdmin.Should().BeTrue();
@@ -61,6 +61,20 @@ public class SeedingServiceTests
         PasswordUtils.VerifyPassword("existing-password", admin.PasswordHash, admin.PasswordSalt)
             .Should()
             .BeTrue();
+    }
+
+    [Test]
+    public async Task SeedAsync_HonorsCanceledTokenBeforeCreatingAdmin()
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        Func<Task> act = () => service.SeedAsync(cancellationTokenSource.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        context.Users.Should().BeEmpty();
     }
 
     private static SeedingService CreateService(BaseDataContext context)

@@ -206,7 +206,7 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var seeder = scope.ServiceProvider.GetRequiredService<ISeedingService>();
-    seeder.Seed();
+    await seeder.SeedAsync();
 }
 
 app.Run();

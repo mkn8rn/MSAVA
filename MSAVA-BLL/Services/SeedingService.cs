@@ -4,6 +4,7 @@ using MSAVA_INF.Environment;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Loggers;
 using MSAVA_INF.Contexts;
+using Microsoft.EntityFrameworkCore;
 
 namespace MSAVA_BLL.Services
 {
@@ -23,17 +24,20 @@ namespace MSAVA_BLL.Services
             _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         }
 
-        public void Seed()
+        public async Task SeedAsync(CancellationToken cancellationToken = default)
         {
-            SeedAdminUser();
+            await SeedAdminUserAsync(cancellationToken);
         }
 
-        private Guid SeedAdminUser()
+        private async Task<Guid> SeedAdminUserAsync(CancellationToken cancellationToken)
         {
             string adminUsername = _env.Values.AdminUsername;
             string adminPassword = _env.Values.AdminPassword;
 
-            UserDB? adminUser = _context.Users.FirstOrDefault(u => u.Username == adminUsername);
+            UserDB? adminUser = await _context.Users.FirstOrDefaultAsync(
+                u => u.Username == adminUsername,
+                cancellationToken);
+
             if (adminUser == null)
             {
                 byte[] salt = PasswordUtils.GenerateSalt();
@@ -50,12 +54,12 @@ namespace MSAVA_BLL.Services
                     CreatedAt = DateTime.UtcNow
                 };
                 _context.Users.Add(adminUser);
-                _context.SaveChanges();
+                await _context.SaveChangesAsync(cancellationToken);
                 _serviceLogger.WriteLog(UserLogAction.AccountCreation, $"Admin user '{adminUsername}' created during seeding.", adminUser.Id, null);
             }
 
             if (EnsureConfiguredAdminIsActive(adminUser))
-                _context.SaveChanges();
+                await _context.SaveChangesAsync(cancellationToken);
 
             return adminUser.Id;
         }
