@@ -91,6 +91,42 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsMalformedUrlBeforeCreatingHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "https://[invalid-drive-url",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("Could not extract Google Drive file id from the provided FileUrl.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task OneDriveImportAsync_UsesInjectedHttpClientFactory()
     {
         var handler = new RecordingHttpMessageHandler(_ =>

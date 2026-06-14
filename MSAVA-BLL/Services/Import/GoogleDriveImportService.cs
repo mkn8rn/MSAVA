@@ -151,7 +151,10 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
             m = Regex.Match(s, @"/uc\?id=([A-Za-z0-9_\-]+)");
             if (m.Success) return m.Groups[1].Value;
         }
-        catch { }
+        catch (UriFormatException)
+        {
+            return null;
+        }
 
         return null;
     }
