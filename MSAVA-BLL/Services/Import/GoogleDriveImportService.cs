@@ -1,7 +1,9 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 using MSAVA_Shared.Models;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Text.RegularExpressions;
 
@@ -12,15 +14,18 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<GoogleDriveImportService> _logger;
 
     public GoogleDriveImportService(
         FilePersistenceService persistenceService,
         ServiceLogger serviceLogger,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ILogger<GoogleDriveImportService> logger)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<Guid> ImportAsync(FetchFileGoogleDriveDTO dto, CancellationToken cancellationToken = default)
@@ -120,7 +125,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         }
         finally
         {
-            DeleteTempFileIfPresent(tempFilePath);
+            TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
     }
 
@@ -175,11 +180,4 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         };
     }
 
-    private static void DeleteTempFileIfPresent(string tempFilePath)
-    {
-        if (!File.Exists(tempFilePath))
-            return;
-
-        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
-    }
 }

@@ -63,7 +63,7 @@ public class FilePersistenceService
         }
         finally
         {
-            DeleteTempFileIfPresent(tempFilePath);
+            TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
     }
 
@@ -94,7 +94,7 @@ public class FilePersistenceService
         }
         finally
         {
-            DeleteTempFileIfPresent(tempFilePath);
+            TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
     }
 
@@ -246,14 +246,6 @@ public class FilePersistenceService
         {
             _logger.LogError(ex, "Failed to roll back file registration {FileRefId}", metaRecord.RefId);
         }
-    }
-
-    private static void DeleteTempFileIfPresent(string tempFilePath)
-    {
-        if (!File.Exists(tempFilePath))
-            return;
-
-        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
     }
 
     private void DetachPendingFileEntities(SavedFileReferenceDB fileReference, SavedFileDataDB? fileData)

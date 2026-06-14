@@ -1,7 +1,9 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 using MSAVA_Shared.Models;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace MSAVA_BLL.Services.Import;
@@ -11,15 +13,18 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<OneDriveImportService> _logger;
 
     public OneDriveImportService(
         FilePersistenceService persistenceService,
         ServiceLogger serviceLogger,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ILogger<OneDriveImportService> logger)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<Guid> ImportAsync(FetchFileFromOneDriveDTO dto, CancellationToken cancellationToken = default)
@@ -98,7 +103,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         }
         finally
         {
-            DeleteTempFileIfPresent(tempFilePath);
+            TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
     }
 
@@ -168,11 +173,4 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         };
     }
 
-    private static void DeleteTempFileIfPresent(string tempFilePath)
-    {
-        if (!File.Exists(tempFilePath))
-            return;
-
-        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
-    }
 }

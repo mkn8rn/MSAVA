@@ -1,7 +1,9 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 using MSAVA_Shared.Models;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace MSAVA_BLL.Services.Import;
@@ -11,19 +13,25 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IYouTubeDownloadClient _youtubeClient;
+    private readonly ILogger<YouTubeImportService> _logger;
 
-    public YouTubeImportService(FilePersistenceService persistenceService, ServiceLogger serviceLogger)
-        : this(persistenceService, serviceLogger, new YoutubeExplodeDownloadClient())
+    public YouTubeImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        ILogger<YouTubeImportService> logger)
+        : this(persistenceService, serviceLogger, logger, new YoutubeExplodeDownloadClient())
     {
     }
 
     internal YouTubeImportService(
         FilePersistenceService persistenceService,
         ServiceLogger serviceLogger,
+        ILogger<YouTubeImportService> logger,
         IYouTubeDownloadClient youtubeClient)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _youtubeClient = youtubeClient ?? throw new ArgumentNullException(nameof(youtubeClient));
     }
 
@@ -112,7 +120,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         }
         finally
         {
-            DeleteTempFileIfPresent(tempFilePath);
+            TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
     }
 
@@ -160,7 +168,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             }
             catch (OperationCanceledException)
             {
-                try { if (!process.HasExited) process.Kill(); } catch { }
+                KillProcessAfterTimeout(process);
                 throw new TimeoutException("FFmpeg process exceeded 15 seconds and was terminated.");
             }
 
@@ -171,8 +179,8 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         }
         finally
         {
-            try { if (File.Exists(videoTemp)) File.Delete(videoTemp); } catch { }
-            try { if (File.Exists(audioTemp)) File.Delete(audioTemp); } catch { }
+            TemporaryFileCleanup.DeleteIfPresent(videoTemp, _logger);
+            TemporaryFileCleanup.DeleteIfPresent(audioTemp, _logger);
         }
     }
 
@@ -249,11 +257,16 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             ?? throw new InvalidOperationException("No suitable audio stream found.");
     }
 
-    private static void DeleteTempFileIfPresent(string tempFilePath)
+    private void KillProcessAfterTimeout(Process process)
     {
-        if (!File.Exists(tempFilePath))
-            return;
-
-        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
+        try
+        {
+            if (!process.HasExited)
+                process.Kill();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to kill FFmpeg process after timeout");
+        }
     }
 }

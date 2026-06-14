@@ -66,7 +66,8 @@ public class ProviderImportServiceTests
             var service = new GoogleDriveImportService(
                 CreatePersistenceService(context, metadataStore),
                 new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -107,7 +108,8 @@ public class ProviderImportServiceTests
             var service = new OneDriveImportService(
                 CreatePersistenceService(context, metadataStore),
                 new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "https://1drv.ms/u/s!abcDEF12345",
@@ -144,7 +146,8 @@ public class ProviderImportServiceTests
             var service = new OneDriveImportService(
                 CreatePersistenceService(context, metadataStore),
                 new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "shared/file.txt",
@@ -179,7 +182,8 @@ public class ProviderImportServiceTests
             var service = new OneDriveImportService(
                 CreatePersistenceService(context, metadataStore),
                 new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "file:///C:/temp/shared.txt",
@@ -223,7 +227,8 @@ public class ProviderImportServiceTests
             var service = new GoogleDriveImportService(
                 CreatePersistenceService(context, metadataStore, logger),
                 new ServiceLogger(logger, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -271,7 +276,8 @@ public class ProviderImportServiceTests
             var service = new GoogleDriveImportService(
                 CreatePersistenceService(context, metadataStore, logger),
                 new ServiceLogger(logger, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -316,7 +322,8 @@ public class ProviderImportServiceTests
             var service = new OneDriveImportService(
                 CreatePersistenceService(context, metadataStore, logger),
                 new ServiceLogger(logger, context),
-                httpClientFactory);
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "https://1drv.ms/u/s!abcDEF12345",
@@ -349,7 +356,8 @@ public class ProviderImportServiceTests
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
             var service = new YouTubeImportService(
                 CreatePersistenceService(context, metadataStore),
-                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                NullLogger<YouTubeImportService>.Instance);
             var dto = new FetchFileYouTubeDTO
             {
                 YouTubeUrl = "not a youtube video id",
@@ -383,6 +391,7 @@ public class ProviderImportServiceTests
             var service = new YouTubeImportService(
                 CreatePersistenceService(context, metadataStore, logger),
                 new ServiceLogger(logger, context),
+                NullLogger<YouTubeImportService>.Instance,
                 youTubeClient);
             var dto = new FetchFileYouTubeDTO
             {
