@@ -24,13 +24,25 @@ public static class FileContentUtils
             hashChars[i * 2 + 1] = GetHexChar(b & 0xF);
         }
 
-        var extension = fileExtension.AsSpan().TrimStart('_').ToString().ToLowerInvariant();
+        var extension = NormalizeExtension(fileExtension);
         var hashString = hashChars.ToString().ToLowerInvariant();
         
         return Path.Combine(FilesDirectory, $"{hashString}.{extension}");
     }
 
     private static char GetHexChar(int value) => (char)(value < 10 ? '0' + value : 'a' + value - 10);
+
+    private static string NormalizeExtension(string fileExtension)
+    {
+        var extension = fileExtension.AsSpan().Trim();
+
+        while (extension.Length > 0 && (extension[0] == '.' || extension[0] == '_'))
+        {
+            extension = extension[1..];
+        }
+
+        return extension.ToString().ToLowerInvariant();
+    }
 
     public static bool IsSafeFilePath(string? fullPath)
     {
