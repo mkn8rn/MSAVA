@@ -230,17 +230,13 @@ public static class SignatureDetector
 
     private static MsavaSignature? DetectInTagLib(Stream input)
     {
-        try
+        using var tagFile = TagLib.File.Create(new StreamFileAbstraction("media", input));
+
+        if (!string.IsNullOrEmpty(tagFile.Tag.Comment))
         {
-            using var tagFile = TagLib.File.Create(new StreamFileAbstraction("media", input));
-            
-            if (!string.IsNullOrEmpty(tagFile.Tag.Comment))
-            {
-                if (MsavaSignature.TryParse(tagFile.Tag.Comment, out var sig))
-                    return sig;
-            }
+            if (MsavaSignature.TryParse(tagFile.Tag.Comment, out var sig))
+                return sig;
         }
-        catch { }
 
         return null;
     }
@@ -251,69 +247,61 @@ public static class SignatureDetector
 
     private static MsavaSignature? DetectInOfficeXml(Stream input)
     {
-        try
-        {
-            using var archive = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true);
-            var entry = archive.GetEntry("docProps/custom.xml");
-            
-            if (entry != null)
-            {
-                using var stream = entry.Open();
-                var doc = new XmlDocument();
-                doc.Load(stream);
+        using var archive = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = archive.GetEntry("docProps/custom.xml");
 
-                // Look for our property
-                var nodes = doc.GetElementsByTagName("property");
-                foreach (XmlNode node in nodes)
+        if (entry != null)
+        {
+            using var stream = entry.Open();
+            var doc = new XmlDocument();
+            doc.Load(stream);
+
+            // Look for our property
+            var nodes = doc.GetElementsByTagName("property");
+            foreach (XmlNode node in nodes)
+            {
+                var nameAttr = node.Attributes?["name"];
+                if (nameAttr?.Value == MsavaSignature.MetadataKey)
                 {
-                    var nameAttr = node.Attributes?["name"];
-                    if (nameAttr?.Value == MsavaSignature.MetadataKey)
-                    {
-                        var value = node.InnerText;
-                        if (MsavaSignature.TryParse(value, out var sig))
-                            return sig;
-                    }
+                    var value = node.InnerText;
+                    if (MsavaSignature.TryParse(value, out var sig))
+                        return sig;
                 }
             }
         }
-        catch { }
 
         return null;
     }
 
     private static MsavaSignature? DetectInOpenDocument(Stream input)
     {
-        try
+        using var archive = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = archive.GetEntry("meta.xml");
+
+        if (entry != null)
         {
-            using var archive = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true);
-            var entry = archive.GetEntry("meta.xml");
-            
-            if (entry != null)
+            using var stream = entry.Open();
+            var doc = new XmlDocument();
+            doc.Load(stream);
+
+            var nsMgr = new XmlNamespaceManager(doc.NameTable);
+            nsMgr.AddNamespace("meta", "urn:oasis:names:tc:opendocument:xmlns:meta:1.0");
+
+            // Look for user-defined metadata with our key
+            var nodes = doc.SelectNodes("//meta:user-defined", nsMgr);
+            if (nodes != null)
             {
-                using var stream = entry.Open();
-                var doc = new XmlDocument();
-                doc.Load(stream);
-
-                var nsMgr = new XmlNamespaceManager(doc.NameTable);
-                nsMgr.AddNamespace("meta", "urn:oasis:names:tc:opendocument:xmlns:meta:1.0");
-
-                // Look for user-defined metadata with our key
-                var nodes = doc.SelectNodes("//meta:user-defined", nsMgr);
-                if (nodes != null)
+                foreach (XmlNode node in nodes)
                 {
-                    foreach (XmlNode node in nodes)
+                    var nameAttr = node.Attributes?["meta:name"];
+                    if (nameAttr?.Value == MsavaSignature.MetadataKey)
                     {
-                        var nameAttr = node.Attributes?["meta:name"];
-                        if (nameAttr?.Value == MsavaSignature.MetadataKey)
-                        {
-                            if (MsavaSignature.TryParse(node.InnerText, out var sig))
-                                return sig;
-                        }
+                        if (MsavaSignature.TryParse(node.InnerText, out var sig))
+                            return sig;
                     }
                 }
             }
         }
-        catch { }
 
         return null;
     }
