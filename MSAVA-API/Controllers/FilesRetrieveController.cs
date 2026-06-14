@@ -21,7 +21,7 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("stream/{refId:guid}")]
-    public IActionResult GetFileStreamById(Guid refId)
+    public FileStreamResult GetFileStreamById(Guid refId)
     {
         var dto = _downloadService.GetFileStreamById(refId);
         return new FileStreamResult(dto.FileStream, "application/octet-stream")
@@ -31,7 +31,7 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("stream/{**fileNameWithExtension}")]
-    public IActionResult GetFileStreamByPath([TaintedPathCheck] string fileNameWithExtension)
+    public FileStreamResult GetFileStreamByPath([TaintedPathCheck] string fileNameWithExtension)
     {
         var dto = _downloadService.GetFileStreamByPath(fileNameWithExtension);
         return new FileStreamResult(dto.FileStream, "application/octet-stream")
@@ -41,14 +41,14 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("physical/{refId:guid}")]
-    public IActionResult GetPhysicalFileReturnDataById(Guid refId)
+    public PhysicalFileResult GetPhysicalFileReturnDataById(Guid refId)
     {
         var fileData = _downloadService.GetPhysicalFileReturnDataById(refId);
         return PhysicalFile(fileData.FilePath, fileData.ContentType, fileData.FileName, enableRangeProcessing: true);
     }
 
     [HttpGet("physical/{**fileNameWithExtension}")]
-    public IActionResult GetPhysicalFileByPath([TaintedPathCheck] string fileNameWithExtension)
+    public PhysicalFileResult GetPhysicalFileByPath([TaintedPathCheck] string fileNameWithExtension)
     {
         var fileData = _downloadService.GetPhysicalFileReturnDataByPath(fileNameWithExtension);
         return PhysicalFile(fileData.FilePath, fileData.ContentType, fileData.FileName, enableRangeProcessing: true);
