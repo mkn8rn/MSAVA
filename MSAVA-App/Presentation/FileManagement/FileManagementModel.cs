@@ -16,10 +16,13 @@ using Uno.Extensions.Navigation;
 
 public partial record FileManagementModel : INotifyPropertyChanged
 {
+    private static readonly TimeSpan UploadResultAutoDismissDelay = TimeSpan.FromSeconds(10);
+
     private readonly IDispatcher _dispatcher;
     private readonly FileRetrievalService _filesService;
     private readonly NavigationService _navigation;
     private readonly FileUploadClientService _uploadService;
+    private CancellationTokenSource? _uploadResultDismissal;
 
     public FileManagementModel(IDispatcher dispatcher, FileRetrievalService filesService, NavigationService navigation, FileUploadClientService uploadService)
     {
@@ -222,15 +225,13 @@ public partial record FileManagementModel : INotifyPropertyChanged
         var tags = (NewTagsCsv ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         var categories = (NewCategoriesCsv ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
+        CancelPendingUploadResultDismissal();
+
         await _dispatcher.ExecuteAsync(() =>
         {
-            // Hide any previous result and show uploading indicator
             ShowUploadResult = false;
             IsUploading = true;
         });
-
-        // DEBUG: Give time to see the in-progress InfoBar
-        await Task.Delay(TimeSpan.FromSeconds(2), ct);
 
         try
         {
@@ -246,7 +247,6 @@ public partial record FileManagementModel : INotifyPropertyChanged
                 publicDownload: NewPublicDownload,
                 ct: ct);
 
-            // Display result info bar
             await _dispatcher.ExecuteAsync(() =>
             {
                 UploadResultIsSuccess = outcome.Success;
@@ -265,24 +265,56 @@ public partial record FileManagementModel : INotifyPropertyChanged
         finally
         {
             await _dispatcher.ExecuteAsync(() => IsUploading = false);
+            ScheduleUploadResultAutoDismiss();
+        }
+    }
 
-            // Auto-dismiss after 10 seconds
-            _ = Task.Run(async () =>
+    private void ScheduleUploadResultAutoDismiss()
+    {
+        if (!ShowUploadResult) return;
+
+        CancelPendingUploadResultDismissal();
+
+        var dismissal = new CancellationTokenSource();
+        _uploadResultDismissal = dismissal;
+        _ = DismissUploadResultAfterDelayAsync(dismissal);
+    }
+
+    private async Task DismissUploadResultAfterDelayAsync(CancellationTokenSource dismissal)
+    {
+        try
+        {
+            await Task.Delay(UploadResultAutoDismissDelay, dismissal.Token);
+            await _dispatcher.ExecuteAsync(() =>
             {
-                try
+                if (ReferenceEquals(_uploadResultDismissal, dismissal))
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(10), ct);
-                }
-                catch
-                {
-                    // ignore cancellation
-                }
-                finally
-                {
-                    await _dispatcher.ExecuteAsync(() => ShowUploadResult = false);
+                    ShowUploadResult = false;
                 }
             });
         }
+        catch (OperationCanceledException)
+        {
+            // A newer upload result owns the current InfoBar lifetime.
+        }
+        finally
+        {
+            if (ReferenceEquals(_uploadResultDismissal, dismissal))
+            {
+                _uploadResultDismissal = null;
+            }
+
+            dismissal.Dispose();
+        }
+    }
+
+    private void CancelPendingUploadResultDismissal()
+    {
+        var pendingDismissal = _uploadResultDismissal;
+        if (pendingDismissal is null) return;
+
+        _uploadResultDismissal = null;
+        pendingDismissal.Cancel();
     }
     
     // Navigate back to main page
