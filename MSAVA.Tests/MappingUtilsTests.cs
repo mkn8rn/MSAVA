@@ -9,6 +9,51 @@ namespace MSAVA_App.Tests;
 public class MappingUtilsTests
 {
     [Test]
+    public void MapSavedFileReferenceDB_FromStream_MapsReferenceFields()
+    {
+        var fileHash = SHA256.HashData(Encoding.UTF8.GetBytes("stream-reference"));
+        using var stream = new MemoryStream([]);
+        var dto = new SaveFileFromStreamDTO
+        {
+            FileName = "reference",
+            FileExtension = " .TXT ",
+            Stream = stream,
+            AccessGroupId = Guid.NewGuid(),
+            PublicDownload = true
+        };
+
+        var reference = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
+
+        reference.Id.Should().NotBeEmpty();
+        reference.FileHash.Should().Equal(fileHash);
+        reference.FileExtension.Should().Be(FileExtensionType._TXT);
+        reference.AccessGroupId.Should().Be(dto.AccessGroupId);
+        reference.PublicDownload.Should().BeTrue();
+    }
+
+    [Test]
+    public void MapSavedFileReferenceDB_FromFetch_MapsReferenceFields()
+    {
+        var fileHash = SHA256.HashData(Encoding.UTF8.GetBytes("fetch-reference"));
+        var dto = new SaveFileFromFetchDTO
+        {
+            FileName = "reference",
+            FileExtension = " .PDF ",
+            TempFilePath = "download.tmp",
+            AccessGroupId = Guid.NewGuid(),
+            PublicDownload = false
+        };
+
+        var reference = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
+
+        reference.Id.Should().NotBeEmpty();
+        reference.FileHash.Should().Equal(fileHash);
+        reference.FileExtension.Should().Be(FileExtensionType._PDF);
+        reference.AccessGroupId.Should().Be(dto.AccessGroupId);
+        reference.PublicDownload.Should().BeFalse();
+    }
+
+    [Test]
     public void MapReturnFileDTO_AcceptsEmptyByteArray()
     {
         var fileReference = CreateFileReference(SHA256.HashData([]));

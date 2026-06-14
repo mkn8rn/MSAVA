@@ -90,8 +90,7 @@ public static class MappingUtils
 
     public static SavedFileReferenceDB MapSavedFileReferenceDB(
         SaveFileFromStreamDTO dto,
-        byte[] fileHash,
-        ulong fileLength)
+        byte[] fileHash)
     {
         var extension = ParseFileExtension(dto.FileExtension);
         return new SavedFileReferenceDB
@@ -106,8 +105,7 @@ public static class MappingUtils
 
     public static SavedFileReferenceDB MapSavedFileReferenceDB(
         SaveFileFromFetchDTO dto,
-        byte[] fileHash,
-        ulong fileLength)
+        byte[] fileHash)
     {
         var extension = ParseFileExtension(dto.FileExtension);
         return new SavedFileReferenceDB

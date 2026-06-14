@@ -46,7 +46,7 @@ public class FilePersistenceService
         try
         {
             var (fileHash, fileLength) = await CopyStreamToTempFileAndHashAsync(dto.Stream, tempFilePath, cancellationToken);
-            var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
+            var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
             var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
 
             return await PersistFileRegistrationAsync(
@@ -77,7 +77,7 @@ public class FilePersistenceService
 
             long fileLength = new FileInfo(tempFilePath).Length;
             byte[] fileHash = await ComputeFileHashAsync(tempFilePath, cancellationToken);
-            var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash, (ulong)fileLength);
+            var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
             var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
 
             return await PersistFileRegistrationAsync(
