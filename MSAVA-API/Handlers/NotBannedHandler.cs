@@ -23,14 +23,20 @@ namespace MSAVA_API.Handlers
             if (userId is null)
                 return;
 
+            var cancellationToken = AuthorizationRequest.GetCancellationToken(context);
+
             try
             {
                 bool userCanAccess = await _context.Users
                     .AsNoTracking()
-                    .AnyAsync(user => user.Id == userId.Value && !user.IsBanned);
+                    .AnyAsync(user => user.Id == userId.Value && !user.IsBanned, cancellationToken);
 
                 if (userCanAccess)
                     context.Succeed(requirement);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

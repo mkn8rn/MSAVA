@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Handlers;
@@ -71,7 +72,28 @@ public class CurrentAdminHandlerTests
         authorizationContext.HasSucceeded.Should().BeFalse();
     }
 
-    private static AuthorizationHandlerContext CreateAuthorizationContext(Guid userId, bool includeStaleAdminRole = false)
+    [Test]
+    public async Task HandleAsync_PropagatesRequestCancellationWithoutSucceeding()
+    {
+        using var context = CreateContext();
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var authorizationContext = CreateAuthorizationContext(
+            Guid.NewGuid(),
+            includeStaleAdminRole: true,
+            requestAborted: cancellation.Token);
+        var handler = new CurrentAdminHandler(context, NullLogger<CurrentAdminHandler>.Instance);
+
+        var act = async () => await handler.HandleAsync(authorizationContext);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        authorizationContext.HasSucceeded.Should().BeFalse();
+    }
+
+    private static AuthorizationHandlerContext CreateAuthorizationContext(
+        Guid userId,
+        bool includeStaleAdminRole = false,
+        CancellationToken requestAborted = default)
     {
         var claims = new List<Claim>
         {
@@ -87,8 +109,12 @@ public class CurrentAdminHandlerTests
             authenticationType: "Test",
             nameType: ClaimTypes.Name,
             roleType: ClaimTypes.Role));
+        var httpContext = new DefaultHttpContext
+        {
+            RequestAborted = requestAborted
+        };
 
-        return new AuthorizationHandlerContext([requirement], principal, resource: null);
+        return new AuthorizationHandlerContext([requirement], principal, httpContext);
     }
 
     private static BaseDataContext CreateContext()

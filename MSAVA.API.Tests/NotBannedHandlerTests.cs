@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Handlers;
@@ -55,7 +56,22 @@ public class NotBannedHandlerTests
         authorizationContext.HasSucceeded.Should().BeFalse();
     }
 
-    private static AuthorizationHandlerContext CreateAuthorizationContext(Guid userId)
+    [Test]
+    public async Task HandleAsync_PropagatesRequestCancellationWithoutSucceeding()
+    {
+        using var context = CreateContext();
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var authorizationContext = CreateAuthorizationContext(Guid.NewGuid(), cancellation.Token);
+        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+
+        var act = async () => await handler.HandleAsync(authorizationContext);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        authorizationContext.HasSucceeded.Should().BeFalse();
+    }
+
+    private static AuthorizationHandlerContext CreateAuthorizationContext(Guid userId, CancellationToken requestAborted = default)
     {
         var requirement = new NotBannedRequirement();
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
@@ -63,8 +79,12 @@ public class NotBannedHandlerTests
             authenticationType: "Test",
             nameType: ClaimTypes.Name,
             roleType: ClaimTypes.Role));
+        var httpContext = new DefaultHttpContext
+        {
+            RequestAborted = requestAborted
+        };
 
-        return new AuthorizationHandlerContext([requirement], principal, resource: null);
+        return new AuthorizationHandlerContext([requirement], principal, httpContext);
     }
 
     private static BaseDataContext CreateContext()

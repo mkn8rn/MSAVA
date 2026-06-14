@@ -23,14 +23,20 @@ public class CurrentAdminHandler : AuthorizationHandler<CurrentAdminRequirement>
         if (userId is null)
             return;
 
+        var cancellationToken = AuthorizationRequest.GetCancellationToken(context);
+
         try
         {
             bool userIsCurrentAdmin = await _context.Users
                 .AsNoTracking()
-                .AnyAsync(user => user.Id == userId.Value && user.IsAdmin && !user.IsBanned);
+                .AnyAsync(user => user.Id == userId.Value && user.IsAdmin && !user.IsBanned, cancellationToken);
 
             if (userIsCurrentAdmin)
                 context.Succeed(requirement);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
