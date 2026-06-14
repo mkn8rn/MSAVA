@@ -1,6 +1,7 @@
 using MSAVA_Shared.Models;
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
+using MSAVA_BLL.Utils.Metadata;
 using System.Text.Json;
 
 namespace MSAVA_BLL.Utils;
@@ -177,10 +178,10 @@ public static class MappingUtils
     {
         var checksum = BytesToHexString(savedFileDb.FileHash);
         var fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
-        var mimeType = MetadataUtils.GetContentType(fileExtension);
+        var mimeType = MetadataExtractor.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
-        var metadata = MetadataUtils.ExtractMetadataFromFileStream(dto.Stream, fileExtension);
+        var metadata = MetadataExtractor.ExtractMetadata(dto.Stream, fileExtension);
         var now = DateTime.UtcNow;
 
         return new SavedFileDataDB
@@ -214,7 +215,7 @@ public static class MappingUtils
     {
         var checksum = BytesToHexString(savedFileDb.FileHash);
         var fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
-        var mimeType = MetadataUtils.GetContentType(fileExtension);
+        var mimeType = MetadataExtractor.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
         var now = DateTime.UtcNow;

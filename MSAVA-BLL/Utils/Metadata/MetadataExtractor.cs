@@ -86,14 +86,6 @@ public static class MetadataExtractor
     }
 
     /// <summary>
-    /// Creates a default metadata document (for backward compatibility).
-    /// </summary>
-    internal static JsonDocument CreateDefaultMetadata(long size)
-    {
-        return CreateInvalidMetadata(size, "Unknown format");
-    }
-
-    /// <summary>
     /// Helper to serialize metadata to JsonDocument.
     /// </summary>
     internal static JsonDocument ToJsonDocument<T>(T metadata)

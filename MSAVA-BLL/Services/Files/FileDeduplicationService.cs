@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Utils;
+using MSAVA_BLL.Utils.Metadata;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
 using MSAVA_Shared.Models;
@@ -242,7 +243,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             Checksum = Convert.ToHexString(fileHash),
             Name = request.FileName ?? existingData?.Name ?? "Unnamed",
             Description = request.Description ?? existingData?.Description ?? "",
-            MimeType = existingData?.MimeType ?? MetadataUtils.GetContentType(extension),
+            MimeType = existingData?.MimeType ?? MetadataExtractor.GetContentType(extension),
             FileExtension = extension,
             Tags = request.Tags?.ToArray() ?? existingData?.Tags ?? [],
             Categories = request.Categories?.ToArray() ?? existingData?.Categories ?? [],

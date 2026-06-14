@@ -1,5 +1,6 @@
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Utils;
+using MSAVA_BLL.Utils.Metadata;
 using MSAVA_INF.Models;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Utils;
@@ -64,7 +65,7 @@ public class FileDownloadService : IFileDownloadService
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
-        string contentType = MetadataUtils.GetContentType(extension);
+        string contentType = MetadataExtractor.GetContentType(extension);
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileName, extension);
         string fileNameWithExtension = $"{fileName}.{extension}";
 
@@ -87,7 +88,7 @@ public class FileDownloadService : IFileDownloadService
 
         string fileName = Path.GetFileName(fileNameWithExtension);
         string extension = Path.GetExtension(fileName).TrimStart('.');
-        string contentType = MetadataUtils.GetContentType(extension);
+        string contentType = MetadataExtractor.GetContentType(extension);
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
 
         await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
