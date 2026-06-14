@@ -34,6 +34,14 @@ public class FileContentUtilsTests
         FileContentUtils.IsSafeFilePath(" ").Should().BeFalse();
     }
 
+    [Test]
+    public void IsSafeFilePath_RejectsPathWithNullCharacter()
+    {
+        var path = Path.Combine(FileContentUtils.FilesDirectory, "bad\0file.txt");
+
+        FileContentUtils.IsSafeFilePath(path).Should().BeFalse();
+    }
+
     [TestCase("txt")]
     [TestCase(".TXT")]
     [TestCase("_TXT")]

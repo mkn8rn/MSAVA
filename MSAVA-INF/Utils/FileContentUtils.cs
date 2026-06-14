@@ -58,10 +58,18 @@ public static class FileContentUtils
             var candidatePath = Path.GetFullPath(fullPath);
             return candidatePath.StartsWith(filesDirectory, StringComparison.OrdinalIgnoreCase);
         }
-        catch
+        catch (Exception ex) when (IsPathResolutionFailure(ex))
         {
             return false;
         }
+    }
+
+    private static bool IsPathResolutionFailure(Exception exception)
+    {
+        return exception is ArgumentException
+            or IOException
+            or NotSupportedException
+            or UnauthorizedAccessException;
     }
 
     public static bool IsSafeFileName(string fileNameWithExtension)
