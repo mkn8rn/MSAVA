@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_Shared.Models;
 using System.ComponentModel.DataAnnotations;
-using MSAVA_BLL.Services.Import;
+using MSAVA_BLL.Services.Interfaces;
 
 namespace MSAVA_API.Controllers;
 
@@ -11,14 +11,14 @@ namespace MSAVA_API.Controllers;
 [Authorize]
 public class FilesImportController : ControllerBase
 {
-    private readonly YouTubeImportService _youTubeImportService;
-    private readonly GoogleDriveImportService _googleDriveImportService;
-    private readonly OneDriveImportService _oneDriveImportService;
+    private readonly IFileImportService<FetchFileYouTubeDTO> _youTubeImportService;
+    private readonly IFileImportService<FetchFileGoogleDriveDTO> _googleDriveImportService;
+    private readonly IFileImportService<FetchFileFromOneDriveDTO> _oneDriveImportService;
 
     public FilesImportController(
-        YouTubeImportService youTubeImportService,
-        GoogleDriveImportService googleDriveImportService,
-        OneDriveImportService oneDriveImportService)
+        IFileImportService<FetchFileYouTubeDTO> youTubeImportService,
+        IFileImportService<FetchFileGoogleDriveDTO> googleDriveImportService,
+        IFileImportService<FetchFileFromOneDriveDTO> oneDriveImportService)
     {
         _youTubeImportService = youTubeImportService ?? throw new ArgumentNullException(nameof(youTubeImportService));
         _googleDriveImportService = googleDriveImportService ?? throw new ArgumentNullException(nameof(googleDriveImportService));

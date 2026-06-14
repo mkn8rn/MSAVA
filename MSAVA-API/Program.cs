@@ -22,6 +22,7 @@ using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Import;
+using MSAVA_Shared.Models;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -123,10 +124,10 @@ builder.Services.AddScoped<IFileQueryService, FileQueryService>();
 builder.Services.AddScoped<ISeedingService, SeedingService>();
 builder.Services.AddScoped<IAccessGroupService, AccessGroupService>();
 builder.Services.AddScoped<IInviteCodeService, InviteCodeService>();
+builder.Services.AddScoped<IFileImportService<FetchFileYouTubeDTO>, YouTubeImportService>();
+builder.Services.AddScoped<IFileImportService<FetchFileGoogleDriveDTO>, GoogleDriveImportService>();
+builder.Services.AddScoped<IFileImportService<FetchFileFromOneDriveDTO>, OneDriveImportService>();
 builder.Services.AddScoped<FilePersistenceService>();
-builder.Services.AddScoped<YouTubeImportService>();
-builder.Services.AddScoped<GoogleDriveImportService>();
-builder.Services.AddScoped<OneDriveImportService>();
 
 // Register custom loggers
 builder.Services.AddScoped<ServiceLogger>();

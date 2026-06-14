@@ -1,11 +1,12 @@
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_Shared.Models;
 using System.Diagnostics;
 
 namespace MSAVA_BLL.Services.Import;
 
-public class YouTubeImportService
+public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 {
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
