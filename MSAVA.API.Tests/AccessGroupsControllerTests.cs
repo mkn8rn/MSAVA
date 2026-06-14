@@ -99,6 +99,26 @@ public class AccessGroupsControllerTests
         badRequest.Value.Should().Be("Access group id must be provided.");
     }
 
+    [Test]
+    public async Task AddUserToAccessGroup_PassesCancellationTokenToService()
+    {
+        var service = new RecordingAccessGroupService();
+        var controller = new AccessGroupsController(service);
+        var userId = Guid.NewGuid();
+        var accessGroupId = Guid.NewGuid();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.AddUserToAccessGroup(
+            userId,
+            accessGroupId,
+            cancellationTokenSource.Token);
+
+        response.Should().BeOfType<OkResult>();
+        service.AddUserId.Should().Be(userId);
+        service.AddAccessGroupId.Should().Be(accessGroupId);
+        service.CancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
     private static AccessGroupsController CreateController(BaseDataContext context, Guid sessionUserId, bool isAdmin)
     {
         var service = new AccessGroupService(
@@ -191,6 +211,26 @@ public class AccessGroupsControllerTests
                 IssuedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             };
+        }
+    }
+
+    private sealed class RecordingAccessGroupService : IAccessGroupService
+    {
+        public Guid AddUserId { get; private set; }
+        public Guid AddAccessGroupId { get; private set; }
+        public CancellationToken CancellationToken { get; private set; }
+
+        public Guid CreateAccessGroup(string name) => throw new NotSupportedException();
+
+        public Task AddUserToAccessGroupAsync(
+            Guid userId,
+            Guid accessGroupId,
+            CancellationToken cancellationToken = default)
+        {
+            AddUserId = userId;
+            AddAccessGroupId = accessGroupId;
+            CancellationToken = cancellationToken;
+            return Task.CompletedTask;
         }
     }
 

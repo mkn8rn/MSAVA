@@ -34,7 +34,8 @@ public class AccessGroupsController : ControllerBase
     [HttpPost("adduser")]
     public async Task<ActionResult> AddUserToAccessGroup(
         [FromQuery][Required] Guid userId,
-        [FromQuery][Required] Guid accessGroupId)
+        [FromQuery][Required] Guid accessGroupId,
+        CancellationToken cancellationToken = default)
     {
         if (userId == Guid.Empty)
             return BadRequest(UserIdRequiredMessage);
@@ -42,7 +43,7 @@ public class AccessGroupsController : ControllerBase
         if (accessGroupId == Guid.Empty)
             return BadRequest(AccessGroupIdRequiredMessage);
 
-        await _accessGroupService.AddUserToAccessGroupAsync(userId, accessGroupId);
+        await _accessGroupService.AddUserToAccessGroupAsync(userId, accessGroupId, cancellationToken);
         return Ok();
     }
 }
