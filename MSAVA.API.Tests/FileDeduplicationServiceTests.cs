@@ -160,6 +160,65 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsExistingPrivateReferenceForAdminWithoutAccessGroup()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-admin-existing-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var admin = CreateUser("admin", isAdmin: true);
+            var existingOwner = CreateUser("owner");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+
+            context.Users.AddRange(admin, existingOwner);
+            context.AccessGroups.Add(existingGroup);
+            context.FileRefs.Add(existingReference);
+            await context.SaveChangesAsync();
+
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = admin.Id,
+                Username = admin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Admin", "Whitelisted"],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-1),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                FileName = "admin-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeTrue();
+            result.ReferenceId.Should().Be(existingReference.Id);
+            result.NewReferenceCreated.Should().BeFalse();
+            result.Error.Should().BeNull();
+            context.FileRefs.Should().ContainSingle(reference => reference.Id == existingReference.Id);
+            metadataStore.GetByAccessGroup(existingGroup.Id).Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_RejectsRequestedAccessGroupOutsideCurrentUserMembership()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-unauthorized-group-{Guid.NewGuid()}"));
@@ -350,7 +409,7 @@ public class FileDeduplicationServiceTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(string username)
+    private static UserDB CreateUser(string username, bool isAdmin = false)
     {
         return new UserDB
         {
@@ -358,7 +417,7 @@ public class FileDeduplicationServiceTests
             Username = username,
             PasswordHash = [1],
             PasswordSalt = [2],
-            IsAdmin = false,
+            IsAdmin = isAdmin,
             IsBanned = false,
             IsWhitelisted = true,
             CreatedAt = DateTime.UtcNow

@@ -53,11 +53,12 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.Failed(hashHex, extensionValidationError);
         }
 
-        if (!TryGetActiveSessionUserId(out Guid sessionUserId, out string? sessionError))
+        if (!TryGetActiveSession(out SessionDTO session, out string? sessionError))
         {
             return HashCheckResult.Failed(hashHex, sessionError);
         }
 
+        Guid sessionUserId = session.UserId;
         var fileHash = Convert.FromHexString(hashHex);
 
         // Get user's access groups
@@ -65,7 +66,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 
         // Check if user already has a reference they can access
         var existingReference = await FindExistingAccessibleReferenceAsync(
-            fileHash, extension, sessionUserId, userAccessGroups, cancellationToken);
+            fileHash, extension, userAccessGroups, session.IsAdmin, cancellationToken);
 
         if (existingReference != null)
         {
@@ -173,17 +174,19 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     private async Task<SavedFileReferenceDB?> FindExistingAccessibleReferenceAsync(
         byte[] fileHash,
         string extension,
-        Guid userId,
         List<Guid> userAccessGroups,
+        bool isAdmin,
         CancellationToken cancellationToken)
     {
         var extensionType = MappingUtils.ParseFileExtension(extension);
 
-        // Find a reference that:
-        // 1. Matches hash and extension
-        // 2. User has access to (via access group membership or public download)
-        return await _context.FileRefs
-            .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType)
+        var matchingReferences = _context.FileRefs
+            .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType);
+
+        if (isAdmin)
+            return await matchingReferences.FirstOrDefaultAsync(cancellationToken);
+
+        return await matchingReferences
             .Where(fr => fr.PublicDownload || userAccessGroups.Contains(fr.AccessGroupId))
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -355,9 +358,9 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         return accessGroup;
     }
 
-    private bool TryGetActiveSessionUserId(out Guid userId, out string error)
+    private bool TryGetActiveSession(out SessionDTO session, out string error)
     {
-        userId = Guid.Empty;
+        session = new SessionDTO();
 
         if (!SessionGuard.TryRequireActive(
                 _requestSessionAccessor.GetSession(),
@@ -367,7 +370,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
                 "Banned users cannot check file hashes."))
             return false;
 
-        userId = activeSession.UserId;
+        session = activeSession;
         return true;
     }
 
