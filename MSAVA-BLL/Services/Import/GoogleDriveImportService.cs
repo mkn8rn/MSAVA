@@ -8,6 +8,8 @@ namespace MSAVA_BLL.Services.Import;
 
 public class GoogleDriveImportService
 {
+    private const int MaximumProviderErrorBodyLength = 2048;
+
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -41,8 +43,7 @@ public class GoogleDriveImportService
 
         if (!initialResp.IsSuccessStatusCode)
         {
-            var body = await initialResp.Content.ReadAsStringAsync(cancellationToken);
-            throw new InvalidOperationException($"Google Drive initial request failed {(int)initialResp.StatusCode}: {body}");
+            await ThrowProviderHttpFailureAsync("Google Drive initial request", initialResp, cancellationToken);
         }
 
         var contentType = initialResp.Content.Headers.ContentType?.MediaType ?? string.Empty;
@@ -88,7 +89,8 @@ public class GoogleDriveImportService
             string finalExtension;
             using (var downloadResp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
             {
-                downloadResp.EnsureSuccessStatusCode();
+                if (!downloadResp.IsSuccessStatusCode)
+                    await ThrowProviderHttpFailureAsync("Google Drive download", downloadResp, cancellationToken);
 
                 var respMediaType = downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty;
                 if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
@@ -121,6 +123,34 @@ public class GoogleDriveImportService
         {
             DeleteTempFileIfPresent(tempFilePath);
         }
+    }
+
+    private static async Task ThrowProviderHttpFailureAsync(
+        string operation,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        string body = await ReadProviderErrorBodyAsync(response, cancellationToken);
+        string message = string.IsNullOrWhiteSpace(body)
+            ? $"{operation} failed {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()})"
+            : $"{operation} failed {(int)response.StatusCode}: {body}";
+
+        throw new HttpRequestException(message, null, response.StatusCode);
+    }
+
+    private static async Task<string> ReadProviderErrorBodyAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.Content is null)
+            return string.Empty;
+
+        string body = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
+
+        if (body.Length <= MaximumProviderErrorBodyLength)
+            return body;
+
+        return body[..MaximumProviderErrorBodyLength];
     }
 
     private static string? ExtractDriveFileId(string urlOrId)

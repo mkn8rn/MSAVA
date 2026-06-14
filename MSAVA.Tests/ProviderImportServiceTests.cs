@@ -44,9 +44,10 @@ public class ProviderImportServiceTests
 
             Func<Task> act = () => service.ImportAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
                 .WithMessage("Google Drive initial request failed 400: drive failure");
 
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             httpClientFactory.WasCalled.Should().BeTrue();
             handler.Requests.Should().ContainSingle();
             handler.Requests[0].RequestUri!.Host.Should().Be("drive.google.com");
@@ -84,9 +85,10 @@ public class ProviderImportServiceTests
 
             Func<Task> act = () => service.ImportAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
                 .WithMessage("OneDrive download failed 400: onedrive failure");
 
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             httpClientFactory.WasCalled.Should().BeTrue();
             handler.Requests.Should().ContainSingle();
             handler.Requests[0].RequestUri!.Host.Should().Be("api.onedrive.com");
@@ -160,6 +162,54 @@ public class ProviderImportServiceTests
 
             httpClientFactory.WasCalled.Should().BeFalse();
             handler.Requests.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GoogleDriveImportAsync_DeletesTempFileWhenFinalDownloadFails()
+    {
+        var responseIndex = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateResponse(HttpStatusCode.OK, "application/octet-stream", "initial ok");
+
+            return CreateResponse(HttpStatusCode.BadGateway, "text/plain", "download failure");
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger),
+                new ServiceLogger(logger, context),
+                httpClientFactory);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
+                .WithMessage("Google Drive download failed 502: download failure");
+
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
         }
         finally
         {
