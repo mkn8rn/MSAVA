@@ -1,7 +1,8 @@
+using MSAVA_API.Handlers;
 using MSAVA_Shared.Models;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
-using Microsoft.IdentityModel.JsonWebTokens;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace MSAVA_API.Middleware;
 
@@ -43,10 +44,7 @@ public class RequestContextMiddleware
             };
         }
 
-        // Parse user ID
-        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier) 
-                       ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        var userId = Guid.TryParse(userIdClaim, out var uid) ? uid : Guid.Empty;
+        var userId = AuthorizationUser.GetAuthenticatedUserId(user) ?? Guid.Empty;
 
         // Parse username
         var username = user.FindFirstValue(ClaimTypes.Name) 
