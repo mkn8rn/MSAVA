@@ -29,18 +29,7 @@ public class AccessGroupsController : ControllerBase
         [FromQuery][Required] Guid userId,
         [FromQuery][Required] Guid accessGroupId)
     {
-        try
-        {
-            await _accessGroupService.AddUserToAccessGroupAsync(userId, accessGroupId);
-            return Ok();
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
+        await _accessGroupService.AddUserToAccessGroupAsync(userId, accessGroupId);
+        return Ok();
     }
 }
