@@ -55,6 +55,37 @@ public class FileManagerTests
         }
     }
 
+    [Test]
+    public void CheckFileAccessByPath_DeniesHexFileNameThatIsNotSha256Length()
+    {
+        byte[] shortHash = Guid.NewGuid().ToByteArray();
+        string metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = Guid.NewGuid(),
+                FileHash = shortHash,
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                PublicDownload = true
+            });
+            var fileManager = new FileManager(metadataStore);
+            string fileNameWithExtension = $"{Convert.ToHexString(shortHash).ToLowerInvariant()}.txt";
+
+            Action act = () => fileManager.CheckFileAccessByPath(fileNameWithExtension, userAccessGroups: null);
+
+            act.Should().Throw<UnauthorizedAccessException>()
+                .WithMessage("Invalid file hash format.");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "msava-tests", Guid.NewGuid().ToString("N"));

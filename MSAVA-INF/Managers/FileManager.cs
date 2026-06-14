@@ -6,6 +6,8 @@ namespace MSAVA_INF.Managers;
 
 public class FileManager
 {
+    private const int Sha256HashHexLength = 64;
+
     private readonly MetadataStore _metadataStore;
 
     public FileManager(MetadataStore metadataStore)
@@ -124,12 +126,29 @@ public class FileManager
     private static (string HashHex, string Extension) ParseFileName(string fileNameWithExtension)
     {
         var lastDot = fileNameWithExtension.LastIndexOf('.');
-        if (lastDot <= 0)
-            throw new ArgumentException("Invalid file name format.", nameof(fileNameWithExtension));
+        if (lastDot <= 0 || lastDot == fileNameWithExtension.Length - 1)
+            throw new UnauthorizedAccessException("Invalid file name format.");
 
         var hashHex = fileNameWithExtension[..lastDot].ToUpperInvariant();
         var extension = fileNameWithExtension[(lastDot + 1)..].ToLowerInvariant();
 
+        if (!IsSha256Hex(hashHex))
+            throw new UnauthorizedAccessException("Invalid file hash format.");
+
         return (hashHex, extension);
+    }
+
+    private static bool IsSha256Hex(string hashHex)
+    {
+        if (hashHex.Length != Sha256HashHexLength)
+            return false;
+
+        foreach (char c in hashHex)
+        {
+            if (!Uri.IsHexDigit(c))
+                return false;
+        }
+
+        return true;
     }
 }

@@ -159,6 +159,35 @@ public class FileDownloadServiceTests
     }
 
     [Test]
+    public async Task GetFileStreamByPathAsync_DeniesInvalidHashShapeAsUnauthorizedAccess()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false
+            });
+
+            Func<Task> act = () => service.GetFileStreamByPathAsync("abc.txt");
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User does not have permission to access this file.");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GetFileStreamByPathAsync_AllowsAdminWithoutAccessGroup()
     {
         using var context = CreateContext();
