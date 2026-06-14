@@ -25,6 +25,29 @@ public class ServiceLoggerTests
         context.SaveChangesAsyncCalls.Should().Be(1);
     }
 
+    [Test]
+    public async Task WriteLogAsync_PropagatesCallerCancellationAndDetachesPendingLog()
+    {
+        using var context = CreateContext();
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var userId = Guid.NewGuid();
+
+        var act = async () => await logger.WriteLogAsync(
+            UserLogAction.AccountRegistered,
+            "Registered user",
+            userId,
+            adminId: null,
+            cancellation.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        context.ChangeTracker.Entries<UserLogDB>().Should().BeEmpty();
+        context.UserLogs.Should().BeEmpty();
+        context.SaveChangesCalls.Should().Be(0);
+        context.SaveChangesAsyncCalls.Should().Be(1);
+    }
+
     private static TestDataContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()

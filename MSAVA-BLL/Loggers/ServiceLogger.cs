@@ -204,6 +204,11 @@ public class ServiceLogger
 
             await _context.SaveChangesAsync(cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            DetachLog(log);
+            throw;
+        }
         catch (Exception ex)
         {
             DetachLog(log);
