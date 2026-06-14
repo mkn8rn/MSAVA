@@ -15,20 +15,24 @@ public class AuthenticationController : ControllerBase
 
     public AuthenticationController(IAuthenticationService authService)
     {
-        _authService = authService;
+        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody][Required] LoginRequestDTO request)
+    public async Task<ActionResult<LoginResponseDTO>> Login(
+        [FromBody][Required] LoginRequestDTO request,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _authService.LoginAsync(request);
+        var result = await _authService.LoginAsync(request, cancellationToken);
         return Ok(result);
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody][Required] RegisterRequestDTO request)
+    public async Task<ActionResult<Guid>> Register(
+        [FromBody][Required] RegisterRequestDTO request,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _authService.RegisterAsync(request);
+        var result = await _authService.RegisterAsync(request, cancellationToken);
         return Ok(result);
     }
 }

@@ -1,0 +1,83 @@
+using Microsoft.AspNetCore.Mvc;
+using MSAVA_API.Controllers;
+using MSAVA_BLL.Services.Interfaces;
+using MSAVA_Shared.Models;
+
+namespace MSAVA_API.Tests;
+
+public class AuthenticationControllerTests
+{
+    [Test]
+    public void Constructor_RejectsMissingAuthenticationService()
+    {
+        Action act = () => _ = new AuthenticationController(null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("authService");
+    }
+
+    [Test]
+    public async Task Login_ReturnsLoginResponseAndPassesCancellationToken()
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service);
+        var request = new LoginRequestDTO
+        {
+            Username = "user",
+            Password = "password"
+        };
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.Login(request, cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(new LoginResponseDTO { Token = "test-token" });
+        service.LoginRequest.Should().BeSameAs(request);
+        service.LoginCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task Register_ReturnsUserIdAndPassesCancellationToken()
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service);
+        var request = new RegisterRequestDTO
+        {
+            Username = "new-user",
+            Password = "password",
+            InviteCode = Guid.NewGuid()
+        };
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.Register(request, cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(service.RegisteredUserId);
+        service.RegisterRequest.Should().BeSameAs(request);
+        service.RegisterCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    private sealed class TestAuthenticationService : IAuthenticationService
+    {
+        public readonly Guid RegisteredUserId = Guid.NewGuid();
+
+        public LoginRequestDTO? LoginRequest { get; private set; }
+        public CancellationToken LoginCancellationToken { get; private set; }
+        public RegisterRequestDTO? RegisterRequest { get; private set; }
+        public CancellationToken RegisterCancellationToken { get; private set; }
+
+        public Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
+        {
+            LoginRequest = request;
+            LoginCancellationToken = cancellationToken;
+            return Task.FromResult(new LoginResponseDTO { Token = "test-token" });
+        }
+
+        public Task<Guid> RegisterAsync(RegisterRequestDTO request, CancellationToken cancellationToken = default)
+        {
+            RegisterRequest = request;
+            RegisterCancellationToken = cancellationToken;
+            return Task.FromResult(RegisteredUserId);
+        }
+    }
+}
