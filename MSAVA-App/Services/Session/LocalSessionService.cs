@@ -69,6 +69,10 @@ public class LocalSessionService
             }
             return token;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to call authentication API");
