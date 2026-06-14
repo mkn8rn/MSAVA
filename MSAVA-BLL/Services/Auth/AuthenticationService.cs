@@ -28,6 +28,8 @@ public class AuthenticationService : IAuthenticationService
         ServiceLogger serviceLogger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(env);
+
         _jwtIssuer = env.Values.JwtIssuerName;
         _jwtAudience = env.Values.JwtIssuerAudience;
         _jwtKeyBytes = env.GetSigningKeyBytes();

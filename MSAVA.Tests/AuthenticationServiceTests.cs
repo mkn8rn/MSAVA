@@ -35,6 +35,23 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public void Constructor_RejectsMissingEnvironment()
+    {
+        using var context = CreateContext();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var admin = CreateUser("admin", "password", isBanned: false);
+        var inviteCodeService = new InviteCodeService(
+            context,
+            new TestUserSessionService(admin.Id),
+            logger);
+
+        Action act = () => _ = new AuthenticationService(context, inviteCodeService, null!, logger);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("env");
+    }
+
+    [Test]
     public async Task LoginAsync_RejectsBannedUserBeforeJwtIsPersisted()
     {
         using var context = CreateContext();
