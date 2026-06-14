@@ -40,6 +40,12 @@ namespace MSAVA_API.Middleware
             }
             catch (Exception ex)
             {
+                if (context.Response.HasStarted)
+                {
+                    logger.LogError(ex, "Unhandled exception occurred after the response started");
+                    throw;
+                }
+
                 Guid errorId = Guid.NewGuid();
                 DateTime timestamp = DateTime.UtcNow;
                 int statusCode = GetStatusCode(ex, context.User?.Identity?.IsAuthenticated == true);

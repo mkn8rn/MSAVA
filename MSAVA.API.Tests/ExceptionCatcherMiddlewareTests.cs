@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -180,6 +181,26 @@ public class ExceptionCatcherMiddlewareTests
         (await ReadResponseBodyAsync(context)).Should().BeEmpty();
     }
 
+    [Test]
+    public async Task InvokeAsync_PropagatesExceptionWhenResponseAlreadyStarted()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        context.Features.Set<IHttpResponseFeature>(new StartedResponseFeature(context.Response.Body));
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new InvalidOperationException("Response is already partially written."));
+
+        var act = async () => await middleware.InvokeAsync(context);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Response is already partially written.");
+        dbContext.ErrorLogs.Should().BeEmpty();
+        dbContext.SaveChangesCalls.Should().Be(0);
+        dbContext.SaveChangesAsyncCalls.Should().Be(0);
+        context.Response.ContentType.Should().BeNull();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        (await ReadResponseBodyAsync(context)).Should().BeEmpty();
+    }
+
     private static TestDataContext CreateContext(bool throwOnSave)
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()
@@ -277,5 +298,26 @@ public class ExceptionCatcherMiddlewareTests
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
 
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class StartedResponseFeature(Stream body) : IHttpResponseFeature
+    {
+        public int StatusCode { get; set; } = StatusCodes.Status200OK;
+
+        public string? ReasonPhrase { get; set; }
+
+        public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
+
+        public Stream Body { get; set; } = body;
+
+        public bool HasStarted => true;
+
+        public void OnCompleted(Func<object, Task> callback, object state)
+        {
+        }
+
+        public void OnStarting(Func<object, Task> callback, object state)
+        {
+        }
     }
 }
