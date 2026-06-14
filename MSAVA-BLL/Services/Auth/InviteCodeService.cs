@@ -9,6 +9,7 @@ using MSAVA_Shared.Models;
 namespace MSAVA_BLL.Services.Auth;
 
 public class InviteCodeService
+    : IInviteCodeService
 {
     private readonly BaseDataContext _context;
     private readonly IUserSessionService _userService;

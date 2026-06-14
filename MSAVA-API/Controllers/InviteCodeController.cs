@@ -2,7 +2,7 @@ using MSAVA_API.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
-using MSAVA_BLL.Services.Auth;
+using MSAVA_BLL.Services.Interfaces;
 
 namespace MSAVA_API.Controllers;
 
@@ -14,9 +14,9 @@ public class InviteCodeController : ControllerBase
     private const int MaximumInviteCodeLifetimeHours = 24 * 365;
     private const string InvalidMaxUsesMessage = "Invite code max uses must be greater than zero.";
 
-    private readonly InviteCodeService _inviteCodeService;
+    private readonly IInviteCodeService _inviteCodeService;
 
-    public InviteCodeController(InviteCodeService inviteCodeService)
+    public InviteCodeController(IInviteCodeService inviteCodeService)
     {
         _inviteCodeService = inviteCodeService ?? throw new ArgumentNullException(nameof(inviteCodeService));
     }

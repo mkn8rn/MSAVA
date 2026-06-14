@@ -13,6 +13,16 @@ namespace MSAVA_API.Tests;
 
 public class InviteCodeControllerTests
 {
+    [Test]
+    public void InviteCodeController_DependsOnInviteCodeServiceInterface()
+    {
+        var constructor = typeof(InviteCodeController).GetConstructors().Should().ContainSingle().Subject;
+
+        constructor.GetParameters()
+            .Should()
+            .ContainSingle(parameter => parameter.ParameterType == typeof(IInviteCodeService));
+    }
+
     [TestCase(0)]
     [TestCase(-1)]
     public async Task CreateInviteCode_RejectsInvalidMaxUsesBeforeServiceCreatesInviteCode(int maxUses)

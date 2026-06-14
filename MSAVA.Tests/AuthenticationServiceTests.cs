@@ -25,6 +25,16 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public void AuthenticationService_DependsOnInviteCodeServiceInterface()
+    {
+        var constructor = typeof(AuthenticationService).GetConstructors().Should().ContainSingle().Subject;
+
+        constructor.GetParameters()
+            .Should()
+            .Contain(parameter => parameter.ParameterType == typeof(IInviteCodeService));
+    }
+
+    [Test]
     public async Task LoginAsync_RejectsBannedUserBeforeJwtIsPersisted()
     {
         using var context = CreateContext();

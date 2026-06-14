@@ -15,7 +15,7 @@ namespace MSAVA_BLL.Services.Auth;
 public class AuthenticationService : IAuthenticationService
 {
     private readonly BaseDataContext _context;
-    private readonly InviteCodeService _inviteCodeService;
+    private readonly IInviteCodeService _inviteCodeService;
     private readonly string _jwtIssuer;
     private readonly string _jwtAudience;
     private readonly byte[] _jwtKeyBytes;
@@ -23,7 +23,7 @@ public class AuthenticationService : IAuthenticationService
 
     public AuthenticationService(
         BaseDataContext context,
-        InviteCodeService inviteCodeService,
+        IInviteCodeService inviteCodeService,
         ILocalEnvironment env,
         ServiceLogger serviceLogger)
     {
