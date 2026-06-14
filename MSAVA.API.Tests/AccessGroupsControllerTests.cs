@@ -1,5 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Controllers;
 using MSAVA_BLL.Loggers;
@@ -63,6 +63,30 @@ public class AccessGroupsControllerTests
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only admins and access group owners can add users to an access group.");
+    }
+
+    [Test]
+    public async Task AddUserToAccessGroup_RejectsEmptyUserIdBeforeServiceException()
+    {
+        using var context = CreateContext();
+        var controller = CreateController(context, Guid.NewGuid(), isAdmin: true);
+
+        var response = await controller.AddUserToAccessGroup(Guid.Empty, Guid.NewGuid());
+
+        var badRequest = response.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().Be("User id must be provided.");
+    }
+
+    [Test]
+    public async Task AddUserToAccessGroup_RejectsEmptyAccessGroupIdBeforeServiceException()
+    {
+        using var context = CreateContext();
+        var controller = CreateController(context, Guid.NewGuid(), isAdmin: true);
+
+        var response = await controller.AddUserToAccessGroup(Guid.NewGuid(), Guid.Empty);
+
+        var badRequest = response.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().Be("Access group id must be provided.");
     }
 
     private static AccessGroupsController CreateController(BaseDataContext context, Guid sessionUserId, bool isAdmin)

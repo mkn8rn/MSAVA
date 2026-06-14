@@ -11,6 +11,8 @@ namespace MSAVA_API.Controllers;
 public class AccessGroupsController : ControllerBase
 {
     private const string AccessGroupNameRequiredMessage = "Access group name must be provided.";
+    private const string UserIdRequiredMessage = "User id must be provided.";
+    private const string AccessGroupIdRequiredMessage = "Access group id must be provided.";
 
     private readonly AccessGroupService _accessGroupService;
 
@@ -34,6 +36,12 @@ public class AccessGroupsController : ControllerBase
         [FromQuery][Required] Guid userId,
         [FromQuery][Required] Guid accessGroupId)
     {
+        if (userId == Guid.Empty)
+            return BadRequest(UserIdRequiredMessage);
+
+        if (accessGroupId == Guid.Empty)
+            return BadRequest(AccessGroupIdRequiredMessage);
+
         await _accessGroupService.AddUserToAccessGroupAsync(userId, accessGroupId);
         return Ok();
     }
