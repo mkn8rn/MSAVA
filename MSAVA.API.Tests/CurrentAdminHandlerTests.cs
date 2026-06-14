@@ -90,6 +90,22 @@ public class CurrentAdminHandlerTests
         authorizationContext.HasSucceeded.Should().BeFalse();
     }
 
+    [Test]
+    public async Task HandleAsync_FailsAuthorizationWhenAdminLookupFails()
+    {
+        using var context = CreateContext();
+        context.Dispose();
+        var authorizationContext = CreateAuthorizationContext(Guid.NewGuid(), includeStaleAdminRole: true);
+        var handler = new CurrentAdminHandler(context, NullLogger<CurrentAdminHandler>.Instance);
+
+        await handler.HandleAsync(authorizationContext);
+
+        authorizationContext.HasSucceeded.Should().BeFalse();
+        authorizationContext.HasFailed.Should().BeTrue();
+        authorizationContext.FailureReasons.Should().ContainSingle(reason =>
+            reason.Message == "Failed to validate current admin status.");
+    }
+
     private static AuthorizationHandlerContext CreateAuthorizationContext(
         Guid userId,
         bool includeStaleAdminRole = false,

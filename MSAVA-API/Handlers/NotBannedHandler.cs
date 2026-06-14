@@ -41,6 +41,7 @@ namespace MSAVA_API.Handlers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to validate ban status for user {UserId}", userId);
+                context.Fail(new AuthorizationFailureReason(this, "Failed to validate ban status."));
             }
         }
     }

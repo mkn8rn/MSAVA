@@ -41,6 +41,7 @@ public class CurrentAdminHandler : AuthorizationHandler<CurrentAdminRequirement>
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to validate admin status for user {UserId}", userId);
+            context.Fail(new AuthorizationFailureReason(this, "Failed to validate current admin status."));
         }
     }
 }

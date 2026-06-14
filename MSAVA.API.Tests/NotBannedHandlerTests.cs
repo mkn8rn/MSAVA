@@ -71,6 +71,22 @@ public class NotBannedHandlerTests
         authorizationContext.HasSucceeded.Should().BeFalse();
     }
 
+    [Test]
+    public async Task HandleAsync_FailsAuthorizationWhenBanLookupFails()
+    {
+        using var context = CreateContext();
+        context.Dispose();
+        var authorizationContext = CreateAuthorizationContext(Guid.NewGuid());
+        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+
+        await handler.HandleAsync(authorizationContext);
+
+        authorizationContext.HasSucceeded.Should().BeFalse();
+        authorizationContext.HasFailed.Should().BeTrue();
+        authorizationContext.FailureReasons.Should().ContainSingle(reason =>
+            reason.Message == "Failed to validate ban status.");
+    }
+
     private static AuthorizationHandlerContext CreateAuthorizationContext(Guid userId, CancellationToken requestAborted = default)
     {
         var requirement = new NotBannedRequirement();
