@@ -105,10 +105,20 @@ public class FileManager
 
     public Guid CheckFileAccessByPath(string fileNameWithExtension, List<Guid>? userAccessGroups)
     {
-        string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
+        EnsureSafeFileName(fileNameWithExtension);
 
         var (hashHex, extension) = ParseFileName(fileNameWithExtension);
         return _metadataStore.CheckAccessOrThrow(hashHex, extension, userAccessGroups);
+    }
+
+    private static void EnsureSafeFileName(string fileNameWithExtension)
+    {
+        if (!FileContentUtils.IsSafeFileName(fileNameWithExtension))
+            throw new UnauthorizedAccessException($"Unsafe file name: {fileNameWithExtension}");
+
+        string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
+        if (!FileContentUtils.IsSafeFilePath(fullPath))
+            throw new UnauthorizedAccessException($"Unsafe file path: {fullPath}");
     }
 
     private static (string HashHex, string Extension) ParseFileName(string fileNameWithExtension)

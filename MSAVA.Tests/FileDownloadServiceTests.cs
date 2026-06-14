@@ -115,6 +115,49 @@ public class FileDownloadServiceTests
         }
     }
 
+    [Test]
+    public void GetFileStreamByPath_DeniesUnauthorizedMetadataBeforeCheckingPhysicalFileExists()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string fileNameWithExtension = $"{Convert.ToHexString(fileHash).ToLowerInvariant()}.txt";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = Guid.NewGuid(),
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                PublicDownload = false
+            });
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false
+            });
+
+            var act = () => service.GetFileStreamByPath(fileNameWithExtension);
+
+            act.Should().Throw<UnauthorizedAccessException>()
+                .WithMessage("User does not have permission to access this file.");
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static FileDownloadService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,
