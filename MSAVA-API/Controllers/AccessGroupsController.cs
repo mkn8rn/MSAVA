@@ -22,12 +22,14 @@ public class AccessGroupsController : ControllerBase
     }
 
     [HttpPost("create")]
-    public ActionResult<Guid> CreateAccessGroup([FromQuery][Required] string name)
+    public async Task<ActionResult<Guid>> CreateAccessGroup(
+        [FromQuery][Required] string name,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(AccessGroupNameRequiredMessage);
 
-        var id = _accessGroupService.CreateAccessGroup(name);
+        var id = await _accessGroupService.CreateAccessGroupAsync(name, cancellationToken);
         return Ok(id);
     }
 

@@ -33,7 +33,7 @@ public class AccessGroupServiceTests
         var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, owner.Id, isAdmin: false, logger);
 
-        var accessGroupId = service.CreateAccessGroup("  Editors  ");
+        var accessGroupId = await service.CreateAccessGroupAsync("  Editors  ");
 
         var accessGroup = context.AccessGroups
             .Include(group => group.Users)
@@ -56,9 +56,9 @@ public class AccessGroupServiceTests
         var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, owner.Id, isAdmin: false, logger);
 
-        var act = () => service.CreateAccessGroup(name);
+        Func<Task> act = () => service.CreateAccessGroupAsync(name);
 
-        act.Should().Throw<ArgumentException>()
+        await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("Access group name must be provided.*");
         context.AccessGroups.Should().BeEmpty();
     }
@@ -75,9 +75,9 @@ public class AccessGroupServiceTests
         var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         var service = CreateService(context, owner.Id, isAdmin: false, logger, isBanned: true);
 
-        var act = () => service.CreateAccessGroup("Editors");
+        Func<Task> act = () => service.CreateAccessGroupAsync("Editors");
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot manage access groups.");
         context.AccessGroups.Should().BeEmpty();
     }

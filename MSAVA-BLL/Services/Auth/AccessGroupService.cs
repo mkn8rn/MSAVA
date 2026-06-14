@@ -25,12 +25,12 @@ public class AccessGroupService
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
     }
 
-    public Guid CreateAccessGroup(string name)
+    public async Task<Guid> CreateAccessGroupAsync(string name, CancellationToken cancellationToken = default)
     {
         string accessGroupName = NormalizeAccessGroupName(name);
         SessionDTO session = GetActiveSession();
 
-        var user = _context.Users.SingleOrDefault(u => u.Id == session.UserId)
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == session.UserId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {session.UserId} not found.");
 
         var accessGroup = new AccessGroupDB
@@ -49,7 +49,7 @@ public class AccessGroupService
         user.AccessGroups ??= [];
         user.AccessGroups.Add(accessGroup);
 
-        _context.SaveChanges(); // Single save for both operations
+        await _context.SaveChangesAsync(cancellationToken);
 
         _serviceLogger.WriteLog(GroupLogActions.AccessGroupCreated, $"Access group '{accessGroupName}' created by user {user.Username}.", user.Id, accessGroup.Id);
         _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroupName}'.", user.Id, accessGroup.Id);

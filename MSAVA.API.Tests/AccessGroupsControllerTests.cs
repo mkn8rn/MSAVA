@@ -33,7 +33,7 @@ public class AccessGroupsControllerTests
         await context.SaveChangesAsync();
         var controller = CreateController(context, owner.Id, isAdmin: false);
 
-        var response = controller.CreateAccessGroup(name);
+        var response = await controller.CreateAccessGroup(name);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
         badRequest.Value.Should().Be("Access group name must be provided.");
@@ -49,11 +49,26 @@ public class AccessGroupsControllerTests
         await context.SaveChangesAsync();
         var controller = CreateController(context, owner.Id, isAdmin: false);
 
-        var response = controller.CreateAccessGroup("Editors");
+        var response = await controller.CreateAccessGroup("Editors");
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         var accessGroupId = ok.Value.Should().BeOfType<Guid>().Subject;
         context.AccessGroups.Should().ContainSingle(group => group.Id == accessGroupId);
+    }
+
+    [Test]
+    public async Task CreateAccessGroup_PassesCancellationTokenToService()
+    {
+        var service = new RecordingAccessGroupService();
+        var controller = new AccessGroupsController(service);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.CreateAccessGroup("Editors", cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(service.CreatedAccessGroupId);
+        service.CreateName.Should().Be("Editors");
+        service.CreateCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
     [Test]
@@ -116,7 +131,7 @@ public class AccessGroupsControllerTests
         response.Should().BeOfType<OkResult>();
         service.AddUserId.Should().Be(userId);
         service.AddAccessGroupId.Should().Be(accessGroupId);
-        service.CancellationToken.Should().Be(cancellationTokenSource.Token);
+        service.AddCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
     private static AccessGroupsController CreateController(BaseDataContext context, Guid sessionUserId, bool isAdmin)
@@ -216,11 +231,21 @@ public class AccessGroupsControllerTests
 
     private sealed class RecordingAccessGroupService : IAccessGroupService
     {
+        public Guid CreatedAccessGroupId { get; } = Guid.NewGuid();
+        public string? CreateName { get; private set; }
+        public CancellationToken CreateCancellationToken { get; private set; }
         public Guid AddUserId { get; private set; }
         public Guid AddAccessGroupId { get; private set; }
-        public CancellationToken CancellationToken { get; private set; }
+        public CancellationToken AddCancellationToken { get; private set; }
 
-        public Guid CreateAccessGroup(string name) => throw new NotSupportedException();
+        public Task<Guid> CreateAccessGroupAsync(
+            string name,
+            CancellationToken cancellationToken = default)
+        {
+            CreateName = name;
+            CreateCancellationToken = cancellationToken;
+            return Task.FromResult(CreatedAccessGroupId);
+        }
 
         public Task AddUserToAccessGroupAsync(
             Guid userId,
@@ -229,7 +254,7 @@ public class AccessGroupsControllerTests
         {
             AddUserId = userId;
             AddAccessGroupId = accessGroupId;
-            CancellationToken = cancellationToken;
+            AddCancellationToken = cancellationToken;
             return Task.CompletedTask;
         }
     }
