@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -287,6 +288,44 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task YouTubeImportAsync_DeletesTempFileWhenStreamCopyFails()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+        var youTubeClient = new ThrowingYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore, logger),
+                new ServiceLogger(logger, context),
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = Guid.NewGuid(),
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<IOException>()
+                .WithMessage("Simulated YouTube stream failure.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            youTubeClient.CopyCalls.Should().Be(1);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public void CreateFfmpegStartInfo_UsesArgumentListWithoutShellExecution()
     {
         var videoPath = Path.Combine("C:\\temp", "video input.webm");
@@ -464,6 +503,34 @@ public class ProviderImportServiceTests
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingYouTubeDownloadClient : IYouTubeDownloadClient
+    {
+        private static readonly byte[] PartialContent = Encoding.UTF8.GetBytes("partial youtube content");
+
+        public int CopyCalls { get; private set; }
+
+        public Task<YouTubeDownloadManifest> GetDownloadManifestAsync(
+            string youtubeUrl,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new YouTubeDownloadManifest(
+                "Test YouTube Video",
+                [new YouTubeStreamInfo(new object(), "mp4", "720p", 720, 1_500)],
+                [],
+                []));
+        }
+
+        public async Task CopyToAsync(
+            YouTubeStreamInfo streamInfo,
+            Stream destination,
+            CancellationToken cancellationToken)
+        {
+            CopyCalls++;
+            await destination.WriteAsync(PartialContent, cancellationToken);
+            throw new IOException("Simulated YouTube stream failure.");
+        }
     }
 
     private sealed class NullHttpContextAccessor : IHttpContextAccessor

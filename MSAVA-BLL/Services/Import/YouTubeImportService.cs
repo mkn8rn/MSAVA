@@ -2,9 +2,6 @@ using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_Shared.Models;
 using System.Diagnostics;
-using YoutubeExplode;
-using YoutubeExplode.Videos;
-using YoutubeExplode.Videos.Streams;
 
 namespace MSAVA_BLL.Services.Import;
 
@@ -12,11 +9,21 @@ public class YouTubeImportService
 {
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
+    private readonly IYouTubeDownloadClient _youtubeClient;
 
     public YouTubeImportService(FilePersistenceService persistenceService, ServiceLogger serviceLogger)
+        : this(persistenceService, serviceLogger, new YoutubeExplodeDownloadClient())
+    {
+    }
+
+    internal YouTubeImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        IYouTubeDownloadClient youtubeClient)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _youtubeClient = youtubeClient ?? throw new ArgumentNullException(nameof(youtubeClient));
     }
 
     public async Task<Guid> ImportAsync(FetchFileYouTubeDTO dto, CancellationToken cancellationToken = default)
@@ -30,80 +37,88 @@ public class YouTubeImportService
         if (!dto.DownloadVideo && !dto.DownloadAudio)
             throw new ArgumentException("At least one YouTube stream type must be selected.", nameof(dto));
 
-        var youtube = new YoutubeClient();
-        var videoId = VideoId.Parse(dto.YouTubeUrl);
-        var video = await youtube.Videos.GetAsync(videoId, cancellationToken);
-        var streamManifest = await youtube.Videos.Streams.GetManifestAsync(videoId, cancellationToken);
-
-        var muxedStreams = streamManifest.GetMuxedStreams().ToList();
-        var videoOnlyStreams = streamManifest.GetVideoOnlyStreams().ToList();
-        var audioOnlyStreams = streamManifest.GetAudioOnlyStreams().ToList();
-
-        string fileName = string.IsNullOrWhiteSpace(video.Title) ? "YouTube Video" : video.Title;
+        var downloadManifest = await _youtubeClient.GetDownloadManifestAsync(dto.YouTubeUrl, cancellationToken);
+        string fileName = string.IsNullOrWhiteSpace(downloadManifest.Title) ? "YouTube Video" : downloadManifest.Title;
         string fileExtension = "mp4";
         string tempFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
 
-        if (dto.DownloadVideo && dto.DownloadAudio)
+        _serviceLogger.LogInformation($"Downloading YouTube content to temp path {tempFilePath}");
+
+        try
         {
-            MuxedStreamInfo? streamInfo = null;
-            if (!string.IsNullOrWhiteSpace(dto.VideoQuality))
+            if (dto.DownloadVideo && dto.DownloadAudio)
             {
-                streamInfo = muxedStreams
-                    .Where(s => s.VideoQuality.Label.Equals(dto.VideoQuality, StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(s => s.Bitrate)
+                YouTubeStreamInfo? streamInfo = null;
+                if (!string.IsNullOrWhiteSpace(dto.VideoQuality))
+                {
+                    streamInfo = downloadManifest.MuxedStreams
+                        .Where(s => string.Equals(s.VideoQualityLabel, dto.VideoQuality, StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(s => s.BitrateKiloBitsPerSecond)
+                        .FirstOrDefault();
+                }
+
+                streamInfo ??= downloadManifest.MuxedStreams
+                    .OrderByDescending(s => s.VideoMaxHeight)
+                    .ThenByDescending(s => s.BitrateKiloBitsPerSecond)
                     .FirstOrDefault();
+
+                if (streamInfo != null)
+                {
+                    fileExtension = streamInfo.ContainerName;
+                    await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    await _youtubeClient.CopyToAsync(streamInfo, fileStream, cancellationToken);
+                }
+                else
+                {
+                    await MuxVideoAndAudio(
+                        _youtubeClient,
+                        downloadManifest.VideoStreams,
+                        downloadManifest.AudioStreams,
+                        dto,
+                        tempFilePath,
+                        cancellationToken);
+                }
             }
-
-            streamInfo ??= muxedStreams
-                .OrderByDescending(s => s.VideoQuality.MaxHeight)
-                .ThenByDescending(s => s.Bitrate)
-                .FirstOrDefault();
-
-            if (streamInfo != null)
+            else if (dto.DownloadVideo)
             {
-                fileExtension = streamInfo.Container.Name;
+                var videoStream = GetBestVideoStream(downloadManifest.VideoStreams, dto.VideoQuality);
+                fileExtension = videoStream.ContainerName;
                 await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await youtube.Videos.Streams.CopyToAsync(streamInfo, fileStream, null, cancellationToken);
+                await _youtubeClient.CopyToAsync(videoStream, fileStream, cancellationToken);
             }
-            else
+            else if (dto.DownloadAudio)
             {
-                await MuxVideoAndAudio(youtube, videoOnlyStreams, audioOnlyStreams, dto, tempFilePath, cancellationToken);
+                var audioStream = GetBestAudioStream(downloadManifest.AudioStreams, dto.AudioQuality);
+                fileExtension = audioStream.ContainerName;
+                await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await _youtubeClient.CopyToAsync(audioStream, fileStream, cancellationToken);
             }
-        }
-        else if (dto.DownloadVideo)
-        {
-            var videoStream = GetBestVideoStream(videoOnlyStreams, dto.VideoQuality);
-            fileExtension = videoStream.Container.Name;
-            await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-            await youtube.Videos.Streams.CopyToAsync(videoStream, fileStream, null, cancellationToken);
-        }
-        else if (dto.DownloadAudio)
-        {
-            var audioStream = GetBestAudioStream(audioOnlyStreams, dto.AudioQuality);
-            fileExtension = audioStream.Container.Name;
-            await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-            await youtube.Videos.Streams.CopyToAsync(audioStream, fileStream, null, cancellationToken);
-        }
-        var fetchDto = new SaveFileFromFetchDTO
-        {
-            FileName = fileName,
-            FileExtension = fileExtension,
-            TempFilePath = tempFilePath,
-            AccessGroupId = dto.AccessGroupId,
-            Tags = dto.Tags ?? [],
-            Categories = dto.Categories ?? [],
-            Description = dto.Description ?? string.Empty,
-            PublicViewing = dto.PublicViewing,
-            PublicDownload = dto.PublicDownload
-        };
 
-        return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
+            var fetchDto = new SaveFileFromFetchDTO
+            {
+                FileName = fileName,
+                FileExtension = fileExtension,
+                TempFilePath = tempFilePath,
+                AccessGroupId = dto.AccessGroupId,
+                Tags = dto.Tags ?? [],
+                Categories = dto.Categories ?? [],
+                Description = dto.Description ?? string.Empty,
+                PublicViewing = dto.PublicViewing,
+                PublicDownload = dto.PublicDownload
+            };
+
+            return await _persistenceService.CreateFileFromTempFileAsync(fetchDto, cancellationToken);
+        }
+        finally
+        {
+            DeleteTempFileIfPresent(tempFilePath);
+        }
     }
 
     private async Task MuxVideoAndAudio(
-        YoutubeClient youtube,
-        IReadOnlyList<IVideoStreamInfo> videoStreams,
-        IReadOnlyList<IAudioStreamInfo> audioStreams,
+        IYouTubeDownloadClient youtube,
+        IReadOnlyList<YouTubeStreamInfo> videoStreams,
+        IReadOnlyList<YouTubeStreamInfo> audioStreams,
         FetchFileYouTubeDTO dto,
         string outputPath,
         CancellationToken cancellationToken)
@@ -111,8 +126,8 @@ public class YouTubeImportService
         var videoStream = GetBestVideoStream(videoStreams, dto.VideoQuality);
         var audioStream = GetBestAudioStream(audioStreams, dto.AudioQuality);
 
-        string videoFormat = videoStream.Container.Name;
-        string audioFormat = audioStream.Container.Name;
+        string videoFormat = videoStream.ContainerName;
+        string audioFormat = audioStream.ContainerName;
 
         string videoTemp = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         string audioTemp = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
@@ -121,11 +136,11 @@ public class YouTubeImportService
         {
             _serviceLogger.LogInformation($"Downloading video to {videoTemp}");
             await using (var vfs = new FileStream(videoTemp, FileMode.Create, FileAccess.Write, FileShare.None))
-                await youtube.Videos.Streams.CopyToAsync(videoStream, vfs, null, cancellationToken);
+                await youtube.CopyToAsync(videoStream, vfs, cancellationToken);
 
             _serviceLogger.LogInformation($"Downloading audio to {audioTemp}");
             await using (var afs = new FileStream(audioTemp, FileMode.Create, FileAccess.Write, FileShare.None))
-                await youtube.Videos.Streams.CopyToAsync(audioStream, afs, null, cancellationToken);
+                await youtube.CopyToAsync(audioStream, afs, cancellationToken);
 
             var psi = CreateFfmpegStartInfo(videoFormat, videoTemp, audioFormat, audioTemp, outputPath);
             _serviceLogger.LogInformation($"Starting FFmpeg mux: {string.Join(' ', psi.ArgumentList)}");
@@ -196,40 +211,48 @@ public class YouTubeImportService
         return processStartInfo;
     }
 
-    private static IVideoStreamInfo GetBestVideoStream(IEnumerable<IVideoStreamInfo> streams, string? preferredQuality)
+    private static YouTubeStreamInfo GetBestVideoStream(IEnumerable<YouTubeStreamInfo> streams, string? preferredQuality)
     {
-        IVideoStreamInfo? stream = null;
+        YouTubeStreamInfo? stream = null;
 
         if (!string.IsNullOrWhiteSpace(preferredQuality))
         {
             stream = streams
-                .Where(s => s.VideoQuality.Label.Equals(preferredQuality, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(s => s.Bitrate)
+                .Where(s => string.Equals(s.VideoQualityLabel, preferredQuality, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.BitrateKiloBitsPerSecond)
                 .FirstOrDefault();
         }
 
         return stream ?? streams
-            .OrderByDescending(s => s.VideoQuality.MaxHeight)
-            .ThenByDescending(s => s.Bitrate)
+            .OrderByDescending(s => s.VideoMaxHeight)
+            .ThenByDescending(s => s.BitrateKiloBitsPerSecond)
             .FirstOrDefault()
             ?? throw new InvalidOperationException("No suitable video stream found.");
     }
 
-    private static IAudioStreamInfo GetBestAudioStream(IEnumerable<IAudioStreamInfo> streams, string? preferredQuality)
+    private static YouTubeStreamInfo GetBestAudioStream(IEnumerable<YouTubeStreamInfo> streams, string? preferredQuality)
     {
-        IAudioStreamInfo? stream = null;
+        YouTubeStreamInfo? stream = null;
 
         if (!string.IsNullOrWhiteSpace(preferredQuality))
         {
             stream = streams
-                .Where(s => (s.Bitrate.KiloBitsPerSecond + "kbps").Equals(preferredQuality, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(s => s.Bitrate)
+                .Where(s => (s.BitrateKiloBitsPerSecond + "kbps").Equals(preferredQuality, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.BitrateKiloBitsPerSecond)
                 .FirstOrDefault();
         }
 
         return stream ?? streams
-            .OrderByDescending(s => s.Bitrate)
+            .OrderByDescending(s => s.BitrateKiloBitsPerSecond)
             .FirstOrDefault()
             ?? throw new InvalidOperationException("No suitable audio stream found.");
+    }
+
+    private static void DeleteTempFileIfPresent(string tempFilePath)
+    {
+        if (!File.Exists(tempFilePath))
+            return;
+
+        try { File.Delete(tempFilePath); } catch { /* best-effort temp cleanup */ }
     }
 }
