@@ -14,7 +14,7 @@ namespace MSAVA_App.Tests;
 public class FileDownloadServiceTests
 {
     [Test]
-    public void GetPhysicalFileReturnDataById_RejectsAnonymousSessionEvenForPublicDownloadFile()
+    public async Task GetPhysicalFileReturnDataByIdAsync_RejectsAnonymousSessionEvenForPublicDownloadFile()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -34,9 +34,9 @@ public class FileDownloadServiceTests
                 IsAdmin = false
             });
 
-            var act = () => service.GetPhysicalFileReturnDataById(fileReference.Id);
+            Func<Task> act = () => service.GetPhysicalFileReturnDataByIdAsync(fileReference.Id);
 
-            act.Should().Throw<UnauthorizedAccessException>()
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("Session user is required to download files.");
         }
         finally
@@ -46,7 +46,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public void GetFileStreamByPath_RejectsBannedSessionBeforeMetadataLookup()
+    public async Task GetFileStreamByPathAsync_RejectsBannedSessionBeforeMetadataLookup()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -64,9 +64,9 @@ public class FileDownloadServiceTests
                 IsBanned = true
             });
 
-            var act = () => service.GetFileStreamByPath("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.txt");
+            Func<Task> act = () => service.GetFileStreamByPathAsync("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.txt");
 
-            act.Should().Throw<UnauthorizedAccessException>()
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("Banned users cannot download files.");
         }
         finally
@@ -76,7 +76,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public void GetPhysicalFileReturnDataById_ReusesAuthorizedSessionForAccessLog()
+    public async Task GetPhysicalFileReturnDataByIdAsync_ReusesAuthorizedSessionForAccessLog()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -103,7 +103,7 @@ public class FileDownloadServiceTests
             };
             var service = CreateService(context, metadataStore, session, out var userSessionService);
 
-            var result = service.GetPhysicalFileReturnDataById(fileReference.Id);
+            var result = await service.GetPhysicalFileReturnDataByIdAsync(fileReference.Id);
 
             result.FilePath.Should().Be(contentPath);
             userSessionService.SessionClaimsCalls.Should().Be(1);
@@ -116,7 +116,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public void GetFileStreamByPath_DeniesUnauthorizedMetadataBeforeCheckingPhysicalFileExists()
+    public async Task GetFileStreamByPathAsync_DeniesUnauthorizedMetadataBeforeCheckingPhysicalFileExists()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -146,9 +146,9 @@ public class FileDownloadServiceTests
                 IsAdmin = false
             });
 
-            var act = () => service.GetFileStreamByPath(fileNameWithExtension);
+            Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
 
-            act.Should().Throw<UnauthorizedAccessException>()
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("User does not have permission to access this file.");
         }
         finally
@@ -159,7 +159,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public void GetFileStreamByPath_AllowsAdminWithoutAccessGroup()
+    public async Task GetFileStreamByPathAsync_AllowsAdminWithoutAccessGroup()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -192,7 +192,7 @@ public class FileDownloadServiceTests
                 IsAdmin = true
             });
 
-            var result = service.GetFileStreamByPath(fileNameWithExtension);
+            var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);
 
             result.FileName.Should().Be(Path.GetFileNameWithoutExtension(fileNameWithExtension));
             result.FileExtension.Should().Be("txt");

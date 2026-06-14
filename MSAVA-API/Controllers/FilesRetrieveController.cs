@@ -21,9 +21,11 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("stream/{refId:guid}")]
-    public FileStreamResult GetFileStreamById(Guid refId)
+    public async Task<FileStreamResult> GetFileStreamById(
+        Guid refId,
+        CancellationToken cancellationToken = default)
     {
-        var dto = _downloadService.GetFileStreamById(refId);
+        var dto = await _downloadService.GetFileStreamByIdAsync(refId, cancellationToken);
         return new FileStreamResult(dto.FileStream, "application/octet-stream")
         {
             FileDownloadName = dto.DownloadFileName
@@ -31,9 +33,11 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("stream/{**fileNameWithExtension}")]
-    public FileStreamResult GetFileStreamByPath([TaintedPathCheck] string fileNameWithExtension)
+    public async Task<FileStreamResult> GetFileStreamByPath(
+        [TaintedPathCheck] string fileNameWithExtension,
+        CancellationToken cancellationToken = default)
     {
-        var dto = _downloadService.GetFileStreamByPath(fileNameWithExtension);
+        var dto = await _downloadService.GetFileStreamByPathAsync(fileNameWithExtension, cancellationToken);
         return new FileStreamResult(dto.FileStream, "application/octet-stream")
         {
             FileDownloadName = dto.DownloadFileName
@@ -41,16 +45,20 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("physical/{refId:guid}")]
-    public PhysicalFileResult GetPhysicalFileReturnDataById(Guid refId)
+    public async Task<PhysicalFileResult> GetPhysicalFileReturnDataById(
+        Guid refId,
+        CancellationToken cancellationToken = default)
     {
-        var fileData = _downloadService.GetPhysicalFileReturnDataById(refId);
+        var fileData = await _downloadService.GetPhysicalFileReturnDataByIdAsync(refId, cancellationToken);
         return PhysicalFile(fileData.FilePath, fileData.ContentType, fileData.FileName, enableRangeProcessing: true);
     }
 
     [HttpGet("physical/{**fileNameWithExtension}")]
-    public PhysicalFileResult GetPhysicalFileByPath([TaintedPathCheck] string fileNameWithExtension)
+    public async Task<PhysicalFileResult> GetPhysicalFileByPath(
+        [TaintedPathCheck] string fileNameWithExtension,
+        CancellationToken cancellationToken = default)
     {
-        var fileData = _downloadService.GetPhysicalFileReturnDataByPath(fileNameWithExtension);
+        var fileData = await _downloadService.GetPhysicalFileReturnDataByPathAsync(fileNameWithExtension, cancellationToken);
         return PhysicalFile(fileData.FilePath, fileData.ContentType, fileData.FileName, enableRangeProcessing: true);
     }
 

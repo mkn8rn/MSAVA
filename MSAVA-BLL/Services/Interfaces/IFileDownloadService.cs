@@ -4,8 +4,19 @@ namespace MSAVA_BLL.Services.Interfaces;
 
 public interface IFileDownloadService
 {
-    StreamReturnFileDTO GetFileStreamById(Guid id);
-    StreamReturnFileDTO GetFileStreamByPath(string fileNameWithExtension);
-    PhysicalReturnFileDTO GetPhysicalFileReturnDataById(Guid id);
-    PhysicalReturnFileDTO GetPhysicalFileReturnDataByPath(string path);
+    Task<StreamReturnFileDTO> GetFileStreamByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
+    Task<StreamReturnFileDTO> GetFileStreamByPathAsync(
+        string fileNameWithExtension,
+        CancellationToken cancellationToken = default);
+
+    Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
+    Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByPathAsync(
+        string path,
+        CancellationToken cancellationToken = default);
 }

@@ -26,33 +26,71 @@ public class FilesRetrieveControllerTests
     }
 
     [Test]
-    public void GetFileStreamById_ReturnsFileStreamResult()
+    public async Task GetFileStreamById_ReturnsFileStreamResultAndPassesCancellationToken()
     {
         var downloadService = new TestFileDownloadService();
         var controller = new FilesRetrieveController(downloadService, new TestFileQueryService());
         var refId = Guid.NewGuid();
+        using var cancellationTokenSource = new CancellationTokenSource();
 
-        var result = controller.GetFileStreamById(refId);
+        var result = await controller.GetFileStreamById(refId, cancellationTokenSource.Token);
 
         result.FileStream.Should().BeSameAs(downloadService.StreamById.FileStream);
         result.FileDownloadName.Should().Be("stream-by-id.txt");
         result.ContentType.Should().Be("application/octet-stream");
         downloadService.StreamByIdRequest.Should().Be(refId);
+        downloadService.StreamByIdCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
     [Test]
-    public void GetPhysicalFileByPath_ReturnsRangeEnabledPhysicalFileResult()
+    public async Task GetPhysicalFileByPath_ReturnsRangeEnabledPhysicalFileResultAndPassesCancellationToken()
     {
         var downloadService = new TestFileDownloadService();
         var controller = new FilesRetrieveController(downloadService, new TestFileQueryService());
+        using var cancellationTokenSource = new CancellationTokenSource();
 
-        var result = controller.GetPhysicalFileByPath("file.txt");
+        var result = await controller.GetPhysicalFileByPath("file.txt", cancellationTokenSource.Token);
 
         result.FileName.Should().Be("C:\\data\\file.txt");
         result.ContentType.Should().Be("text/plain");
         result.FileDownloadName.Should().Be("file.txt");
         result.EnableRangeProcessing.Should().BeTrue();
         downloadService.PhysicalByPathRequest.Should().Be("file.txt");
+        downloadService.PhysicalByPathCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task GetFileStreamByPath_ReturnsFileStreamResultAndPassesCancellationToken()
+    {
+        var downloadService = new TestFileDownloadService();
+        var controller = new FilesRetrieveController(downloadService, new TestFileQueryService());
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var result = await controller.GetFileStreamByPath("path-file.txt", cancellationTokenSource.Token);
+
+        result.FileStream.Should().BeSameAs(downloadService.StreamByPath.FileStream);
+        result.FileDownloadName.Should().Be("stream-by-path.txt");
+        result.ContentType.Should().Be("application/octet-stream");
+        downloadService.StreamByPathRequest.Should().Be("path-file.txt");
+        downloadService.StreamByPathCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task GetPhysicalFileReturnDataById_ReturnsRangeEnabledPhysicalFileResultAndPassesCancellationToken()
+    {
+        var downloadService = new TestFileDownloadService();
+        var controller = new FilesRetrieveController(downloadService, new TestFileQueryService());
+        var refId = Guid.NewGuid();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var result = await controller.GetPhysicalFileReturnDataById(refId, cancellationTokenSource.Token);
+
+        result.FileName.Should().Be("C:\\data\\id-file.txt");
+        result.ContentType.Should().Be("text/plain");
+        result.FileDownloadName.Should().Be("id-file.txt");
+        result.EnableRangeProcessing.Should().BeTrue();
+        downloadService.PhysicalByIdRequest.Should().Be(refId);
+        downloadService.PhysicalByIdCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
     [Test]
@@ -78,44 +116,66 @@ public class FilesRetrieveControllerTests
             FileStream = new MemoryStream([1, 2, 3])
         };
 
-        public Guid StreamByIdRequest { get; private set; }
-        public string? PhysicalByPathRequest { get; private set; }
+        public readonly StreamReturnFileDTO StreamByPath = new()
+        {
+            FileName = "stream-by-path",
+            FileExtension = "txt",
+            FileStream = new MemoryStream([4, 5, 6])
+        };
 
-        public StreamReturnFileDTO GetFileStreamById(Guid id)
+        public Guid StreamByIdRequest { get; private set; }
+        public CancellationToken StreamByIdCancellationToken { get; private set; }
+        public string? StreamByPathRequest { get; private set; }
+        public CancellationToken StreamByPathCancellationToken { get; private set; }
+        public Guid PhysicalByIdRequest { get; private set; }
+        public CancellationToken PhysicalByIdCancellationToken { get; private set; }
+        public string? PhysicalByPathRequest { get; private set; }
+        public CancellationToken PhysicalByPathCancellationToken { get; private set; }
+
+        public Task<StreamReturnFileDTO> GetFileStreamByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
         {
             StreamByIdRequest = id;
-            return StreamById;
+            StreamByIdCancellationToken = cancellationToken;
+            return Task.FromResult(StreamById);
         }
 
-        public StreamReturnFileDTO GetFileStreamByPath(string fileNameWithExtension)
+        public Task<StreamReturnFileDTO> GetFileStreamByPathAsync(
+            string fileNameWithExtension,
+            CancellationToken cancellationToken = default)
         {
-            return new StreamReturnFileDTO
-            {
-                FileName = "stream-by-path",
-                FileExtension = "txt",
-                FileStream = new MemoryStream([4, 5, 6])
-            };
+            StreamByPathRequest = fileNameWithExtension;
+            StreamByPathCancellationToken = cancellationToken;
+            return Task.FromResult(StreamByPath);
         }
 
-        public PhysicalReturnFileDTO GetPhysicalFileReturnDataById(Guid id)
+        public Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
         {
-            return new PhysicalReturnFileDTO
+            PhysicalByIdRequest = id;
+            PhysicalByIdCancellationToken = cancellationToken;
+            return Task.FromResult(new PhysicalReturnFileDTO
             {
                 FilePath = "C:\\data\\id-file.txt",
                 ContentType = "text/plain",
                 FileName = "id-file.txt"
-            };
+            });
         }
 
-        public PhysicalReturnFileDTO GetPhysicalFileReturnDataByPath(string path)
+        public Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByPathAsync(
+            string path,
+            CancellationToken cancellationToken = default)
         {
             PhysicalByPathRequest = path;
-            return new PhysicalReturnFileDTO
+            PhysicalByPathCancellationToken = cancellationToken;
+            return Task.FromResult(new PhysicalReturnFileDTO
             {
                 FilePath = "C:\\data\\file.txt",
                 ContentType = "text/plain",
                 FileName = "file.txt"
-            };
+            });
         }
     }
 

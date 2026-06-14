@@ -29,9 +29,13 @@ public class FileDownloadService : IFileDownloadService
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
     }
 
-    public StreamReturnFileDTO GetFileStreamById(Guid id)
+    public async Task<StreamReturnFileDTO> GetFileStreamByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        var db = _context.FileRefs.AsNoTracking().SingleOrDefault(r => r.Id == id)
+        var db = await _context.FileRefs
+            .AsNoTracking()
+            .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException($"File with id {id} not found.");
 
         SessionDTO session = CanSessionUserAccessFile(db);
@@ -47,9 +51,13 @@ public class FileDownloadService : IFileDownloadService
         return MappingUtils.MapReturnFileDTO(db, fileStream: fileStream);
     }
 
-    public PhysicalReturnFileDTO GetPhysicalFileReturnDataById(Guid id)
+    public async Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        var db = _context.FileRefs.AsNoTracking().SingleOrDefault(r => r.Id == id)
+        var db = await _context.FileRefs
+            .AsNoTracking()
+            .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException($"File with id {id} not found.");
 
         SessionDTO session = CanSessionUserAccessFile(db);
@@ -70,8 +78,11 @@ public class FileDownloadService : IFileDownloadService
         };
     }
 
-    public PhysicalReturnFileDTO GetPhysicalFileReturnDataByPath(string fileNameWithExtension)
+    public Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByPathAsync(
+        string fileNameWithExtension,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         FilePathAccess access = CanSessionUserAccessFile(fileNameWithExtension);
 
         string fileName = Path.GetFileName(fileNameWithExtension);
@@ -81,16 +92,19 @@ public class FileDownloadService : IFileDownloadService
 
         _serviceLogger.WriteLog(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
 
-        return new PhysicalReturnFileDTO
+        return Task.FromResult(new PhysicalReturnFileDTO
         {
             FilePath = fullPath,
             FileName = fileName,
             ContentType = contentType
-        };
+        });
     }
 
-    public StreamReturnFileDTO GetFileStreamByPath(string fileNameWithExtension)
+    public Task<StreamReturnFileDTO> GetFileStreamByPathAsync(
+        string fileNameWithExtension,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         FilePathAccess access = CanSessionUserAccessFile(fileNameWithExtension);
 
         string fileName = Path.GetFileNameWithoutExtension(fileNameWithExtension);
@@ -99,12 +113,12 @@ public class FileDownloadService : IFileDownloadService
 
         _serviceLogger.WriteLog(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
 
-        return new StreamReturnFileDTO
+        return Task.FromResult(new StreamReturnFileDTO
         {
             FileName = fileName,
             FileExtension = extension,
             FileStream = fileStream
-        };
+        });
     }
 
     private FilePathAccess CanSessionUserAccessFile(string fileNameWithExtension)
