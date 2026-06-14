@@ -281,22 +281,22 @@ public class FileDownloadServiceTests
 
         public int SessionClaimsCalls { get; private set; }
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public bool IsSessionUserAdmin() => _session.IsAdmin;
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session.IsAdmin);
 
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Guid GetSessionUserId() => _session.UserId;
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session.UserId);
 
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public SessionDTO GetSessionClaims()
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
         {
             SessionClaimsCalls++;
-            return _session;
+            return Task.FromResult(_session);
         }
     }
 

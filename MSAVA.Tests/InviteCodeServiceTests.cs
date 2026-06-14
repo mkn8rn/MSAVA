@@ -312,21 +312,21 @@ public class InviteCodeServiceTests
             _sessionUser = sessionUser;
         }
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public bool IsSessionUserAdmin() => _sessionUser.IsAdmin;
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUser.IsAdmin);
 
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Guid GetSessionUserId() => _sessionUser.Id;
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUser.Id);
 
-        public UserDB GetSessionUserDB() => _sessionUser;
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUser);
 
-        public SessionDTO GetSessionClaims()
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
         {
-            return new SessionDTO
+            return Task.FromResult(new SessionDTO
             {
                 LoggedIn = true,
                 UserId = _sessionUser.Id,
@@ -339,25 +339,25 @@ public class InviteCodeServiceTests
                 AccessGroups = [],
                 IssuedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
-            };
+            });
         }
     }
 
     private sealed class ThrowingUserSessionService : IUserSessionService
     {
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public bool IsSessionUserAdmin() => throw new NotSupportedException();
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Guid GetSessionUserId() => throw new NotSupportedException();
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public SessionDTO GetSessionClaims() => throw new NotSupportedException();
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class ClaimsOnlyUserSessionService : IUserSessionService
@@ -369,21 +369,21 @@ public class InviteCodeServiceTests
             _sessionUser = sessionUser;
         }
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public bool IsSessionUserAdmin() => throw new NotSupportedException();
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Guid GetSessionUserId() => throw new NotSupportedException();
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public SessionDTO GetSessionClaims()
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
         {
-            return new SessionDTO
+            return Task.FromResult(new SessionDTO
             {
                 LoggedIn = true,
                 UserId = _sessionUser.Id,
@@ -396,7 +396,7 @@ public class InviteCodeServiceTests
                 AccessGroups = [],
                 IssuedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
-            };
+            });
         }
     }
 

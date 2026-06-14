@@ -38,7 +38,7 @@ public class FileDownloadService : IFileDownloadService
             .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException($"File with id {id} not found.");
 
-        SessionDTO session = CanSessionUserAccessFile(db);
+        SessionDTO session = await CanSessionUserAccessFileAsync(db, cancellationToken);
 
         FileStream fileStream = _fileManager.GetFileStream(db.FileHash, db.FileExtension.ToString());
 
@@ -60,7 +60,7 @@ public class FileDownloadService : IFileDownloadService
             .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException($"File with id {id} not found.");
 
-        SessionDTO session = CanSessionUserAccessFile(db);
+        SessionDTO session = await CanSessionUserAccessFileAsync(db, cancellationToken);
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
@@ -83,7 +83,7 @@ public class FileDownloadService : IFileDownloadService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        FilePathAccess access = CanSessionUserAccessFile(fileNameWithExtension);
+        FilePathAccess access = await CanSessionUserAccessFileAsync(fileNameWithExtension, cancellationToken);
 
         string fileName = Path.GetFileName(fileNameWithExtension);
         string extension = Path.GetExtension(fileName).TrimStart('.');
@@ -105,7 +105,7 @@ public class FileDownloadService : IFileDownloadService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        FilePathAccess access = CanSessionUserAccessFile(fileNameWithExtension);
+        FilePathAccess access = await CanSessionUserAccessFileAsync(fileNameWithExtension, cancellationToken);
 
         string fileName = Path.GetFileNameWithoutExtension(fileNameWithExtension);
         string extension = Path.GetExtension(fileNameWithExtension).TrimStart('.');
@@ -121,9 +121,9 @@ public class FileDownloadService : IFileDownloadService
         };
     }
 
-    private FilePathAccess CanSessionUserAccessFile(string fileNameWithExtension)
+    private async Task<FilePathAccess> CanSessionUserAccessFileAsync(string fileNameWithExtension, CancellationToken cancellationToken)
     {
-        SessionDTO claims = GetActiveSession();
+        SessionDTO claims = await GetActiveSessionAsync(cancellationToken);
         try
         {
             Guid refId = _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups, claims.IsAdmin);
@@ -135,9 +135,9 @@ public class FileDownloadService : IFileDownloadService
         }
     }
 
-    private SessionDTO CanSessionUserAccessFile(SavedFileReferenceDB fileReference)
+    private async Task<SessionDTO> CanSessionUserAccessFileAsync(SavedFileReferenceDB fileReference, CancellationToken cancellationToken)
     {
-        SessionDTO claims = GetActiveSession();
+        SessionDTO claims = await GetActiveSessionAsync(cancellationToken);
 
         if (claims.IsAdmin)
             return claims;
@@ -154,10 +154,10 @@ public class FileDownloadService : IFileDownloadService
         return claims;
     }
 
-    private SessionDTO GetActiveSession()
+    private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActive(
-            _userService.GetSessionClaims(),
+            await _userService.GetSessionClaimsAsync(cancellationToken),
             "Session user is required to download files.",
             "Banned users cannot download files.");
     }

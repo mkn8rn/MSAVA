@@ -41,7 +41,7 @@ public class UserSessionServiceTests
                 ExpiresAt = expiresAt
             });
 
-        var session = service.GetSessionClaims();
+        var session = await service.GetSessionClaimsAsync();
 
         session.UserId.Should().Be(user.Id);
         session.Username.Should().Be(user.Username);
@@ -53,11 +53,11 @@ public class UserSessionServiceTests
         session.Claims.Should().ContainKey("source");
         session.IssuedAt.Should().Be(issuedAt);
         session.ExpiresAt.Should().Be(expiresAt);
-        service.IsSessionUserAdmin().Should().BeFalse();
+        (await service.IsSessionUserAdminAsync()).Should().BeFalse();
     }
 
     [Test]
-    public void GetSessionClaims_ThrowsWhenTokenUserNoLongerExists()
+    public async Task GetSessionClaims_ThrowsWhenTokenUserNoLongerExists()
     {
         using var context = CreateContext();
         var deletedUserId = Guid.NewGuid();
@@ -75,14 +75,14 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.GetSessionClaims();
+        Func<Task> act = () => service.GetSessionClaimsAsync();
 
-        act.Should().Throw<KeyNotFoundException>()
+        await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"User with id {deletedUserId} not found.");
     }
 
     [Test]
-    public void GetSessionClaims_ReturnsAnonymousSessionWithoutDatabaseLookup()
+    public async Task GetSessionClaims_ReturnsAnonymousSessionWithoutDatabaseLookup()
     {
         using var context = CreateContext();
         var anonymousSession = new SessionDTO
@@ -98,7 +98,7 @@ public class UserSessionServiceTests
         };
         var service = CreateService(context, anonymousSession);
 
-        var session = service.GetSessionClaims();
+        var session = await service.GetSessionClaimsAsync();
 
         session.Should().BeSameAs(anonymousSession);
     }
@@ -127,7 +127,7 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        var users = service.GetAllUsers();
+        var users = await service.GetAllUsersAsync();
 
         users.Select(u => u.Id).Should().BeEquivalentTo([admin.Id, user.Id]);
     }
@@ -155,7 +155,7 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        var result = service.GetUserById(user.Id);
+        var result = await service.GetUserByIdAsync(user.Id);
 
         result.Id.Should().Be(user.Id);
         result.Username.Should().Be(user.Username);
@@ -185,7 +185,7 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        var result = service.GetUserById(otherUser.Id);
+        var result = await service.GetUserByIdAsync(otherUser.Id);
 
         result.Id.Should().Be(otherUser.Id);
         result.Username.Should().Be(otherUser.Username);
@@ -215,9 +215,9 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.GetUserById(otherUser.Id);
+        Func<Task> act = () => service.GetUserByIdAsync(otherUser.Id);
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only admins can access other users.");
     }
 
@@ -245,9 +245,9 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.GetUserById(otherUser.Id);
+        Func<Task> act = () => service.GetUserByIdAsync(otherUser.Id);
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot access users.");
     }
 
@@ -274,9 +274,9 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.GetAllUsers();
+        Func<Task> act = () => service.GetAllUsersAsync();
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only admins can list users.");
     }
 
@@ -303,9 +303,9 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.GetAllUsers();
+        Func<Task> act = () => service.GetAllUsersAsync();
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot list users.");
     }
 
@@ -331,14 +331,14 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.GetSessionUserId();
+        Func<Task> act = () => service.GetSessionUserIdAsync();
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot access the current user.");
     }
 
     [Test]
-    public void GetSessionUser_RejectsAnonymousSession()
+    public async Task GetSessionUser_RejectsAnonymousSession()
     {
         using var context = CreateContext();
         var service = CreateService(
@@ -355,9 +355,9 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.MinValue
             });
 
-        Action act = () => service.GetSessionUser();
+        Func<Task> act = () => service.GetSessionUserAsync();
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Session user is required to access the current user.");
     }
 
@@ -384,9 +384,9 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Action act = () => service.IsSessionUserAdmin();
+        Func<Task> act = () => service.IsSessionUserAdminAsync();
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot check admin status.");
     }
 

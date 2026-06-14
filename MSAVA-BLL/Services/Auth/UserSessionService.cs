@@ -18,33 +18,34 @@ public class UserSessionService : IUserSessionService
         _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
     }
 
-    public UserDTO GetUserById(Guid id)
+    public async Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        RequireCanReadUser(id);
+        await RequireCanReadUserAsync(id, cancellationToken);
 
-        var userDb = _context.Users
+        var userDb = await _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
-            .SingleOrDefault(u => u.Id == id)
+            .SingleOrDefaultAsync(u => u.Id == id, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {id} not found.");
 
         return MappingUtils.MapUserDTOWithRelationships(userDb);
     }
 
-    public Guid GetSessionUserId()
+    public async Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default)
     {
-        return RequireActiveSession(
+        return (await RequireActiveSessionAsync(
             "Session user is required to access the current user.",
-            "Banned users cannot access the current user.").UserId;
+            "Banned users cannot access the current user.",
+            cancellationToken)).UserId;
     }
 
-    public SessionDTO GetSessionClaims()
+    public async Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
     {
         SessionDTO tokenSession = GetTokenSessionDto();
         if (!tokenSession.LoggedIn || tokenSession.UserId == Guid.Empty)
             return tokenSession;
 
-        UserDB userDb = GetSessionUserDb(tokenSession.UserId);
+        UserDB userDb = await GetSessionUserDbAsync(tokenSession.UserId, cancellationToken);
         var roles = new List<string>(3);
 
         if (userDb.IsAdmin)
@@ -70,65 +71,70 @@ public class UserSessionService : IUserSessionService
         };
     }
 
-    public bool IsSessionUserAdmin()
+    public async Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default)
     {
-        return RequireActiveSession(
+        return (await RequireActiveSessionAsync(
             "Session user is required to check admin status.",
-            "Banned users cannot check admin status.").IsAdmin;
+            "Banned users cannot check admin status.",
+            cancellationToken)).IsAdmin;
     }
 
-    public UserDTO GetSessionUser() => MappingUtils.MapUserDTOWithRelationships(GetSessionUserDB());
+    public async Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) =>
+        MappingUtils.MapUserDTOWithRelationships(await GetSessionUserDBAsync(cancellationToken));
 
-    public UserDB GetSessionUserDB()
+    public async Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default)
     {
-        SessionDTO session = RequireActiveSession(
+        SessionDTO session = await RequireActiveSessionAsync(
             "Session user is required to access the current user.",
-            "Banned users cannot access the current user.");
+            "Banned users cannot access the current user.",
+            cancellationToken);
 
-        return GetSessionUserDb(session.UserId);
+        return await GetSessionUserDbAsync(session.UserId, cancellationToken);
     }
 
-    private UserDB GetSessionUserDb(Guid sessionUserId)
+    private async Task<UserDB> GetSessionUserDbAsync(Guid sessionUserId, CancellationToken cancellationToken)
     {
-        var userDb = _context.Users
+        var userDb = await _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
-            .SingleOrDefault(u => u.Id == sessionUserId)
+            .SingleOrDefaultAsync(u => u.Id == sessionUserId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {sessionUserId} not found.");
 
         return userDb;
     }
 
-    public List<UserDTO> GetAllUsers()
+    public async Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default)
     {
-        RequireActiveAdminSession();
+        await RequireActiveAdminSessionAsync(cancellationToken);
 
-        var userDbs = _context.Users
+        var userDbs = await _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
-            .ToList();
+            .ToListAsync(cancellationToken);
 
         return userDbs.Select(MappingUtils.MapUserDTOWithRelationships).ToList();
     }
 
-    private void RequireActiveAdminSession()
+    private async Task RequireActiveAdminSessionAsync(CancellationToken cancellationToken)
     {
-        SessionDTO session = RequireActiveSession(
+        SessionDTO session = await RequireActiveSessionAsync(
             "Session user is required to list users.",
-            "Banned users cannot list users.");
+            "Banned users cannot list users.",
+            cancellationToken);
 
         if (!session.IsAdmin)
             throw new UnauthorizedAccessException("Only admins can list users.");
     }
 
-    private SessionDTO RequireCanReadUser(Guid userId)
+    private async Task<SessionDTO> RequireCanReadUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         if (userId == Guid.Empty)
             throw new ArgumentException("User id must be provided.", nameof(userId));
 
-        SessionDTO session = RequireActiveSession(
+        SessionDTO session = await RequireActiveSessionAsync(
             "Session user is required to access users.",
-            "Banned users cannot access users.");
+            "Banned users cannot access users.",
+            cancellationToken);
 
         if (!session.IsAdmin && session.UserId != userId)
             throw new UnauthorizedAccessException("Only admins can access other users.");
@@ -136,10 +142,13 @@ public class UserSessionService : IUserSessionService
         return session;
     }
 
-    private SessionDTO RequireActiveSession(string missingSessionMessage, string bannedSessionMessage)
+    private async Task<SessionDTO> RequireActiveSessionAsync(
+        string missingSessionMessage,
+        string bannedSessionMessage,
+        CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActive(
-            GetSessionClaims(),
+            await GetSessionClaimsAsync(cancellationToken),
             missingSessionMessage,
             bannedSessionMessage);
     }

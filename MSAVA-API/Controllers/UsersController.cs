@@ -19,12 +19,15 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("me")]
-    public ActionResult<UserDTO> GetCurrentUser() => Ok(_userService.GetSessionUser());
+    public async Task<ActionResult<UserDTO>> GetCurrentUser(CancellationToken cancellationToken = default) =>
+        Ok(await _userService.GetSessionUserAsync(cancellationToken));
 
     [HttpGet("claims")]
-    public ActionResult<SessionDTO> GetUserClaims() => Ok(_userService.GetSessionClaims());
+    public async Task<ActionResult<SessionDTO>> GetUserClaims(CancellationToken cancellationToken = default) =>
+        Ok(await _userService.GetSessionClaimsAsync(cancellationToken));
 
     [HttpGet("all")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public ActionResult<List<UserDTO>> GetAll() => Ok(_userService.GetAllUsers());
+    public async Task<ActionResult<List<UserDTO>>> GetAll(CancellationToken cancellationToken = default) =>
+        Ok(await _userService.GetAllUsersAsync(cancellationToken));
 }

@@ -20,7 +20,7 @@ public class FileQueryService : IFileQueryService
 
     public async Task<List<Guid>> GetAllFileGuidsAsync(CancellationToken cancellationToken = default)
     {
-        var session = GetActiveSession();
+        var session = await GetActiveSessionAsync(cancellationToken);
 
         return await GetVisibleFileDataQuery(session)
             .Select(f => f.Id)
@@ -29,7 +29,7 @@ public class FileQueryService : IFileQueryService
 
     public async Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(CancellationToken cancellationToken = default)
     {
-        var session = GetActiveSession();
+        var session = await GetActiveSessionAsync(cancellationToken);
 
         var dbList = await GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
@@ -45,7 +45,7 @@ public class FileQueryService : IFileQueryService
         string? description,
         CancellationToken cancellationToken = default)
     {
-        var session = GetActiveSession();
+        var session = await GetActiveSessionAsync(cancellationToken);
 
         var query = GetVisibleFileDataQuery(session);
 
@@ -61,7 +61,7 @@ public class FileQueryService : IFileQueryService
         string? description,
         CancellationToken cancellationToken = default)
     {
-        var session = GetActiveSession();
+        var session = await GetActiveSessionAsync(cancellationToken);
 
         var query = GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
@@ -73,10 +73,10 @@ public class FileQueryService : IFileQueryService
         return dbList.Select(MappingUtils.MapSearchFileDataDTO).ToList();
     }
 
-    private SessionDTO GetActiveSession()
+    private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActive(
-            _userService.GetSessionClaims(),
+            await _userService.GetSessionClaimsAsync(cancellationToken),
             "Session user is required to query files.",
             "Banned users cannot query files.");
     }

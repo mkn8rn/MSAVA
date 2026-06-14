@@ -30,7 +30,7 @@ public class InviteCodeService
         DateTime expiresAt,
         CancellationToken cancellationToken = default)
     {
-        SessionDTO session = GetAuthorizedAdminSession();
+        SessionDTO session = await GetAuthorizedAdminSessionAsync(cancellationToken);
 
         if (maxUses <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
@@ -60,7 +60,7 @@ public class InviteCodeService
     /// </summary>
     public async Task<int> GetRemainingUsesAsync(Guid inviteCodeId, CancellationToken cancellationToken = default)
     {
-        EnsureCurrentUserCanManageInviteCodes();
+        await EnsureCurrentUserCanManageInviteCodesAsync(cancellationToken);
 
         var result = await _context.InviteCodes
             .AsNoTracking()
@@ -99,7 +99,7 @@ public class InviteCodeService
 
     public async Task<List<InviteCodeDTO>> GetAllInviteCodesAsync(CancellationToken cancellationToken = default)
     {
-        EnsureCurrentUserCanManageInviteCodes();
+        await EnsureCurrentUserCanManageInviteCodesAsync(cancellationToken);
 
         return await _context.InviteCodes
             .AsNoTracking()
@@ -116,7 +116,7 @@ public class InviteCodeService
 
     public async Task<InviteCodeDTO> GetInviteCodeByIdAsync(Guid inviteCodeId, CancellationToken cancellationToken = default)
     {
-        EnsureCurrentUserCanManageInviteCodes();
+        await EnsureCurrentUserCanManageInviteCodesAsync(cancellationToken);
 
         var inviteCode = await _context.InviteCodes
             .AsNoTracking()
@@ -126,15 +126,15 @@ public class InviteCodeService
         return MappingUtils.MapInviteCodeDTO(inviteCode);
     }
 
-    private void EnsureCurrentUserCanManageInviteCodes()
+    private async Task EnsureCurrentUserCanManageInviteCodesAsync(CancellationToken cancellationToken)
     {
-        _ = GetAuthorizedAdminSession();
+        _ = await GetAuthorizedAdminSessionAsync(cancellationToken);
     }
 
-    private SessionDTO GetAuthorizedAdminSession()
+    private async Task<SessionDTO> GetAuthorizedAdminSessionAsync(CancellationToken cancellationToken)
     {
         SessionDTO session = SessionGuard.RequireActive(
-            _userService.GetSessionClaims(),
+            await _userService.GetSessionClaimsAsync(cancellationToken),
             "Only active admins can manage invite codes.",
             "Only active admins can manage invite codes.");
 

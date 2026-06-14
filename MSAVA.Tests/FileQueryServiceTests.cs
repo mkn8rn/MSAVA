@@ -186,12 +186,12 @@ public class FileQueryServiceTests
             _session = session;
         }
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
-        public bool IsSessionUserAdmin() => _session.IsAdmin;
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
-        public Guid GetSessionUserId() => _session.UserId;
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
-        public SessionDTO GetSessionClaims() => _session;
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session.IsAdmin);
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session.UserId);
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session);
     }
 }

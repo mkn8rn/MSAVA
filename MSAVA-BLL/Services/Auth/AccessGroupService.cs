@@ -28,7 +28,7 @@ public class AccessGroupService
     public async Task<Guid> CreateAccessGroupAsync(string name, CancellationToken cancellationToken = default)
     {
         string accessGroupName = NormalizeAccessGroupName(name);
-        SessionDTO session = GetActiveSession();
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == session.UserId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {session.UserId} not found.");
@@ -65,7 +65,7 @@ public class AccessGroupService
         if (accessGroupId == Guid.Empty)
             throw new ArgumentException("Access group id must be provided.", nameof(accessGroupId));
 
-        SessionDTO session = GetActiveSession();
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         var accessGroup = await _context.AccessGroups.SingleOrDefaultAsync(g => g.Id == accessGroupId, cancellationToken)
             ?? throw new KeyNotFoundException($"Access group with id {accessGroupId} not found.");
@@ -89,10 +89,10 @@ public class AccessGroupService
         }
     }
 
-    private SessionDTO GetActiveSession()
+    private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActive(
-            _userService.GetSessionClaims(),
+            await _userService.GetSessionClaimsAsync(cancellationToken),
             "Session user is required to manage access groups.",
             "Banned users cannot manage access groups.");
     }

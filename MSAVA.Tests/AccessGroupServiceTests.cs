@@ -264,21 +264,21 @@ public class AccessGroupServiceTests
             _isBanned = isBanned;
         }
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public bool IsSessionUserAdmin() => _isAdmin;
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => Task.FromResult(_isAdmin);
 
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Guid GetSessionUserId() => _sessionUserId;
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUserId);
 
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public SessionDTO GetSessionClaims()
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
         {
-            return new SessionDTO
+            return Task.FromResult(new SessionDTO
             {
                 LoggedIn = true,
                 UserId = _sessionUserId,
@@ -291,7 +291,7 @@ public class AccessGroupServiceTests
                 AccessGroups = [],
                 IssuedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
-            };
+            });
         }
     }
 

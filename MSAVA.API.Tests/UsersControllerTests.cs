@@ -18,36 +18,36 @@ public class UsersControllerTests
     }
 
     [Test]
-    public void GetCurrentUser_ReturnsSessionUser()
+    public async Task GetCurrentUser_ReturnsSessionUser()
     {
         var service = new TestUserSessionService();
         var controller = new UsersController(service);
 
-        var response = controller.GetCurrentUser();
+        var response = await controller.GetCurrentUser();
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeSameAs(service.SessionUser);
     }
 
     [Test]
-    public void GetUserClaims_ReturnsSessionClaims()
+    public async Task GetUserClaims_ReturnsSessionClaims()
     {
         var service = new TestUserSessionService();
         var controller = new UsersController(service);
 
-        var response = controller.GetUserClaims();
+        var response = await controller.GetUserClaims();
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeSameAs(service.SessionClaims);
     }
 
     [Test]
-    public void GetAll_ReturnsAllUsers()
+    public async Task GetAll_ReturnsAllUsers()
     {
         var service = new TestUserSessionService();
         var controller = new UsersController(service);
 
-        var response = controller.GetAll();
+        var response = await controller.GetAll();
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeSameAs(service.AllUsers);
@@ -94,12 +94,12 @@ public class UsersControllerTests
             }
         ];
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
-        public List<UserDTO> GetAllUsers() => AllUsers;
-        public bool IsSessionUserAdmin() => throw new NotSupportedException();
-        public UserDTO GetSessionUser() => SessionUser;
-        public Guid GetSessionUserId() => SessionClaims.UserId;
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
-        public SessionDTO GetSessionClaims() => SessionClaims;
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => Task.FromResult(AllUsers);
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionUser);
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims.UserId);
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims);
     }
 }

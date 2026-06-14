@@ -375,19 +375,19 @@ public class AuthenticationServiceTests
             _sessionUserId = sessionUserId;
         }
 
-        public UserDTO GetUserById(Guid id) => throw new NotSupportedException();
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public List<UserDTO> GetAllUsers() => throw new NotSupportedException();
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public bool IsSessionUserAdmin() => true;
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
 
-        public UserDTO GetSessionUser() => throw new NotSupportedException();
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Guid GetSessionUserId() => _sessionUserId;
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUserId);
 
-        public UserDB GetSessionUserDB() => throw new NotSupportedException();
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public SessionDTO GetSessionClaims() => throw new NotSupportedException();
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class TestEnvironment : ILocalEnvironment
