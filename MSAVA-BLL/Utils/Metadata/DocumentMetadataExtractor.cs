@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -275,24 +276,40 @@ public static partial class DocumentMetadataExtractor
 
     private static string? ParsePdfDate(string? pdfDate)
     {
-        if (string.IsNullOrEmpty(pdfDate) || !pdfDate.StartsWith("D:"))
+        if (string.IsNullOrEmpty(pdfDate) || !pdfDate.StartsWith("D:", StringComparison.Ordinal))
             return pdfDate;
 
-        // PDF date format: D:YYYYMMDDHHmmSS
-        try
-        {
-            var dateStr = pdfDate[2..];
-            if (dateStr.Length >= 8)
-            {
-                var year = dateStr[..4];
-                var month = dateStr[4..6];
-                var day = dateStr[6..8];
-                return $"{year}-{month}-{day}";
-            }
-        }
-        catch { }
+        var date = pdfDate.AsSpan(2);
+        if (date.Length < 8)
+            return pdfDate;
 
-        return pdfDate;
+        if (!TryParseAsciiDigits(date[..4], out int year) ||
+            !TryParseAsciiDigits(date.Slice(4, 2), out int month) ||
+            !TryParseAsciiDigits(date.Slice(6, 2), out int day))
+            return pdfDate;
+
+        if (year is < 1 or > 9999 || month is < 1 or > 12)
+            return pdfDate;
+
+        if (day < 1 || day > DateTime.DaysInMonth(year, month))
+            return pdfDate;
+
+        return new DateOnly(year, month, day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static bool TryParseAsciiDigits(ReadOnlySpan<char> digits, out int value)
+    {
+        value = 0;
+
+        foreach (char digit in digits)
+        {
+            if (digit is < '0' or > '9')
+                return false;
+
+            value = (value * 10) + digit - '0';
+        }
+
+        return true;
     }
 
     #endregion
