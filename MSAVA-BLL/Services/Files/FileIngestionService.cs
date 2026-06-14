@@ -6,6 +6,8 @@ namespace MSAVA_BLL.Services.Files;
 
 public class FileIngestionService : IFileIngestionService
 {
+    public const string RemoteFileHttpClientName = "RemoteFileIngestion";
+
     private const int MaximumRemoteErrorBodyLength = 2048;
 
     private readonly FilePersistenceService _persistenceService;
@@ -52,7 +54,7 @@ public class FileIngestionService : IFileIngestionService
 
         Uri fileUri = ParseFileUrl(dto.FileUrl);
 
-        var httpClient = _httpClientFactory.CreateClient();
+        var httpClient = _httpClientFactory.CreateClient(RemoteFileHttpClientName);
         using var response = await httpClient.GetAsync(fileUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         await EnsureSuccessfulRemoteResponseAsync(response, cancellationToken);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);

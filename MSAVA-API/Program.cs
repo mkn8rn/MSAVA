@@ -105,6 +105,12 @@ builder.Services.AddDbContext<BaseDataContext>(options =>
 // Register HTTP services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
+builder.Services
+    .AddHttpClient(FileIngestionService.RemoteFileHttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false
+    });
 
 // Register services
 builder.Services.AddScoped<IRequestSessionAccessor, HttpContextRequestSessionAccessor>();

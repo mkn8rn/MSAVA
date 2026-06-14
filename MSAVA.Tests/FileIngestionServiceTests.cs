@@ -126,6 +126,45 @@ public class FileIngestionServiceTests
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
             httpClientFactory.WasCalled.Should().BeTrue();
+            httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
+            handler.RequestUri.Should().Be(new Uri(dto.FileUrl));
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromUrlAsync_TreatsRedirectAsRemoteFailure()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.Redirect)
+            {
+                Headers =
+                {
+                    Location = new Uri("http://127.0.0.1/private.txt")
+                }
+            });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, httpClientFactory);
+            var dto = CreateUrlDto("https://example.com/files/redirect.txt");
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
+                .WithMessage("File URL download failed 302 (Found).");
+
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.Redirect);
+            httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.RequestUri.Should().Be(new Uri(dto.FileUrl));
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -201,10 +240,12 @@ public class FileIngestionServiceTests
         }
 
         public bool WasCalled { get; private set; }
+        public string? ClientName { get; private set; }
 
         public HttpClient CreateClient(string name)
         {
             WasCalled = true;
+            ClientName = name;
             return _handler is null
                 ? new HttpClient()
                 : new HttpClient(_handler, disposeHandler: false);
