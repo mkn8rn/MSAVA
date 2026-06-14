@@ -212,12 +212,3 @@ public sealed partial class FileManagementPage : Page
         vm.NewFileStream = picked.Stream;
     }
 }
-
-internal static class ObjectExtensions
-{
-    public static T Also<T>(this T obj, System.Action<T> action)
-    {
-        action(obj);
-        return obj;
-    }
-}
