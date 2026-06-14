@@ -9,6 +9,33 @@ namespace MSAVA_App.Tests;
 public class MappingUtilsTests
 {
     [Test]
+    public void MapReturnFileDTO_AcceptsEmptyByteArray()
+    {
+        var fileReference = CreateFileReference(SHA256.HashData([]));
+
+        var result = MappingUtils.MapReturnFileDTO(fileReference, fileBytes: []);
+
+        result.Id.Should().Be(fileReference.Id);
+        result.FileName.Should().Be(MappingUtils.GetFileName(fileReference));
+        result.FileExtension.Should().Be("txt");
+        result.FileStream.Should().BeOfType<MemoryStream>();
+        result.FileStream.Length.Should().Be(0);
+    }
+
+    [Test]
+    public void MapReturnFileDTO_AcceptsEmptyStream()
+    {
+        var fileReference = CreateFileReference(SHA256.HashData([]));
+        using var stream = new MemoryStream();
+
+        var result = MappingUtils.MapReturnFileDTO(fileReference, fileStream: stream);
+
+        result.FileStream.Should().BeSameAs(stream);
+        result.FileStream.Length.Should().Be(0);
+        result.FileStream.Position.Should().Be(0);
+    }
+
+    [Test]
     public void MapSavedFileDataDB_FromStream_UsesNormalizedReferenceExtension()
     {
         var content = Encoding.UTF8.GetBytes("hello world");
@@ -84,5 +111,17 @@ public class MappingUtilsTests
             if (File.Exists(dto.TempFilePath))
                 File.Delete(dto.TempFilePath);
         }
+    }
+
+    private static SavedFileReferenceDB CreateFileReference(byte[] hash)
+    {
+        return new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = hash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = Guid.NewGuid(),
+            PublicDownload = false
+        };
     }
 }

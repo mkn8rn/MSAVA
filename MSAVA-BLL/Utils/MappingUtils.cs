@@ -126,11 +126,11 @@ public static class MappingUtils
         string fileExtension = FileExtensionUtils.GetFileExtension(db);
 
         Stream stream;
-        if (fileBytes is { Length: > 0 })
+        if (fileBytes is not null)
         {
             stream = new MemoryStream(fileBytes);
         }
-        else if (fileStream is { Length: > 0 })
+        else if (fileStream is not null)
         {
             stream = fileStream;
             if (stream.CanSeek)
