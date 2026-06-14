@@ -91,7 +91,7 @@ public class ApiService
     public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage message, CancellationToken cancellationToken = default)
     {
         var client = CreateClient();
-        return await client.SendAsync(message, cancellationToken);
+        return await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
     public async Task<T?> SendForAsync<T>(HttpMethod method, string relativeUrl, object? body = null, CancellationToken cancellationToken = default, bool anonymous = false)

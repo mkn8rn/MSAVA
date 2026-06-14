@@ -82,34 +82,58 @@ public class FileUploadClientService
         using var resp = await _api.SendAsync(msg, ct);
         var status = (int)resp.StatusCode;
 
-        if (resp.IsSuccessStatusCode)
+        return resp.IsSuccessStatusCode
+            ? await ReadSuccessfulUploadOutcomeAsync(resp, status, ct)
+            : await ReadFailedUploadOutcomeAsync(resp, status, ct);
+    }
+
+    private async Task<UploadOutcome> ReadSuccessfulUploadOutcomeAsync(
+        HttpResponseMessage response,
+        int statusCode,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            try
-            {
-                var id = await resp.Content.ReadFromJsonAsync<Guid>(cancellationToken: ct);
-                return new UploadOutcome(true, status, id.ToString(), null);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to parse GUID from upload response");
-                var raw = await resp.Content.ReadAsStringAsync(ct);
-                return new UploadOutcome(true, status, raw, null);
-            }
+            var id = await response.Content.ReadFromJsonAsync<Guid>(cancellationToken: cancellationToken);
+            return new UploadOutcome(true, statusCode, id.ToString(), null);
         }
-        else
+        catch (OperationCanceledException)
         {
-            string error;
-            try { error = await resp.Content.ReadAsStringAsync(ct); }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch { error = resp.ReasonPhrase ?? "Unknown error"; }
-            return new UploadOutcome(false, status, null, error);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse GUID from upload response");
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new UploadOutcome(true, statusCode, raw, null);
+        }
+    }
+
+    private async Task<UploadOutcome> ReadFailedUploadOutcomeAsync(
+        HttpResponseMessage response,
+        int statusCode,
+        CancellationToken cancellationToken)
+    {
+        var error = await ReadFailedUploadErrorAsync(response, cancellationToken);
+        return new UploadOutcome(false, statusCode, null, error);
+    }
+
+    private async Task<string> ReadFailedUploadErrorAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read upload error response body");
+            return response.ReasonPhrase ?? "Unknown error";
         }
     }
 }

@@ -71,6 +71,40 @@ public class FileUploadClientServiceTests
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
+    [Test]
+    public async Task CreateFileFromFormFileAsync_ReturnsErrorBodyFromFailedResponse()
+    {
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            ReasonPhrase = "Bad Request",
+            Content = new StringContent("upload rejected", Encoding.UTF8, "text/plain")
+        });
+
+        var outcome = await CreateUploadAsync(service);
+
+        outcome.Success.Should().BeFalse();
+        outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);
+        outcome.Id.Should().BeNull();
+        outcome.Error.Should().Be("upload rejected");
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_ReturnsReasonPhraseWhenErrorBodyCannotBeRead()
+    {
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            ReasonPhrase = "Bad Request",
+            Content = new ThrowingContent()
+        });
+
+        var outcome = await CreateUploadAsync(service);
+
+        outcome.Success.Should().BeFalse();
+        outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);
+        outcome.Id.Should().BeNull();
+        outcome.Error.Should().Be("Bad Request");
+    }
+
     private static Task<UploadOutcome> CreateUploadAsync(FileUploadClientService service)
     {
         return service.CreateFileFromFormFileAsync(
@@ -136,6 +170,33 @@ public class FileUploadClientServiceTests
             CancellationToken cancellationToken)
         {
             throw new OperationCanceledException(cancellationToken);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    private sealed class ThrowingContent : HttpContent
+    {
+        public ThrowingContent()
+        {
+            Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            throw new IOException("Unable to read content");
+        }
+
+        protected override Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context,
+            CancellationToken cancellationToken)
+        {
+            throw new IOException("Unable to read content");
         }
 
         protected override bool TryComputeLength(out long length)
