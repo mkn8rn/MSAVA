@@ -159,6 +159,27 @@ public class ExceptionCatcherMiddlewareTests
         response.StackTrace.Should().Contain("Development diagnostic detail.");
     }
 
+    [Test]
+    public async Task InvokeAsync_PropagatesRequestAbortedCancellationWithoutLoggingError()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        context.RequestAborted = cancellation.Token;
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new OperationCanceledException(cancellation.Token));
+
+        var act = async () => await middleware.InvokeAsync(context);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        dbContext.ErrorLogs.Should().BeEmpty();
+        dbContext.SaveChangesCalls.Should().Be(0);
+        dbContext.SaveChangesAsyncCalls.Should().Be(0);
+        context.Response.ContentType.Should().BeNull();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        (await ReadResponseBodyAsync(context)).Should().BeEmpty();
+    }
+
     private static TestDataContext CreateContext(bool throwOnSave)
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()

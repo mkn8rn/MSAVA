@@ -34,6 +34,10 @@ namespace MSAVA_API.Middleware
             {
                 await _next(context);
             }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 Guid errorId = Guid.NewGuid();
