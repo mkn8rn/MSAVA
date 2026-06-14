@@ -119,6 +119,44 @@ public class ExceptionCatcherMiddlewareTests
         errorLog.UserId.Should().Be(userId);
     }
 
+    [Test]
+    public async Task InvokeAsync_MasksServerErrorMessageInProduction()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new ApplicationException("Database password leaked in stack context."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("An unexpected error occurred.");
+        response.StackTrace.Should().BeNull();
+        errorLog.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+    }
+
+    [Test]
+    public async Task InvokeAsync_ReturnsServerErrorDetailsInDevelopment()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext(dbContext, isDevelopment: true);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new ApplicationException("Development diagnostic detail."));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("Development diagnostic detail.");
+        response.StackTrace.Should().Contain("Development diagnostic detail.");
+    }
+
     private static TestDataContext CreateContext(bool throwOnSave)
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()

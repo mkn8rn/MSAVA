@@ -16,6 +16,8 @@ namespace MSAVA_API.Middleware
 {
     public class ExceptionCatcherMiddleware
     {
+        private const string ProductionServerErrorMessage = "An unexpected error occurred.";
+
         private readonly RequestDelegate _next;
 
         public ExceptionCatcherMiddleware(RequestDelegate next)
@@ -190,7 +192,7 @@ namespace MSAVA_API.Middleware
 
         private static async Task HandleExceptionAsync(Guid errorId, DateTime timestamp, HttpContext context, Exception exception, bool isDevelopment, int statusCode)
         {
-            string message = exception.Message;
+            string message = GetResponseMessage(exception, isDevelopment, statusCode);
             string? stack = null;
 
             if (isDevelopment)
@@ -210,6 +212,14 @@ namespace MSAVA_API.Middleware
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
             await context.Response.WriteAsync(JsonSerializer.Serialize(responseDto));
+        }
+
+        private static string GetResponseMessage(Exception exception, bool isDevelopment, int statusCode)
+        {
+            if (isDevelopment || statusCode < StatusCodes.Status500InternalServerError)
+                return exception.Message;
+
+            return ProductionServerErrorMessage;
         }
 
         private static Guid? GetAuthenticatedUserId(HttpContext context)
