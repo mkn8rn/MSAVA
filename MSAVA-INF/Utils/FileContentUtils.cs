@@ -156,7 +156,8 @@ public static class FileContentUtils
             "xbm" or "xpm" => true,
 
             // Vector images
-            "svg" or "svgz" => read >= 4 && (header[0] == 0x3C && header[1] == 0x3F && header[2] == 0x78 && header[3] == 0x6D),
+            "svg" => IsXmlDeclaration(header, read) || StartsWithAsciiIgnoreCase(header, read, "<svg"),
+            "svgz" => read >= 2 && header[0] == 0x1F && header[1] == 0x8B,
             "eps" => read >= 4 && header[0] == 0x25 && header[1] == 0x21 && header[2] == 0x50 && header[3] == 0x53,
             "ai" => read >= 4 && header[0] == 0x25 && header[1] == 0x21 && header[2] == 0x50 && header[3] == 0x53,
             "wmf" or "emf" => true,
@@ -201,5 +202,24 @@ public static class FileContentUtils
 
             _ => true
         };
+    }
+
+    private static bool IsXmlDeclaration(ReadOnlySpan<byte> header, int read)
+    {
+        return StartsWithAsciiIgnoreCase(header, read, "<?xml");
+    }
+
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> header, int read, string expected)
+    {
+        if (read < expected.Length)
+            return false;
+
+        for (int i = 0; i < expected.Length; i++)
+        {
+            if (char.ToLowerInvariant((char)header[i]) != expected[i])
+                return false;
+        }
+
+        return true;
     }
 }

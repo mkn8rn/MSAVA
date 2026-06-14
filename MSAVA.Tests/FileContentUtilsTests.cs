@@ -53,4 +53,36 @@ public class FileContentUtilsTests
 
         FileContentUtils.ValidateFileContent(stream, " ").Should().BeFalse();
     }
+
+    [Test]
+    public void ValidateFileContent_AcceptsSvgRootWithoutXmlDeclaration()
+    {
+        using var stream = new MemoryStream("<svg viewBox=\"0 0 1 1\"></svg>"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, "svg").Should().BeTrue();
+    }
+
+    [Test]
+    public void ValidateFileContent_AcceptsSvgXmlDeclaration()
+    {
+        using var stream = new MemoryStream("<?xml version=\"1.0\"?><svg></svg>"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, ".svg").Should().BeTrue();
+    }
+
+    [Test]
+    public void ValidateFileContent_AcceptsSvgzGzipHeader()
+    {
+        using var stream = new MemoryStream([0x1F, 0x8B, 0x08, 0x00]);
+
+        FileContentUtils.ValidateFileContent(stream, "svgz").Should().BeTrue();
+    }
+
+    [Test]
+    public void ValidateFileContent_RejectsPlainSvgAsSvgz()
+    {
+        using var stream = new MemoryStream("<svg></svg>"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, "svgz").Should().BeFalse();
+    }
 }
