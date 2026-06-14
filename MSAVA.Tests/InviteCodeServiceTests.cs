@@ -140,6 +140,30 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task GetAllInviteCodes_ReturnsInviteCodeDtos()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("admin");
+        var inviteCode = CreateInviteCode(admin.Id);
+        context.Users.Add(admin);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, admin);
+
+        var inviteCodes = service.GetAllInviteCodes();
+
+        inviteCodes.Should().ContainSingle().Which.Should().BeEquivalentTo(new InviteCodeDTO
+        {
+            Id = inviteCode.Id,
+            OwnerId = inviteCode.OwnerId,
+            CreatedAt = inviteCode.CreatedAt,
+            ExpiresAt = inviteCode.ExpiresAt,
+            MaxUses = inviteCode.MaxUses
+        });
+    }
+
+    [Test]
     public async Task GetInviteCodeById_RejectsNonAdminUser()
     {
         using var context = CreateContext();
@@ -155,6 +179,30 @@ public class InviteCodeServiceTests
 
         act.Should().Throw<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
+    }
+
+    [Test]
+    public async Task GetInviteCodeById_ReturnsInviteCodeDto()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("admin");
+        var inviteCode = CreateInviteCode(admin.Id);
+        context.Users.Add(admin);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, admin);
+
+        var result = service.GetInviteCodeById(inviteCode.Id);
+
+        result.Should().BeEquivalentTo(new InviteCodeDTO
+        {
+            Id = inviteCode.Id,
+            OwnerId = inviteCode.OwnerId,
+            CreatedAt = inviteCode.CreatedAt,
+            ExpiresAt = inviteCode.ExpiresAt,
+            MaxUses = inviteCode.MaxUses
+        });
     }
 
     [Test]

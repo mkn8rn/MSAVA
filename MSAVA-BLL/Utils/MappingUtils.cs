@@ -74,6 +74,19 @@ public static class MappingUtils
         };
     }
 
+    public static InviteCodeDTO MapInviteCodeDTO(InviteCodeDB db)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        return new InviteCodeDTO
+        {
+            Id = db.Id,
+            OwnerId = db.OwnerId,
+            CreatedAt = db.CreatedAt,
+            ExpiresAt = db.ExpiresAt,
+            MaxUses = db.MaxUses
+        };
+    }
+
     public static SavedFileReferenceDB MapSavedFileReferenceDB(
         SaveFileFromStreamDTO dto,
         byte[] fileHash,

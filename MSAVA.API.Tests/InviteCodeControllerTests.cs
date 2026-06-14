@@ -96,6 +96,30 @@ public class InviteCodeControllerTests
             .WithMessage($"Invite code with id {missingInviteCodeId} not found.");
     }
 
+    [Test]
+    public async Task GetInviteCodeById_ReturnsInviteCodeDto()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser(isAdmin: true, isBanned: false);
+        var inviteCode = new InviteCodeDB
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = admin.Id,
+            CreatedAt = DateTime.UtcNow.AddMinutes(-5),
+            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            MaxUses = 3
+        };
+        context.Users.Add(admin);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, admin);
+
+        var response = controller.GetInviteCodeById(inviteCode.Id);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<InviteCodeDTO>();
+    }
+
     private static InviteCodeController CreateController(BaseDataContext context, UserDB sessionUser)
     {
         var service = new InviteCodeService(

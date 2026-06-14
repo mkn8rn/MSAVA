@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Controllers;
 
@@ -44,11 +45,11 @@ public class InviteCodeController : ControllerBase
 
     [HttpGet("all")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public IActionResult GetAllInviteCodes() => Ok(_inviteCodeService.GetAllInviteCodes());
+    public ActionResult<List<InviteCodeDTO>> GetAllInviteCodes() => Ok(_inviteCodeService.GetAllInviteCodes());
 
     [HttpGet("{inviteCodeId:guid}")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public ActionResult GetInviteCodeById(Guid inviteCodeId)
+    public ActionResult<InviteCodeDTO> GetInviteCodeById(Guid inviteCodeId)
     {
         var code = _inviteCodeService.GetInviteCodeById(inviteCodeId);
         return Ok(code);

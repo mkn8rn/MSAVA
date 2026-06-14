@@ -94,19 +94,31 @@ public class InviteCodeService
         return result.ExpiresAt > DateTime.UtcNow && (result.MaxUses - result.UsedCount) > 0;
     }
 
-    public List<InviteCodeDB> GetAllInviteCodes()
+    public List<InviteCodeDTO> GetAllInviteCodes()
     {
         EnsureCurrentUserCanManageInviteCodes();
 
-        return _context.InviteCodes.AsNoTracking().ToList();
+        return _context.InviteCodes
+            .AsNoTracking()
+            .Select(inviteCode => new InviteCodeDTO
+            {
+                Id = inviteCode.Id,
+                OwnerId = inviteCode.OwnerId,
+                CreatedAt = inviteCode.CreatedAt,
+                ExpiresAt = inviteCode.ExpiresAt,
+                MaxUses = inviteCode.MaxUses
+            })
+            .ToList();
     }
 
-    public InviteCodeDB GetInviteCodeById(Guid inviteCodeId)
+    public InviteCodeDTO GetInviteCodeById(Guid inviteCodeId)
     {
         EnsureCurrentUserCanManageInviteCodes();
 
-        return _context.InviteCodes.AsNoTracking().SingleOrDefault(i => i.Id == inviteCodeId)
+        var inviteCode = _context.InviteCodes.AsNoTracking().SingleOrDefault(i => i.Id == inviteCodeId)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
+
+        return MappingUtils.MapInviteCodeDTO(inviteCode);
     }
 
     private void EnsureCurrentUserCanManageInviteCodes()
