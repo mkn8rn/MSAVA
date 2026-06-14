@@ -6,8 +6,6 @@ namespace MSAVA_INF.Managers;
 
 public class FileManager
 {
-    private const int Sha256HashHexLength = 64;
-
     private readonly MetadataStore _metadataStore;
 
     public FileManager(MetadataStore metadataStore)
@@ -109,8 +107,12 @@ public class FileManager
     {
         EnsureSafeFileName(fileNameWithExtension);
 
-        var (hashHex, extension) = ParseFileName(fileNameWithExtension);
-        return _metadataStore.CheckAccessOrThrow(hashHex, extension, userAccessGroups, isAdmin);
+        var storedFileName = ParseStoredFileName(fileNameWithExtension);
+        return _metadataStore.CheckAccessOrThrow(
+            storedFileName.FileHashHex,
+            storedFileName.Extension,
+            userAccessGroups,
+            isAdmin);
     }
 
     private static void EnsureSafeFileName(string fileNameWithExtension)
@@ -123,32 +125,11 @@ public class FileManager
             throw new UnauthorizedAccessException($"Unsafe file path: {fullPath}");
     }
 
-    private static (string HashHex, string Extension) ParseFileName(string fileNameWithExtension)
+    private static StoredFileName ParseStoredFileName(string fileNameWithExtension)
     {
-        var lastDot = fileNameWithExtension.LastIndexOf('.');
-        if (lastDot <= 0 || lastDot == fileNameWithExtension.Length - 1)
+        if (!StoredFileName.TryParse(fileNameWithExtension, out var storedFileName))
             throw new UnauthorizedAccessException("Invalid file name format.");
 
-        var hashHex = fileNameWithExtension[..lastDot].ToUpperInvariant();
-        var extension = fileNameWithExtension[(lastDot + 1)..].ToLowerInvariant();
-
-        if (!IsSha256Hex(hashHex))
-            throw new UnauthorizedAccessException("Invalid file hash format.");
-
-        return (hashHex, extension);
-    }
-
-    private static bool IsSha256Hex(string hashHex)
-    {
-        if (hashHex.Length != Sha256HashHexLength)
-            return false;
-
-        foreach (char c in hashHex)
-        {
-            if (!Uri.IsHexDigit(c))
-                return false;
-        }
-
-        return true;
+        return storedFileName;
     }
 }

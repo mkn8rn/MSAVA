@@ -1,18 +1,17 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MSAVA_INF.Contexts;
+using MSAVA_INF.Utils;
 
 namespace MSAVA_API.Authorization;
 
 public static class PublicFileAccessGuard
 {
-    private const int Sha256HashByteLength = 32;
-
     public static bool CanServePublicFile(HttpContext context, string? physicalPath)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!TryParsePublicFileName(physicalPath, out var fileHash, out var extension))
+        if (!StoredFileName.TryParse(physicalPath, out var storedFileName))
             return false;
 
         var metadataStore = context.RequestServices.GetService<MetadataStore>();
@@ -24,41 +23,11 @@ public static class PublicFileAccessGuard
 
         try
         {
-            return metadataStore.CheckAccess(fileHash, extension, userAccessGroups: null) is not null;
+            return metadataStore.CheckAccess(storedFileName.FileHash, storedFileName.Extension, userAccessGroups: null) is not null;
         }
         catch (Exception ex)
         {
             LogDeniedRequest(context, physicalPath, "metadata lookup failed", ex);
-            return false;
-        }
-    }
-
-    private static bool TryParsePublicFileName(
-        string? physicalPath,
-        out byte[] fileHash,
-        out string extension)
-    {
-        fileHash = [];
-        extension = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(physicalPath))
-            return false;
-
-        string fileName = Path.GetFileName(physicalPath);
-        int lastDot = fileName.LastIndexOf('.');
-        if (lastDot <= 0 || lastDot == fileName.Length - 1)
-            return false;
-
-        string hashHex = fileName[..lastDot];
-        extension = fileName[(lastDot + 1)..].ToLowerInvariant();
-
-        try
-        {
-            fileHash = Convert.FromHexString(hashHex);
-            return fileHash.Length == Sha256HashByteLength;
-        }
-        catch (FormatException)
-        {
             return false;
         }
     }

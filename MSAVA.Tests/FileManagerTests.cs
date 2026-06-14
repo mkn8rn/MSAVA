@@ -78,7 +78,7 @@ public class FileManagerTests
             Action act = () => fileManager.CheckFileAccessByPath(fileNameWithExtension, userAccessGroups: null);
 
             act.Should().Throw<UnauthorizedAccessException>()
-                .WithMessage("Invalid file hash format.");
+                .WithMessage("Invalid file name format.");
         }
         finally
         {
