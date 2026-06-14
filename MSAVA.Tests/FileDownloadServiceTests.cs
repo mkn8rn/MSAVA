@@ -255,7 +255,7 @@ public class FileDownloadServiceTests
         return new FileDownloadService(
             context,
             userSessionService,
-            new FileManager(metadataStore),
+            new FileManager(metadataStore, NullLogger<FileManager>.Instance),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
     }
 

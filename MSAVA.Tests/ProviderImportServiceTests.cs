@@ -469,7 +469,7 @@ public class ProviderImportServiceTests
     {
         return new FilePersistenceService(
             context,
-            new FileManager(metadataStore),
+            new FileManager(metadataStore, NullLogger<FileManager>.Instance),
             new TestRequestSessionAccessor(),
             new ServiceLogger(serviceLogger ?? NullLogger<ServiceLogger>.Instance, context),
             NullLogger<FilePersistenceService>.Instance);

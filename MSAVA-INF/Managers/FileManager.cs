@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
 using MSAVA_INF.Contexts;
@@ -7,10 +8,12 @@ namespace MSAVA_INF.Managers;
 public class FileManager
 {
     private readonly MetadataStore _metadataStore;
+    private readonly ILogger<FileManager> _logger;
 
-    public FileManager(MetadataStore metadataStore)
+    public FileManager(MetadataStore metadataStore, ILogger<FileManager> logger)
     {
         _metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<bool> SaveTempFileAsync(
@@ -57,10 +60,7 @@ public class FileManager
         }
         finally
         {
-            if (File.Exists(tempFilePath))
-            {
-                try { File.Delete(tempFilePath); } catch { /* ignore */ }
-            }
+            DeleteTempFileIfPresent(tempFilePath);
         }
     }
 
@@ -131,5 +131,20 @@ public class FileManager
             throw new UnauthorizedAccessException("Invalid file name format.");
 
         return storedFileName;
+    }
+
+    private void DeleteTempFileIfPresent(string tempFilePath)
+    {
+        if (!File.Exists(tempFilePath))
+            return;
+
+        try
+        {
+            File.Delete(tempFilePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete temporary file {TempFilePath}", tempFilePath);
+        }
     }
 }

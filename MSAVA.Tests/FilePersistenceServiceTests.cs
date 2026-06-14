@@ -465,7 +465,7 @@ public class FilePersistenceServiceTests
         Guid? sessionUserId = null,
         bool isBanned = false)
     {
-        var fileManager = new FileManager(metadataStore);
+        var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
         SessionDTO? session = null;
 

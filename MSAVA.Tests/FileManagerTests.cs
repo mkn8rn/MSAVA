@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
@@ -29,7 +30,7 @@ public class FileManagerTests
             await File.WriteAllBytesAsync(tempFilePath, content);
 
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            var fileManager = new FileManager(metadataStore);
+            var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
             var metadata = new SavedFileMetaRecord
             {
                 RefId = Guid.NewGuid(),
@@ -72,7 +73,7 @@ public class FileManagerTests
                 AccessGroupId = Guid.NewGuid(),
                 PublicDownload = true
             });
-            var fileManager = new FileManager(metadataStore);
+            var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
             string fileNameWithExtension = $"{Convert.ToHexString(shortHash).ToLowerInvariant()}.txt";
 
             Action act = () => fileManager.CheckFileAccessByPath(fileNameWithExtension, userAccessGroups: null);
