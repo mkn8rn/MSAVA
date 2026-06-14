@@ -227,16 +227,9 @@ public static class SignatureEmbedder
         input.CopyTo(memoryStream);
         memoryStream.Position = 0;
 
-        try
-        {
-            using var tagFile = TagLib.File.Create(new StreamFileAbstraction("media", memoryStream));
-            tagFile.Tag.Comment = signature.ToString();
-            tagFile.Save();
-        }
-        catch
-        {
-            // If TagLib fails, return original
-        }
+        using var tagFile = TagLib.File.Create(new StreamFileAbstraction("media", memoryStream));
+        tagFile.Tag.Comment = signature.ToString();
+        tagFile.Save();
 
         memoryStream.Position = 0;
         return memoryStream;
