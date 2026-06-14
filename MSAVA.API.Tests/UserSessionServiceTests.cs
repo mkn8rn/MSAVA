@@ -1,6 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
-using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
@@ -396,8 +394,7 @@ public class UserSessionServiceTests
     {
         return new UserSessionService(
             context,
-            new TestRequestSessionAccessor(session),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+            new TestRequestSessionAccessor(session));
     }
 
     private sealed class TestRequestSessionAccessor : IRequestSessionAccessor

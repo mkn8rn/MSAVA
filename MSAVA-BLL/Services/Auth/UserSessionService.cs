@@ -2,7 +2,6 @@ using MSAVA_Shared.Models;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Models;
 using MSAVA_BLL.Services.Interfaces;
-using MSAVA_BLL.Loggers;
 using MSAVA_INF.Contexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,13 +11,11 @@ public class UserSessionService : IUserSessionService
 {
     private readonly BaseDataContext _context;
     private readonly IRequestSessionAccessor _requestSessionAccessor;
-    private readonly ServiceLogger _serviceLogger;
 
-    public UserSessionService(BaseDataContext context, IRequestSessionAccessor requestSessionAccessor, ServiceLogger serviceLogger)
+    public UserSessionService(BaseDataContext context, IRequestSessionAccessor requestSessionAccessor)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
-        _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
     }
 
     public UserDTO GetUserById(Guid id)
