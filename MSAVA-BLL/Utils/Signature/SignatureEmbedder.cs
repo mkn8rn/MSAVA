@@ -298,10 +298,23 @@ public static class SignatureEmbedder
                     return sw.ToString();
                 }
             }
-            catch { }
+            catch (Exception ex) when (IsExistingCustomPropertiesReadFailure(ex))
+            {
+                return CreateNewCustomPropertiesXml(signature, ns, vtNs);
+            }
         }
 
         // Create new custom properties
+        return CreateNewCustomPropertiesXml(signature, ns, vtNs);
+    }
+
+    private static bool IsExistingCustomPropertiesReadFailure(Exception exception)
+    {
+        return exception is XmlException or IOException or InvalidDataException;
+    }
+
+    private static string CreateNewCustomPropertiesXml(MsavaSignature signature, string ns, string vtNs)
+    {
         return $@"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?>
 <Properties xmlns=""{ns}"" xmlns:vt=""{vtNs}"">
   <property fmtid=""{{D5CDD505-2E9C-101B-9397-08002B2CF9AE}}"" pid=""2"" name=""{MsavaSignature.MetadataKey}"">

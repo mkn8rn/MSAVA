@@ -1,4 +1,5 @@
 using System.Text;
+using System.IO.Compression;
 using MSAVA_BLL.Utils.Signature;
 
 namespace MSAVA_App.Tests;
@@ -32,6 +33,24 @@ public class SignatureEmbedderTests
         stream.Position.Should().Be(0);
     }
 
+    [Test]
+    public void Embed_ReplacesMalformedOfficeCustomProperties()
+    {
+        using var document = CreateOfficeDocumentWithMalformedCustomProperties();
+        var signature = CreateSignature();
+
+        using var embedded = SignatureEmbedder.Embed(document, "docx", signature);
+
+        using var archive = new ZipArchive(embedded, ZipArchiveMode.Read, leaveOpen: true);
+        var customProperties = archive.GetEntry("docProps/custom.xml");
+        customProperties.Should().NotBeNull();
+        using var entryStream = customProperties!.Open();
+        using var reader = new StreamReader(entryStream, Encoding.UTF8);
+        var customXml = reader.ReadToEnd();
+        customXml.Should().Contain(MsavaSignature.MetadataKey);
+        customXml.Should().Contain(signature.ToString());
+    }
+
     private static MsavaSignature CreateSignature()
     {
         return new MsavaSignature
@@ -40,5 +59,21 @@ public class SignatureEmbedderTests
             FileId = 42,
             Timestamp = 1700000000
         };
+    }
+
+    private static MemoryStream CreateOfficeDocumentWithMalformedCustomProperties()
+    {
+        var stream = new MemoryStream();
+
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var customProperties = archive.CreateEntry("docProps/custom.xml");
+            using var entryStream = customProperties.Open();
+            using var writer = new StreamWriter(entryStream, Encoding.UTF8);
+            writer.Write("<Properties><property>");
+        }
+
+        stream.Position = 0;
+        return stream;
     }
 }
