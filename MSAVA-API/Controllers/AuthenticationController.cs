@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
@@ -7,6 +8,7 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/auth")]
 [ApiController]
+[AllowAnonymous]
 public class AuthenticationController : ControllerBase
 {
     private readonly IAuthenticationService _authService;

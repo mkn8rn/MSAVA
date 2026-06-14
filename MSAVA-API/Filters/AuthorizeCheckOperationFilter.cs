@@ -11,12 +11,12 @@ namespace MSAVA_API.Filters
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
-            var hasAuthorize =
+            var allowsAnonymous =
                 (context.MethodInfo.DeclaringType != null &&
-                 context.MethodInfo.DeclaringType.GetCustomAttributes(true).OfType<AuthorizeAttribute>().Any()) ||
-                context.MethodInfo.GetCustomAttributes(true).OfType<AuthorizeAttribute>().Any();
+                 context.MethodInfo.DeclaringType.GetCustomAttributes(true).OfType<AllowAnonymousAttribute>().Any()) ||
+                context.MethodInfo.GetCustomAttributes(true).OfType<AllowAnonymousAttribute>().Any();
 
-            if (!hasAuthorize)
+            if (allowsAnonymous)
                 return;
 
             if (operation.Security == null)

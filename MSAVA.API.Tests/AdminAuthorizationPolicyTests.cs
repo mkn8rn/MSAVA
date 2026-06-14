@@ -1,13 +1,51 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Authorization;
 using MSAVA_API.Controllers;
+using MSAVA_API.Handlers;
 
 namespace MSAVA_API.Tests;
 
 public class AdminAuthorizationPolicyTests
 {
+    [Test]
+    public void ApiAuthorization_UsesAuthenticatedNotBannedFallbackPolicy()
+    {
+        var options = new AuthorizationOptions();
+
+        ApiAuthorizationOptions.Configure(options);
+
+        options.DefaultPolicy.Should().NotBeNull();
+        options.FallbackPolicy.Should().NotBeNull();
+        AssertRequiresAuthenticatedNotBannedUser(options.DefaultPolicy);
+        AssertRequiresAuthenticatedNotBannedUser(options.FallbackPolicy!);
+    }
+
+    [Test]
+    public void ApiAuthorization_CurrentAdminPolicyUsesDatabaseBackedRequirements()
+    {
+        var options = new AuthorizationOptions();
+
+        ApiAuthorizationOptions.Configure(options);
+
+        var policy = options.GetPolicy(AuthorizationPolicies.CurrentAdmin);
+        policy.Should().NotBeNull();
+        policy!.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().Should().ContainSingle();
+        policy.Requirements.OfType<NotBannedRequirement>().Should().ContainSingle();
+        policy.Requirements.OfType<CurrentAdminRequirement>().Should().ContainSingle();
+    }
+
+    [Test]
+    public void AuthenticationController_ExplicitlyAllowsAnonymousAccess()
+    {
+        typeof(AuthenticationController)
+            .GetCustomAttributes<AllowAnonymousAttribute>()
+            .Should()
+            .ContainSingle();
+    }
+
     [Test]
     public void ApiControllers_DoNotUseTokenRoleBasedAdminAuthorization()
     {
@@ -40,5 +78,11 @@ public class AdminAuthorizationPolicyTests
         method.GetCustomAttributes<AuthorizeAttribute>()
             .Should()
             .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentAdmin);
+    }
+
+    private static void AssertRequiresAuthenticatedNotBannedUser(AuthorizationPolicy policy)
+    {
+        policy.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().Should().ContainSingle();
+        policy.Requirements.OfType<NotBannedRequirement>().Should().ContainSingle();
     }
 }

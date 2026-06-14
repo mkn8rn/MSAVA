@@ -60,16 +60,7 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.DefaultPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .AddRequirements(new NotBannedRequirement())
-        .Build();
-
-    options.AddPolicy(AuthorizationPolicies.CurrentAdmin, policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.AddRequirements(new NotBannedRequirement(), new CurrentAdminRequirement());
-    });
+    ApiAuthorizationOptions.Configure(options);
 });
 
 // Swagger setup WITH JWT SUPPORT
