@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Controllers;
 using MSAVA_BLL.Loggers;
@@ -12,6 +13,39 @@ namespace MSAVA_API.Tests;
 
 public class AccessGroupsControllerTests
 {
+    [TestCase("")]
+    [TestCase(" ")]
+    public async Task CreateAccessGroup_RejectsBlankNameBeforeServiceMutation(string name)
+    {
+        using var context = CreateContext();
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, owner.Id, isAdmin: false);
+
+        var response = controller.CreateAccessGroup(name);
+
+        var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().Be("Access group name must be provided.");
+        context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateAccessGroup_ReturnsCreatedAccessGroupId()
+    {
+        using var context = CreateContext();
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, owner.Id, isAdmin: false);
+
+        var response = controller.CreateAccessGroup("Editors");
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var accessGroupId = ok.Value.Should().BeOfType<Guid>().Subject;
+        context.AccessGroups.Should().ContainSingle(group => group.Id == accessGroupId);
+    }
+
     [Test]
     public async Task AddUserToAccessGroup_LetsAuthorizationFailureReachExceptionMiddleware()
     {

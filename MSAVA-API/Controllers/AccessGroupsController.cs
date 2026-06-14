@@ -10,6 +10,8 @@ namespace MSAVA_API.Controllers;
 [Authorize]
 public class AccessGroupsController : ControllerBase
 {
+    private const string AccessGroupNameRequiredMessage = "Access group name must be provided.";
+
     private readonly AccessGroupService _accessGroupService;
 
     public AccessGroupsController(AccessGroupService accessGroupService)
@@ -18,8 +20,11 @@ public class AccessGroupsController : ControllerBase
     }
 
     [HttpPost("create")]
-    public ActionResult CreateAccessGroup([FromQuery][Required] string name)
+    public ActionResult<Guid> CreateAccessGroup([FromQuery][Required] string name)
     {
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(AccessGroupNameRequiredMessage);
+
         var id = _accessGroupService.CreateAccessGroup(name);
         return Ok(id);
     }
