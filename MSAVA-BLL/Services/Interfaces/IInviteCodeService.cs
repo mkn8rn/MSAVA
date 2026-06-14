@@ -4,9 +4,22 @@ namespace MSAVA_BLL.Services.Interfaces;
 
 public interface IInviteCodeService
 {
-    Task<Guid> CreateNewInviteCode(int maxUses, DateTime expiresAt);
-    int GetRemainingUses(Guid inviteCodeId);
-    bool IsValidInviteCode(Guid inviteCodeId);
-    List<InviteCodeDTO> GetAllInviteCodes();
-    InviteCodeDTO GetInviteCodeById(Guid inviteCodeId);
+    Task<Guid> CreateNewInviteCodeAsync(
+        int maxUses,
+        DateTime expiresAt,
+        CancellationToken cancellationToken = default);
+
+    Task<int> GetRemainingUsesAsync(
+        Guid inviteCodeId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> IsValidInviteCodeAsync(
+        Guid inviteCodeId,
+        CancellationToken cancellationToken = default);
+
+    Task<List<InviteCodeDTO>> GetAllInviteCodesAsync(CancellationToken cancellationToken = default);
+
+    Task<InviteCodeDTO> GetInviteCodeByIdAsync(
+        Guid inviteCodeId,
+        CancellationToken cancellationToken = default);
 }

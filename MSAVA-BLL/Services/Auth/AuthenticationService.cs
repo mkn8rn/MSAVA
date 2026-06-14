@@ -125,7 +125,7 @@ public class AuthenticationService : IAuthenticationService
         if (request.InviteCode == Guid.Empty)
             throw new ArgumentException("Invite code is required.", nameof(RegisterRequestDTO.InviteCode));
 
-        if (!_inviteCodeService.IsValidInviteCode(request.InviteCode))
+        if (!await _inviteCodeService.IsValidInviteCodeAsync(request.InviteCode, cancellationToken))
             throw new ArgumentException("Invalid or expired invite code.", nameof(RegisterRequestDTO.InviteCode));
 
         bool exists = await _context.Users

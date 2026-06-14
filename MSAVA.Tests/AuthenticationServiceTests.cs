@@ -249,6 +249,28 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task RegisterAsync_HonorsCanceledTokenBeforeCreatingUser()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "new-user",
+            Password = "password",
+            InviteCode = inviteCode.Id
+        }, cancellationTokenSource.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        context.Users.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task RegisterAsync_TrimsUsernameBeforePersistingUser()
     {
         using var context = CreateContext();

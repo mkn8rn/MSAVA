@@ -25,7 +25,10 @@ public class InviteCodeService
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
     }
 
-    public async Task<Guid> CreateNewInviteCode(int maxUses, DateTime expiresAt)
+    public async Task<Guid> CreateNewInviteCodeAsync(
+        int maxUses,
+        DateTime expiresAt,
+        CancellationToken cancellationToken = default)
     {
         SessionDTO session = GetAuthorizedAdminSession();
 
@@ -45,7 +48,7 @@ public class InviteCodeService
         };
 
         _context.InviteCodes.Add(inviteCode);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
         _serviceLogger.WriteLog(InviteLogActions.InviteCodeCreated, $"Invite code created by user {session.Username}.", session.UserId, inviteCode.Id);
 
@@ -55,11 +58,11 @@ public class InviteCodeService
     /// <summary>
     /// Optimized: Single query to get both MaxUses and current usage count.
     /// </summary>
-    public int GetRemainingUses(Guid inviteCodeId)
+    public async Task<int> GetRemainingUsesAsync(Guid inviteCodeId, CancellationToken cancellationToken = default)
     {
         EnsureCurrentUserCanManageInviteCodes();
 
-        var result = _context.InviteCodes
+        var result = await _context.InviteCodes
             .AsNoTracking()
             .Where(ic => ic.Id == inviteCodeId)
             .Select(ic => new
@@ -67,16 +70,16 @@ public class InviteCodeService
                 ic.MaxUses,
                 UsedCount = _context.Users.Count(u => u.InviteCodeId == inviteCodeId)
             })
-            .SingleOrDefault()
+            .SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
 
         return Math.Max(0, result.MaxUses - result.UsedCount);
     }
 
-    public bool IsValidInviteCode(Guid inviteCodeId)
+    public async Task<bool> IsValidInviteCodeAsync(Guid inviteCodeId, CancellationToken cancellationToken = default)
     {
         // Optimized: Single query instead of calling GetRemainingUses
-        var result = _context.InviteCodes
+        var result = await _context.InviteCodes
             .AsNoTracking()
             .Where(ic => ic.Id == inviteCodeId)
             .Select(ic => new
@@ -85,7 +88,7 @@ public class InviteCodeService
                 ic.ExpiresAt,
                 UsedCount = _context.Users.Count(u => u.InviteCodeId == inviteCodeId)
             })
-            .SingleOrDefault();
+            .SingleOrDefaultAsync(cancellationToken);
 
         if (result is null)
             return false;
@@ -94,11 +97,11 @@ public class InviteCodeService
         return result.ExpiresAt > DateTime.UtcNow && (result.MaxUses - result.UsedCount) > 0;
     }
 
-    public List<InviteCodeDTO> GetAllInviteCodes()
+    public async Task<List<InviteCodeDTO>> GetAllInviteCodesAsync(CancellationToken cancellationToken = default)
     {
         EnsureCurrentUserCanManageInviteCodes();
 
-        return _context.InviteCodes
+        return await _context.InviteCodes
             .AsNoTracking()
             .Select(inviteCode => new InviteCodeDTO
             {
@@ -108,14 +111,16 @@ public class InviteCodeService
                 ExpiresAt = inviteCode.ExpiresAt,
                 MaxUses = inviteCode.MaxUses
             })
-            .ToList();
+            .ToListAsync(cancellationToken);
     }
 
-    public InviteCodeDTO GetInviteCodeById(Guid inviteCodeId)
+    public async Task<InviteCodeDTO> GetInviteCodeByIdAsync(Guid inviteCodeId, CancellationToken cancellationToken = default)
     {
         EnsureCurrentUserCanManageInviteCodes();
 
-        var inviteCode = _context.InviteCodes.AsNoTracking().SingleOrDefault(i => i.Id == inviteCodeId)
+        var inviteCode = await _context.InviteCodes
+            .AsNoTracking()
+            .SingleOrDefaultAsync(i => i.Id == inviteCodeId, cancellationToken)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
 
         return MappingUtils.MapInviteCodeDTO(inviteCode);

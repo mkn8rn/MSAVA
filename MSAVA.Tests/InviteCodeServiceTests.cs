@@ -22,7 +22,7 @@ public class InviteCodeServiceTests
         var service = CreateService(context, owner);
         var expiresAt = DateTime.UtcNow.AddHours(2);
 
-        var inviteCodeId = await service.CreateNewInviteCode(maxUses: 3, expiresAt);
+        var inviteCodeId = await service.CreateNewInviteCodeAsync(maxUses: 3, expiresAt);
 
         var inviteCode = context.InviteCodes.Single();
         inviteCode.Id.Should().Be(inviteCodeId);
@@ -41,7 +41,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, user);
 
-        Func<Task> act = () => service.CreateNewInviteCode(maxUses: 1, DateTime.UtcNow.AddHours(1));
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddHours(1));
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
@@ -58,7 +58,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, user);
 
-        Func<Task> act = () => service.CreateNewInviteCode(maxUses: 1, DateTime.UtcNow.AddHours(1));
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddHours(1));
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
@@ -76,7 +76,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, owner);
 
-        Func<Task> act = () => service.CreateNewInviteCode(maxUses, DateTime.UtcNow.AddHours(1));
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses, DateTime.UtcNow.AddHours(1));
 
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
             .WithMessage("Invite code max uses must be greater than zero.*");
@@ -95,9 +95,9 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, user);
 
-        Action act = () => service.GetRemainingUses(inviteCode.Id);
+        Func<Task> act = () => service.GetRemainingUsesAsync(inviteCode.Id);
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
     }
 
@@ -118,7 +118,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, admin);
 
-        int remainingUses = service.GetRemainingUses(inviteCode.Id);
+        int remainingUses = await service.GetRemainingUsesAsync(inviteCode.Id);
 
         remainingUses.Should().Be(0);
     }
@@ -133,9 +133,9 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, user);
 
-        Action act = () => service.GetAllInviteCodes();
+        Func<Task> act = () => service.GetAllInviteCodesAsync();
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
     }
 
@@ -151,7 +151,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, admin);
 
-        var inviteCodes = service.GetAllInviteCodes();
+        var inviteCodes = await service.GetAllInviteCodesAsync();
 
         inviteCodes.Should().ContainSingle().Which.Should().BeEquivalentTo(new InviteCodeDTO
         {
@@ -175,9 +175,9 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, user);
 
-        Action act = () => service.GetInviteCodeById(inviteCode.Id);
+        Func<Task> act = () => service.GetInviteCodeByIdAsync(inviteCode.Id);
 
-        act.Should().Throw<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
     }
 
@@ -193,7 +193,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, admin);
 
-        var result = service.GetInviteCodeById(inviteCode.Id);
+        var result = await service.GetInviteCodeByIdAsync(inviteCode.Id);
 
         result.Should().BeEquivalentTo(new InviteCodeDTO
         {
@@ -218,7 +218,7 @@ public class InviteCodeServiceTests
             new ThrowingUserSessionService(),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
 
-        service.IsValidInviteCode(inviteCode.Id).Should().BeTrue();
+        (await service.IsValidInviteCodeAsync(inviteCode.Id)).Should().BeTrue();
     }
 
     [Test]
@@ -231,7 +231,7 @@ public class InviteCodeServiceTests
 
         var service = CreateService(context, owner);
 
-        Func<Task> act = () => service.CreateNewInviteCode(maxUses: 1, DateTime.UtcNow.AddMinutes(-1));
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddMinutes(-1));
 
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
             .WithMessage("Invite code expiration must be in the future.*");
@@ -251,7 +251,7 @@ public class InviteCodeServiceTests
             new ClaimsOnlyUserSessionService(admin),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
 
-        var inviteCodeId = await service.CreateNewInviteCode(maxUses: 2, DateTime.UtcNow.AddHours(1));
+        var inviteCodeId = await service.CreateNewInviteCodeAsync(maxUses: 2, DateTime.UtcNow.AddHours(1));
 
         context.InviteCodes.Should().ContainSingle(inviteCode =>
             inviteCode.Id == inviteCodeId &&

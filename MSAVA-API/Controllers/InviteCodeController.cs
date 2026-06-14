@@ -24,13 +24,20 @@ public class InviteCodeController : ControllerBase
 
     [HttpGet("remaining-uses/{inviteCodeId:guid}")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public ActionResult<int> GetRemainingUses(Guid inviteCodeId) => Ok(_inviteCodeService.GetRemainingUses(inviteCodeId));
+    public async Task<ActionResult<int>> GetRemainingUses(
+        Guid inviteCodeId,
+        CancellationToken cancellationToken = default)
+    {
+        var remainingUses = await _inviteCodeService.GetRemainingUsesAsync(inviteCodeId, cancellationToken);
+        return Ok(remainingUses);
+    }
 
     [HttpPost("create")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
     public async Task<ActionResult<Guid>> CreateInviteCode(
         [FromQuery][Required] int maxUses,
-        [FromQuery][Required] int expiresInHours)
+        [FromQuery][Required] int expiresInHours,
+        CancellationToken cancellationToken = default)
     {
         if (maxUses <= 0)
             return BadRequest(InvalidMaxUsesMessage);
@@ -39,19 +46,26 @@ public class InviteCodeController : ControllerBase
             return BadRequest($"Invite code expiration must be between 1 and {MaximumInviteCodeLifetimeHours} hours.");
 
         var expiresAt = DateTime.UtcNow.AddHours(expiresInHours);
-        var id = await _inviteCodeService.CreateNewInviteCode(maxUses, expiresAt);
+        var id = await _inviteCodeService.CreateNewInviteCodeAsync(maxUses, expiresAt, cancellationToken);
         return Ok(id);
     }
 
     [HttpGet("all")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public ActionResult<List<InviteCodeDTO>> GetAllInviteCodes() => Ok(_inviteCodeService.GetAllInviteCodes());
+    public async Task<ActionResult<List<InviteCodeDTO>>> GetAllInviteCodes(
+        CancellationToken cancellationToken = default)
+    {
+        var codes = await _inviteCodeService.GetAllInviteCodesAsync(cancellationToken);
+        return Ok(codes);
+    }
 
     [HttpGet("{inviteCodeId:guid}")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]
-    public ActionResult<InviteCodeDTO> GetInviteCodeById(Guid inviteCodeId)
+    public async Task<ActionResult<InviteCodeDTO>> GetInviteCodeById(
+        Guid inviteCodeId,
+        CancellationToken cancellationToken = default)
     {
-        var code = _inviteCodeService.GetInviteCodeById(inviteCodeId);
+        var code = await _inviteCodeService.GetInviteCodeByIdAsync(inviteCodeId, cancellationToken);
         return Ok(code);
     }
 }

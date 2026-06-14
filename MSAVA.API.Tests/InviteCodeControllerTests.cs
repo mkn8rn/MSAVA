@@ -23,6 +23,71 @@ public class InviteCodeControllerTests
             .ContainSingle(parameter => parameter.ParameterType == typeof(IInviteCodeService));
     }
 
+    [Test]
+    public async Task GetRemainingUses_ReturnsServiceResultAndPassesCancellationToken()
+    {
+        var service = new RecordingInviteCodeService();
+        var controller = new InviteCodeController(service);
+        var inviteCodeId = Guid.NewGuid();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.GetRemainingUses(inviteCodeId, cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(service.RemainingUses);
+        service.RemainingUsesInviteCodeId.Should().Be(inviteCodeId);
+        service.RemainingUsesCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task CreateInviteCode_ReturnsServiceResultAndPassesCancellationToken()
+    {
+        var service = new RecordingInviteCodeService();
+        var controller = new InviteCodeController(service);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.CreateInviteCode(
+            maxUses: 4,
+            expiresInHours: 2,
+            cancellationToken: cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(service.CreatedInviteCodeId);
+        service.CreateMaxUses.Should().Be(4);
+        service.CreateExpiresAt.Should().BeCloseTo(DateTime.UtcNow.AddHours(2), TimeSpan.FromSeconds(5));
+        service.CreateCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task GetAllInviteCodes_ReturnsServiceResultAndPassesCancellationToken()
+    {
+        var service = new RecordingInviteCodeService();
+        var controller = new InviteCodeController(service);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.GetAllInviteCodes(cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeSameAs(service.AllInviteCodes);
+        service.GetAllCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task GetInviteCodeById_ReturnsServiceResultAndPassesCancellationToken()
+    {
+        var service = new RecordingInviteCodeService();
+        var controller = new InviteCodeController(service);
+        var inviteCodeId = Guid.NewGuid();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.GetInviteCodeById(inviteCodeId, cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeSameAs(service.InviteCode);
+        service.GetByIdInviteCodeId.Should().Be(inviteCodeId);
+        service.GetByIdCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
     [TestCase(0)]
     [TestCase(-1)]
     public async Task CreateInviteCode_RejectsInvalidMaxUsesBeforeServiceCreatesInviteCode(int maxUses)
@@ -90,9 +155,9 @@ public class InviteCodeControllerTests
         var controller = CreateController(context, admin);
         var missingInviteCodeId = Guid.NewGuid();
 
-        Action act = () => controller.GetInviteCodeById(missingInviteCodeId);
+        Func<Task> act = () => controller.GetInviteCodeById(missingInviteCodeId);
 
-        act.Should().Throw<KeyNotFoundException>()
+        await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"Invite code with id {missingInviteCodeId} not found.");
     }
 
@@ -114,7 +179,7 @@ public class InviteCodeControllerTests
         await context.SaveChangesAsync();
         var controller = CreateController(context, admin);
 
-        var response = controller.GetInviteCodeById(inviteCode.Id);
+        var response = await controller.GetInviteCodeById(inviteCode.Id);
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeOfType<InviteCodeDTO>();
@@ -128,6 +193,83 @@ public class InviteCodeControllerTests
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
 
         return new InviteCodeController(service);
+    }
+
+    private sealed class RecordingInviteCodeService : IInviteCodeService
+    {
+        public Guid CreatedInviteCodeId { get; } = Guid.NewGuid();
+        public int RemainingUses { get; } = 2;
+        public List<InviteCodeDTO> AllInviteCodes { get; } =
+        [
+            new InviteCodeDTO
+            {
+                Id = Guid.NewGuid(),
+                OwnerId = Guid.NewGuid(),
+                CreatedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1),
+                MaxUses = 3
+            }
+        ];
+        public InviteCodeDTO InviteCode { get; } = new()
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = Guid.NewGuid(),
+            CreatedAt = DateTime.UtcNow.AddMinutes(-5),
+            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            MaxUses = 3
+        };
+
+        public int CreateMaxUses { get; private set; }
+        public DateTime CreateExpiresAt { get; private set; }
+        public CancellationToken CreateCancellationToken { get; private set; }
+        public Guid RemainingUsesInviteCodeId { get; private set; }
+        public CancellationToken RemainingUsesCancellationToken { get; private set; }
+        public CancellationToken GetAllCancellationToken { get; private set; }
+        public Guid GetByIdInviteCodeId { get; private set; }
+        public CancellationToken GetByIdCancellationToken { get; private set; }
+
+        public Task<Guid> CreateNewInviteCodeAsync(
+            int maxUses,
+            DateTime expiresAt,
+            CancellationToken cancellationToken = default)
+        {
+            CreateMaxUses = maxUses;
+            CreateExpiresAt = expiresAt;
+            CreateCancellationToken = cancellationToken;
+            return Task.FromResult(CreatedInviteCodeId);
+        }
+
+        public Task<int> GetRemainingUsesAsync(
+            Guid inviteCodeId,
+            CancellationToken cancellationToken = default)
+        {
+            RemainingUsesInviteCodeId = inviteCodeId;
+            RemainingUsesCancellationToken = cancellationToken;
+            return Task.FromResult(RemainingUses);
+        }
+
+        public Task<bool> IsValidInviteCodeAsync(
+            Guid inviteCodeId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<List<InviteCodeDTO>> GetAllInviteCodesAsync(
+            CancellationToken cancellationToken = default)
+        {
+            GetAllCancellationToken = cancellationToken;
+            return Task.FromResult(AllInviteCodes);
+        }
+
+        public Task<InviteCodeDTO> GetInviteCodeByIdAsync(
+            Guid inviteCodeId,
+            CancellationToken cancellationToken = default)
+        {
+            GetByIdInviteCodeId = inviteCodeId;
+            GetByIdCancellationToken = cancellationToken;
+            return Task.FromResult(InviteCode);
+        }
     }
 
     private static BaseDataContext CreateContext()
