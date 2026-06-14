@@ -107,6 +107,10 @@ public class ApiService
         {
             return await resp.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to deserialize API response for {Url}", relativeUrl);
@@ -126,6 +130,10 @@ public class ApiService
         try
         {
             return await resp.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
