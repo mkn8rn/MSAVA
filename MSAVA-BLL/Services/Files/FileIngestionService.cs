@@ -6,6 +6,8 @@ namespace MSAVA_BLL.Services.Files;
 
 public class FileIngestionService : IFileIngestionService
 {
+    private const int MaximumRemoteErrorBodyLength = 2048;
+
     private readonly FilePersistenceService _persistenceService;
     private readonly IHttpClientFactory _httpClientFactory;
 
@@ -52,7 +54,7 @@ public class FileIngestionService : IFileIngestionService
 
         var httpClient = _httpClientFactory.CreateClient();
         using var response = await httpClient.GetAsync(fileUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessfulRemoteResponseAsync(response, cancellationToken);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
         var streamDto = new SaveFileFromStreamDTO
@@ -69,6 +71,36 @@ public class FileIngestionService : IFileIngestionService
         };
 
         return await _persistenceService.CreateFileFromStreamAsync(streamDto, cancellationToken);
+    }
+
+    private static async Task EnsureSuccessfulRemoteResponseAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        string body = await ReadRemoteErrorBodyAsync(response, cancellationToken);
+        string message = string.IsNullOrWhiteSpace(body)
+            ? $"File URL download failed {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()})."
+            : $"File URL download failed {(int)response.StatusCode}: {body}";
+
+        throw new HttpRequestException(message, null, response.StatusCode);
+    }
+
+    private static async Task<string> ReadRemoteErrorBodyAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.Content is null)
+            return string.Empty;
+
+        string body = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
+
+        if (body.Length <= MaximumRemoteErrorBodyLength)
+            return body;
+
+        return body[..MaximumRemoteErrorBodyLength];
     }
 
     private static Uri ParseFileUrl(string fileUrl)

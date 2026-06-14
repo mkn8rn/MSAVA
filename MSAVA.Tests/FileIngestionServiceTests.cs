@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -100,6 +101,41 @@ public class FileIngestionServiceTests
         }
     }
 
+    [Test]
+    public async Task CreateFileFromUrlAsync_ThrowsHttpRequestExceptionWhenRemoteDownloadFails()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("missing file")
+            });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, httpClientFactory);
+            var dto = CreateUrlDto("https://example.com/files/missing.txt");
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
+                .WithMessage("File URL download failed 404: missing file");
+
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
+            httpClientFactory.WasCalled.Should().BeTrue();
+            handler.RequestUri.Should().Be(new Uri(dto.FileUrl));
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static SaveFileFromUrlDTO CreateUrlDto(string fileUrl)
     {
         return new SaveFileFromUrlDTO
@@ -157,12 +193,41 @@ public class FileIngestionServiceTests
 
     private sealed class RecordingHttpClientFactory : IHttpClientFactory
     {
+        private readonly HttpMessageHandler? _handler;
+
+        public RecordingHttpClientFactory(HttpMessageHandler? handler = null)
+        {
+            _handler = handler;
+        }
+
         public bool WasCalled { get; private set; }
 
         public HttpClient CreateClient(string name)
         {
             WasCalled = true;
-            return new HttpClient();
+            return _handler is null
+                ? new HttpClient()
+                : new HttpClient(_handler, disposeHandler: false);
+        }
+    }
+
+    private sealed class RecordingHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _createResponse;
+
+        public RecordingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> createResponse)
+        {
+            _createResponse = createResponse;
+        }
+
+        public Uri? RequestUri { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestUri = request.RequestUri;
+            return Task.FromResult(_createResponse(request));
         }
     }
 
