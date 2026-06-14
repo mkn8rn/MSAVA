@@ -86,7 +86,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         var newReference = await CreateNewReferenceAsync(
             request, fileHash, extension, anyExistingReference, sessionUserId, userAccessGroups, cancellationToken);
 
-        _serviceLogger.WriteLog(
+        await _serviceLogger.WriteLogAsync(
             AccessLogActions.NewReferenceAddedToExistingFile,
             $"Created reference to existing file: {hashHex}.{extension}",
             sessionUserId,

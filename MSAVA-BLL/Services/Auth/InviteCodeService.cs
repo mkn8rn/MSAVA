@@ -50,7 +50,7 @@ public class InviteCodeService
         _context.InviteCodes.Add(inviteCode);
         await _context.SaveChangesAsync(cancellationToken);
 
-        _serviceLogger.WriteLog(InviteLogActions.InviteCodeCreated, $"Invite code created by user {session.Username}.", session.UserId, inviteCode.Id);
+        await _serviceLogger.WriteLogAsync(InviteLogActions.InviteCodeCreated, $"Invite code created by user {session.Username}.", session.UserId, inviteCode.Id);
 
         return inviteCode.Id;
     }

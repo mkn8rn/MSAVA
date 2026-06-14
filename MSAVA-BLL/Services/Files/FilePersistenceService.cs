@@ -118,7 +118,7 @@ public class FilePersistenceService
             string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
             string fileNameWithExtension = $"{fileName}.{fileExtension}";
 
-            _serviceLogger.WriteLog(AccessLogActions.NewFileCreated, $"File created: {fileNameWithExtension}", sessionUserId, fileNameWithExtension, savedFileDb.Id);
+            await _serviceLogger.WriteLogAsync(AccessLogActions.NewFileCreated, $"File created: {fileNameWithExtension}", sessionUserId, fileNameWithExtension, savedFileDb.Id);
 
             return savedFileDb.Id;
         }

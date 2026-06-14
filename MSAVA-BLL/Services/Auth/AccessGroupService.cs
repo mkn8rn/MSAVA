@@ -51,8 +51,8 @@ public class AccessGroupService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        _serviceLogger.WriteLog(GroupLogActions.AccessGroupCreated, $"Access group '{accessGroupName}' created by user {user.Username}.", user.Id, accessGroup.Id);
-        _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroupName}'.", user.Id, accessGroup.Id);
+        await _serviceLogger.WriteLogAsync(GroupLogActions.AccessGroupCreated, $"Access group '{accessGroupName}' created by user {user.Username}.", user.Id, accessGroup.Id);
+        await _serviceLogger.WriteLogAsync(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroupName}'.", user.Id, accessGroup.Id);
 
         return accessGroup.Id;
     }
@@ -85,7 +85,7 @@ public class AccessGroupService
             user.AccessGroups.Add(accessGroup);
             await _context.SaveChangesAsync(cancellationToken);
 
-            _serviceLogger.WriteLog(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", session.UserId, accessGroup.Id);
+            await _serviceLogger.WriteLogAsync(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroup.Name}'.", session.UserId, accessGroup.Id);
         }
     }
 

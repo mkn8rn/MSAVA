@@ -55,7 +55,11 @@ public class ServiceLogger
         return sb.ToString();
     }
 
-    public void WriteLog(int statusCode, string message, Guid? userId)
+    public async Task WriteLogAsync(
+        int statusCode,
+        string message,
+        Guid? userId,
+        CancellationToken cancellationToken = default)
     {
         var errorLog = new ErrorLogDB
         {
@@ -68,10 +72,15 @@ public class ServiceLogger
         string sanitizedMessage = SanitizeString(message);
         _logger.LogError("Status Code: {StatusCode}, Message: {Message}, UserId: {UserId}", statusCode, sanitizedMessage, userId);
 
-        PersistLog(errorLog);
+        await PersistLogAsync(errorLog, cancellationToken);
     }
 
-    public void WriteLog(InviteLogActions action, string message, Guid userId, Guid codeId)
+    public async Task WriteLogAsync(
+        InviteLogActions action,
+        string message,
+        Guid userId,
+        Guid codeId,
+        CancellationToken cancellationToken = default)
     {
         var inviteLog = new InviteLogDB
         {
@@ -85,10 +94,15 @@ public class ServiceLogger
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, InviteCodeId: {CodeId}", action, sanitizedMessage, userId, codeId);
 
-        PersistLog(inviteLog);
+        await PersistLogAsync(inviteLog, cancellationToken);
     }
 
-    public void WriteLog(GroupLogActions action, string message, Guid userId, Guid groupId)
+    public async Task WriteLogAsync(
+        GroupLogActions action,
+        string message,
+        Guid userId,
+        Guid groupId,
+        CancellationToken cancellationToken = default)
     {
         var groupLog = new GroupLogDB
         {
@@ -102,10 +116,16 @@ public class ServiceLogger
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, GroupId: {GroupId}", action, sanitizedMessage, userId, groupId);
 
-        PersistLog(groupLog);
+        await PersistLogAsync(groupLog, cancellationToken);
     }
 
-    public void WriteLog(AccessLogActions action, string message, Guid userId, string fileNameWithExtension, Guid refId)
+    public async Task WriteLogAsync(
+        AccessLogActions action,
+        string message,
+        Guid userId,
+        string fileNameWithExtension,
+        Guid refId,
+        CancellationToken cancellationToken = default)
     {
         var accessLog = new AccessLogDB
         {
@@ -120,10 +140,15 @@ public class ServiceLogger
         string sanitizedFileName = SanitizeString(fileNameWithExtension);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, File: {FileName}, FileRefId: {RefId}", action, sanitizedMessage, userId, sanitizedFileName, refId);
 
-        PersistLog(accessLog);
+        await PersistLogAsync(accessLog, cancellationToken);
     }
 
-    public void WriteLog(AccessLogActions action, string message, Guid userId, Guid refId)
+    public async Task WriteLogAsync(
+        AccessLogActions action,
+        string message,
+        Guid userId,
+        Guid refId,
+        CancellationToken cancellationToken = default)
     {
         var accessLog = new AccessLogDB
         {
@@ -137,10 +162,15 @@ public class ServiceLogger
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, FileRefId: {RefId}", action, sanitizedMessage, userId, refId);
 
-        PersistLog(accessLog);
+        await PersistLogAsync(accessLog, cancellationToken);
     }
 
-    public void WriteLog(UserLogAction action, string message, Guid userId, Guid? adminId)
+    public async Task WriteLogAsync(
+        UserLogAction action,
+        string message,
+        Guid userId,
+        Guid? adminId,
+        CancellationToken cancellationToken = default)
     {
         var userLog = new UserLogDB
         {
@@ -154,10 +184,10 @@ public class ServiceLogger
         string sanitizedMessage = SanitizeString(message);
         _logger.LogInformation("Action: {Action}, Message: {Message}, UserId: {UserId}, AdminId: {AdminId}", action, sanitizedMessage, userId, adminId);
 
-        PersistLog(userLog);
+        await PersistLogAsync(userLog, cancellationToken);
     }
 
-    private void PersistLog(object log)
+    private async Task PersistLogAsync(object log, CancellationToken cancellationToken)
     {
         try
         {
@@ -172,7 +202,7 @@ public class ServiceLogger
                     throw new ArgumentOutOfRangeException(nameof(log), log.GetType().FullName, "Unsupported service log type.");
             }
 
-            _context.SaveChanges();
+            await _context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {

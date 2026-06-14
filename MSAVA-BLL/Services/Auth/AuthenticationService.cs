@@ -55,7 +55,7 @@ public class AuthenticationService : IAuthenticationService
             throw new UnauthorizedAccessException("Banned users cannot log in.");
 
         JwtDB token = await GenerateJwtTokenAsync(user, cancellationToken);
-        _serviceLogger.WriteLog(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
+        await _serviceLogger.WriteLogAsync(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
 
         return new LoginResponseDTO { Token = token.TokenString };
     }
@@ -153,7 +153,7 @@ public class AuthenticationService : IAuthenticationService
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
 
-        _serviceLogger.WriteLog(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
+        await _serviceLogger.WriteLogAsync(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
 
         return user.Id;
     }
