@@ -38,23 +38,27 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     }
 
     public async Task<HashCheckResult> CheckAndGetReferenceAsync(
-        HashCheckRequest request,
+        HashCheckRequest? request,
         CancellationToken cancellationToken = default)
     {
-        // Validate hash format
-        if (string.IsNullOrWhiteSpace(request.ContentHashHex) ||
-            !Sha256HexRegex().IsMatch(request.ContentHashHex))
+        if (request is null)
+            return HashCheckResult.Failed("", "Hash check request is required.");
+
+        if (!TryNormalizeHash(request.ContentHashHex, out string hashHex, out var hashValidationError))
         {
-            return HashCheckResult.Failed(request.ContentHashHex ?? "", "Invalid hash format. Expected 64 hexadecimal characters.");
+            return HashCheckResult.Failed(request.ContentHashHex ?? "", hashValidationError);
+        }
+
+        if (!TryNormalizeExtension(request.FileExtension, out string extension, out var extensionValidationError))
+        {
+            return HashCheckResult.Failed(hashHex, extensionValidationError);
         }
 
         if (!TryGetActiveSessionUserId(out Guid sessionUserId, out string? sessionError))
         {
-            return HashCheckResult.Failed(request.ContentHashHex, sessionError);
+            return HashCheckResult.Failed(hashHex, sessionError);
         }
 
-        var hashHex = request.ContentHashHex.ToUpperInvariant();
-        var extension = request.FileExtension.TrimStart('.').ToLowerInvariant();
         var fileHash = Convert.FromHexString(hashHex);
 
         // Get user's access groups
@@ -93,9 +97,14 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     }
 
     public async Task<List<HashCheckResult>> CheckAndGetReferenceBatchAsync(
-        List<HashCheckRequest> requests,
+        List<HashCheckRequest>? requests,
         CancellationToken cancellationToken = default)
     {
+        if (requests is null)
+        {
+            return [HashCheckResult.Failed("", "Hash check batch request is required.")];
+        }
+
         if (requests.Count > 100)
         {
             return [HashCheckResult.Failed("", "Maximum 100 hashes per batch request.")];
@@ -110,6 +119,48 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         return results;
+    }
+
+    private static bool TryNormalizeHash(
+        string? contentHashHex,
+        out string hashHex,
+        out string error)
+    {
+        hashHex = string.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(contentHashHex) || !Sha256HexRegex().IsMatch(contentHashHex))
+        {
+            error = "Invalid hash format. Expected 64 hexadecimal characters.";
+            return false;
+        }
+
+        hashHex = contentHashHex.ToUpperInvariant();
+        return true;
+    }
+
+    private static bool TryNormalizeExtension(
+        string? fileExtension,
+        out string extension,
+        out string error)
+    {
+        extension = string.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(fileExtension))
+        {
+            error = "FileExtension must be provided.";
+            return false;
+        }
+
+        extension = fileExtension.Trim().TrimStart('.').ToLowerInvariant();
+        if (extension.Length == 0)
+        {
+            error = "FileExtension must be provided.";
+            return false;
+        }
+
+        return true;
     }
 
     private async Task<List<Guid>> GetUserAccessGroupsAsync(Guid userId, CancellationToken cancellationToken)

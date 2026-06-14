@@ -15,6 +15,100 @@ namespace MSAVA_API.Tests;
 public class FileDeduplicationServiceTests
 {
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForNullRequest()
+    {
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+
+            var result = await service.CheckAndGetReferenceAsync(null);
+
+            result.Error.Should().Be("Hash check request is required.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForMissingFileExtension()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-missing-extension-{Guid.NewGuid()}"));
+        var hashHex = Convert.ToHexString(contentHash);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = hashHex,
+                FileExtension = " . ",
+                AccessGroupId = Guid.NewGuid(),
+                FileName = "missing-extension-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("FileExtension must be provided.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().Be(hashHex);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+            metadataStore.GetByFileHash(contentHash, "txt").Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CheckAndGetReferenceBatchAsync_ReturnsFailureForNullRequestList()
+    {
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+
+            var results = await service.CheckAndGetReferenceBatchAsync(null);
+
+            results.Should().ContainSingle();
+            results[0].Error.Should().Be("Hash check batch request is required.");
+            results[0].FileExists.Should().BeFalse();
+            results[0].ReferenceId.Should().BeNull();
+            results[0].NewReferenceCreated.Should().BeFalse();
+            results[0].ContentHashHex.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsFailureForBannedSessionBeforeReferenceLookup()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-banned-session-{Guid.NewGuid()}"));

@@ -13,10 +13,10 @@ public interface IFileDeduplicationService
     /// <param name="request">The hash check request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Result indicating if file exists and the reference ID.</returns>
-    Task<HashCheckResult> CheckAndGetReferenceAsync(HashCheckRequest request, CancellationToken cancellationToken = default);
+    Task<HashCheckResult> CheckAndGetReferenceAsync(HashCheckRequest? request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Batch check multiple hashes and return/create references.
     /// </summary>
-    Task<List<HashCheckResult>> CheckAndGetReferenceBatchAsync(List<HashCheckRequest> requests, CancellationToken cancellationToken = default);
+    Task<List<HashCheckResult>> CheckAndGetReferenceBatchAsync(List<HashCheckRequest>? requests, CancellationToken cancellationToken = default);
 }
