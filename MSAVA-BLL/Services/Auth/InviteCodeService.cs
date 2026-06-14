@@ -69,7 +69,7 @@ public class InviteCodeService
             .SingleOrDefault()
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
 
-        return result.MaxUses - result.UsedCount;
+        return Math.Max(0, result.MaxUses - result.UsedCount);
     }
 
     public bool IsValidInviteCode(Guid inviteCodeId)

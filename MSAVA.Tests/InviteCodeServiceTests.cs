@@ -102,6 +102,28 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task GetRemainingUses_ReturnsZeroWhenUsageExceedsMaxUses()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("admin");
+        var firstRegisteredUser = CreateUser("first-registered", isAdmin: false);
+        var secondRegisteredUser = CreateUser("second-registered", isAdmin: false);
+        var inviteCode = CreateInviteCode(admin.Id);
+        inviteCode.MaxUses = 1;
+        firstRegisteredUser.InviteCodeId = inviteCode.Id;
+        secondRegisteredUser.InviteCodeId = inviteCode.Id;
+        context.Users.AddRange(admin, firstRegisteredUser, secondRegisteredUser);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, admin);
+
+        int remainingUses = service.GetRemainingUses(inviteCode.Id);
+
+        remainingUses.Should().Be(0);
+    }
+
+    [Test]
     public async Task GetAllInviteCodes_RejectsNonAdminUser()
     {
         using var context = CreateContext();
