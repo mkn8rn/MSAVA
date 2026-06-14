@@ -23,7 +23,7 @@ public static class PublicFileAccessGuard
 
         try
         {
-            return metadataStore.CheckAccess(storedFileName.FileHash, storedFileName.Extension, userAccessGroups: null) is not null;
+            return metadataStore.CheckPublicDownloadAccess(storedFileName.FileHash, storedFileName.Extension) is not null;
         }
         catch (Exception ex)
         {
