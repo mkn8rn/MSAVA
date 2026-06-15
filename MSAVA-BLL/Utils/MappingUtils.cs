@@ -71,7 +71,8 @@ public static class MappingUtils
             Id = db.Id,
             Name = db.Name,
             CreatedAt = db.CreatedAt,
-            OwnerId = db.OwnerId
+            OwnerId = db.OwnerId,
+            SubGroups = db.SubGroups?.Select(MapAccessGroupDTO).ToList() ?? []
         };
     }
 

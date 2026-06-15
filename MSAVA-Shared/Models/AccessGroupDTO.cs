@@ -9,6 +9,6 @@ namespace MSAVA_Shared.Models
         public Guid OwnerId { get; set; }
         public DateTime CreatedAt { get; set; }
         public string Name { get; set; } = string.Empty;
-        public AccessGroupDTO? SubGroups { get; set; }
+        public List<AccessGroupDTO> SubGroups { get; set; } = [];
     }
 }

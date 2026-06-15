@@ -82,6 +82,33 @@ public class MappingUtilsTests
     }
 
     [Test]
+    public void MapAccessGroupDTO_MapsSubGroupsAsCollection()
+    {
+        var child = CreateAccessGroup("Child");
+        var parent = CreateAccessGroup("Parent");
+        parent.SubGroups = [child];
+
+        var result = MappingUtils.MapAccessGroupDTO(parent);
+
+        result.Id.Should().Be(parent.Id);
+        result.Name.Should().Be("Parent");
+        result.SubGroups.Should().ContainSingle();
+        result.SubGroups[0].Id.Should().Be(child.Id);
+        result.SubGroups[0].Name.Should().Be("Child");
+        result.SubGroups[0].SubGroups.Should().BeEmpty();
+    }
+
+    [Test]
+    public void MapAccessGroupDTO_UsesEmptySubGroupsWhenSourceHasNone()
+    {
+        var accessGroup = CreateAccessGroup("No children");
+
+        var result = MappingUtils.MapAccessGroupDTO(accessGroup);
+
+        result.SubGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public void MapSavedFileDataDB_FromStream_UsesNormalizedReferenceExtension()
     {
         var content = Encoding.UTF8.GetBytes("hello world");
@@ -169,6 +196,17 @@ public class MappingUtilsTests
             FileExtension = FileExtensionType._TXT,
             AccessGroupId = Guid.NewGuid(),
             PublicDownload = false
+        };
+    }
+
+    private static AccessGroupDB CreateAccessGroup(string name)
+    {
+        return new AccessGroupDB
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = Guid.NewGuid(),
+            CreatedAt = DateTime.UtcNow,
+            Name = name
         };
     }
 }
