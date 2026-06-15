@@ -116,6 +116,10 @@ public class FileContentUtilsTests
 
     [TestCase("../secret.txt")]
     [TestCase("folder/file.txt")]
+    [TestCase("readme.txt")]
+    [TestCase("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [TestCase("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.")]
+    [TestCase("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaag.txt")]
     [TestCase("")]
     [TestCase(" ")]
     public void TryGetSafeFullPath_RejectsUnsafeStoredFileName(string fileName)

@@ -133,6 +133,9 @@ public static class FileContentUtils
         if (!IsSafeFileName(fileNameWithExtension))
             return false;
 
+        if (!StoredFileName.TryParse(fileNameWithExtension, out _))
+            return false;
+
         string candidatePath = GetFullPath(fileNameWithExtension);
         if (!IsSafeFilePath(candidatePath))
             return false;
