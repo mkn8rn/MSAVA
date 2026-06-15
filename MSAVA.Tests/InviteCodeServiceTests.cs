@@ -124,6 +124,25 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task GetRemainingUses_ReturnsZeroWhenInviteCodeIsExpired()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("admin");
+        var inviteCode = CreateInviteCode(admin.Id);
+        inviteCode.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+        inviteCode.MaxUses = 3;
+        context.Users.Add(admin);
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, admin);
+
+        int remainingUses = await service.GetRemainingUsesAsync(inviteCode.Id);
+
+        remainingUses.Should().Be(0);
+    }
+
+    [Test]
     public async Task GetAllInviteCodes_RejectsNonAdminUser()
     {
         using var context = CreateContext();

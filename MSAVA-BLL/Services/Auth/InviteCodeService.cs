@@ -68,10 +68,14 @@ public class InviteCodeService
             .Select(ic => new
             {
                 ic.MaxUses,
+                ic.ExpiresAt,
                 UsedCount = _context.Users.Count(u => u.InviteCodeId == inviteCodeId)
             })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
+
+        if (result.ExpiresAt <= DateTime.UtcNow)
+            return 0;
 
         return Math.Max(0, result.MaxUses - result.UsedCount);
     }
