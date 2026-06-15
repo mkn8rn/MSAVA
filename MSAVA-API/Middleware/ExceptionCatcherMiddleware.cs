@@ -138,7 +138,6 @@ namespace MSAVA_API.Middleware
                     break;
                 // --- 403 Forbidden ---
                 case System.Security.SecurityException _:
-                case AccessViolationException _:
                     statusCode = StatusCodes.Status403Forbidden;
                     break;
                 // --- 404 Not Found ---
@@ -183,6 +182,7 @@ namespace MSAVA_API.Middleware
                 case MissingMethodException _:
                 case MemberAccessException _:
                 case NullReferenceException _:
+                case AccessViolationException _:
                 case ExternalException _:
                     statusCode = StatusCodes.Status500InternalServerError;
                     break;
