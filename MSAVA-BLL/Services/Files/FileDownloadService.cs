@@ -189,13 +189,13 @@ public class FileDownloadService : IFileDownloadService
                 fileReference.FileHash == storedFileName.FileHash &&
                 fileReference.FileExtension == extensionType);
 
-        var accessibleReference = await references
-            .Where(fileReference =>
+        var accessibleReferences = references.Where(fileReference =>
                 claims.IsAdmin ||
                 fileReference.PublicDownload ||
-                (claims.AccessGroups != null && claims.AccessGroups.Contains(fileReference.AccessGroupId)))
-            .OrderByDescending(fileReference => fileReference.PublicDownload)
-            .ThenBy(fileReference => fileReference.Id)
+                (claims.AccessGroups != null && claims.AccessGroups.Contains(fileReference.AccessGroupId)));
+
+        var accessibleReference = await FileReferenceSelectionPolicy
+            .OrderForStableSelection(accessibleReferences)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (accessibleReference is not null)
