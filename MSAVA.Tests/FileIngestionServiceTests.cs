@@ -221,6 +221,44 @@ public class FileIngestionServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromUrlAsync_TruncatesRemoteErrorBodyWithoutReadingEntireBody()
+    {
+        var errorStream = new CountingRepeatingReadStream((byte)'x', 100_000);
+        var handler = new RecordingHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.BadGateway)
+            {
+                Content = new StreamContent(errorStream)
+            });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        string expectedBody = new('x', 2048);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, httpClientFactory, session: CreateSession(user.Id));
+            var dto = CreateUrlDto("https://example.com/files/error.txt", accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
+                .WithMessage($"File URL download failed 502: {expectedBody}");
+
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+            errorStream.BytesRead.Should().BeLessThan(errorStream.TotalLength);
+            httpClientFactory.WasCalled.Should().BeTrue();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromUrlAsync_TreatsRedirectAsRemoteFailure()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -552,6 +590,71 @@ public class FileIngestionServiceTests
         {
             OpenReadStreamWasCalled = true;
             return Stream.Null;
+        }
+    }
+
+    private sealed class CountingRepeatingReadStream : Stream
+    {
+        private readonly byte _value;
+
+        public CountingRepeatingReadStream(byte value, long totalLength)
+        {
+            _value = value;
+            TotalLength = totalLength;
+        }
+
+        public long TotalLength { get; }
+
+        public long BytesRead { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return ReadCore(buffer.AsSpan(offset, count));
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return ValueTask.FromCanceled<int>(cancellationToken);
+
+            return ValueTask.FromResult(ReadCore(buffer.Span));
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        private int ReadCore(Span<byte> buffer)
+        {
+            if (BytesRead >= TotalLength)
+                return 0;
+
+            int bytesToRead = (int)Math.Min(buffer.Length, TotalLength - BytesRead);
+            buffer[..bytesToRead].Fill(_value);
+            BytesRead += bytesToRead;
+            return bytesToRead;
         }
     }
 

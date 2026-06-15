@@ -1,5 +1,6 @@
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 
 namespace MSAVA_BLL.Services.Files;
 
@@ -94,27 +95,15 @@ public class FileIngestionService : IFileIngestionService
         if (response.IsSuccessStatusCode)
             return;
 
-        string body = await ReadRemoteErrorBodyAsync(response, cancellationToken);
+        string body = await HttpErrorBodyReader.ReadTrimmedBodyAsync(
+            response.Content,
+            MaximumRemoteErrorBodyLength,
+            cancellationToken);
         string message = string.IsNullOrWhiteSpace(body)
             ? $"File URL download failed {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()})."
             : $"File URL download failed {(int)response.StatusCode}: {body}";
 
         throw new HttpRequestException(message, null, response.StatusCode);
-    }
-
-    private static async Task<string> ReadRemoteErrorBodyAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        if (response.Content is null)
-            return string.Empty;
-
-        string body = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
-
-        if (body.Length <= MaximumRemoteErrorBodyLength)
-            return body;
-
-        return body[..MaximumRemoteErrorBodyLength];
     }
 
     private async Task EnsureSafeResolvedHostAsync(Uri uri, CancellationToken cancellationToken)

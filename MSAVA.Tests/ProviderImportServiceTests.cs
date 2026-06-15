@@ -50,6 +50,25 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task ProviderHttpFailure_TruncatesStreamingErrorBodyWithoutReadingEntireBody()
+    {
+        var errorStream = new CountingRepeatingReadStream((byte)'x', 100_000);
+        using var response = new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            Content = new StreamContent(errorStream)
+        };
+        string expectedBody = new('x', 2048);
+
+        Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider download", response, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage($"Provider download failed 502: {expectedBody}");
+
+        exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        errorStream.BytesRead.Should().BeLessThan(errorStream.TotalLength);
+    }
+
+    [Test]
     public async Task GoogleDriveImportAsync_UsesInjectedHttpClientFactory()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -1161,6 +1180,71 @@ public class ProviderImportServiceTests
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class CountingRepeatingReadStream : Stream
+    {
+        private readonly byte _value;
+
+        public CountingRepeatingReadStream(byte value, long totalLength)
+        {
+            _value = value;
+            TotalLength = totalLength;
+        }
+
+        public long TotalLength { get; }
+
+        public long BytesRead { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return ReadCore(buffer.AsSpan(offset, count));
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return ValueTask.FromCanceled<int>(cancellationToken);
+
+            return ValueTask.FromResult(ReadCore(buffer.Span));
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        private int ReadCore(Span<byte> buffer)
+        {
+            if (BytesRead >= TotalLength)
+                return 0;
+
+            int bytesToRead = (int)Math.Min(buffer.Length, TotalLength - BytesRead);
+            buffer[..bytesToRead].Fill(_value);
+            BytesRead += bytesToRead;
+            return bytesToRead;
+        }
     }
 
     private sealed class NonSeekableMemoryStream : MemoryStream

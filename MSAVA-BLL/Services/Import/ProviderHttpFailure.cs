@@ -1,3 +1,5 @@
+using MSAVA_BLL.Utils;
+
 namespace MSAVA_BLL.Services.Import;
 
 internal static class ProviderHttpFailure
@@ -9,26 +11,14 @@ internal static class ProviderHttpFailure
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        string body = await ReadErrorBodyAsync(response, cancellationToken);
+        string body = await HttpErrorBodyReader.ReadTrimmedBodyAsync(
+            response.Content,
+            MaximumErrorBodyLength,
+            cancellationToken);
         string message = string.IsNullOrWhiteSpace(body)
             ? $"{operation} failed {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()})"
             : $"{operation} failed {(int)response.StatusCode}: {body}";
 
         throw new HttpRequestException(message, null, response.StatusCode);
-    }
-
-    private static async Task<string> ReadErrorBodyAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        if (response.Content is null)
-            return string.Empty;
-
-        string body = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
-
-        if (body.Length <= MaximumErrorBodyLength)
-            return body;
-
-        return body[..MaximumErrorBodyLength];
     }
 }
