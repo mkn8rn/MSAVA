@@ -15,6 +15,10 @@ public class BaseDataContext : DbContext
             .HasIndex(u => u.Username)
             .IsUnique();
 
+        modelBuilder.Entity<AccessGroupDB>()
+            .HasIndex(accessGroup => new { accessGroup.OwnerId, accessGroup.Name })
+            .IsUnique();
+
         modelBuilder.Entity<SavedFileDataDB>()
             .HasOne(fileData => fileData.FileReference)
             .WithOne()

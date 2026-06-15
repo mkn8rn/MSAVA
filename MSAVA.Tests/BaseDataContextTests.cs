@@ -122,6 +122,22 @@ public class BaseDataContextTests
         usernameIndex!.IsUnique.Should().BeTrue();
     }
 
+    [Test]
+    public void OnModelCreatingEnforcesUniqueAccessGroupNamesPerOwner()
+    {
+        using var context = CreateContext();
+
+        var ownerNameIndex = context.Model
+            .FindEntityType(typeof(AccessGroupDB))
+            ?.GetIndexes()
+            .SingleOrDefault(index =>
+                index.Properties.Select(property => property.Name)
+                    .SequenceEqual([nameof(AccessGroupDB.OwnerId), nameof(AccessGroupDB.Name)]));
+
+        ownerNameIndex.Should().NotBeNull();
+        ownerNameIndex!.IsUnique.Should().BeTrue();
+    }
+
     private static IForeignKey FindForeignKey(IModel model, Type entityType, string propertyName)
     {
         var entity = model.FindEntityType(entityType)

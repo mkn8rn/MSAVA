@@ -43,6 +43,50 @@ public class AccessGroupServiceTests
         accessGroup.Users.Should().ContainSingle(user => user.Id == owner.Id);
     }
 
+    [Test]
+    public async Task CreateAccessGroup_RejectsDuplicateNormalizedNameForSameOwner()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        await service.CreateAccessGroupAsync("Editors");
+        Func<Task> act = () => service.CreateAccessGroupAsync("  Editors  ");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Access group 'Editors' already exists for this owner.");
+        context.AccessGroups.Should().ContainSingle(group => group.OwnerId == owner.Id && group.Name == "Editors");
+    }
+
+    [Test]
+    public async Task CreateAccessGroup_AllowsSameNormalizedNameForDifferentOwners()
+    {
+        using var context = CreateContext();
+
+        var firstOwner = CreateUser("first-owner");
+        var secondOwner = CreateUser("second-owner");
+        context.Users.AddRange(firstOwner, secondOwner);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var firstOwnerService = CreateService(context, firstOwner.Id, isAdmin: false, logger);
+        var secondOwnerService = CreateService(context, secondOwner.Id, isAdmin: false, logger);
+
+        await firstOwnerService.CreateAccessGroupAsync("Editors");
+        await secondOwnerService.CreateAccessGroupAsync("  Editors  ");
+
+        context.AccessGroups
+            .Where(group => group.Name == "Editors")
+            .Select(group => group.OwnerId)
+            .Should()
+            .BeEquivalentTo([firstOwner.Id, secondOwner.Id]);
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task CreateAccessGroup_RejectsBlankName(string name)

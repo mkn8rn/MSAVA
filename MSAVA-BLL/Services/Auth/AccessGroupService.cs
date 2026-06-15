@@ -33,6 +33,15 @@ public class AccessGroupService
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == session.UserId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {session.UserId} not found.");
 
+        bool nameExistsForOwner = await _context.AccessGroups
+            .AsNoTracking()
+            .AnyAsync(
+                group => group.OwnerId == user.Id && group.Name == accessGroupName,
+                cancellationToken);
+
+        if (nameExistsForOwner)
+            throw new InvalidOperationException($"Access group '{accessGroupName}' already exists for this owner.");
+
         var accessGroup = new AccessGroupDB
         {
             Id = Guid.NewGuid(),
