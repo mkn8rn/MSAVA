@@ -76,11 +76,11 @@ public class AuthenticationService : IAuthenticationService
         ];
 
         if (user.IsAdmin)
-            claims.Add(new Claim(ClaimTypes.Role, "Admin"));
+            claims.Add(new Claim(ClaimTypes.Role, SessionRoles.Admin));
         if (user.IsBanned)
-            claims.Add(new Claim(ClaimTypes.Role, "Banned"));
+            claims.Add(new Claim(ClaimTypes.Role, SessionRoles.Banned));
         if (user.IsWhitelisted)
-            claims.Add(new Claim(ClaimTypes.Role, "Whitelisted"));
+            claims.Add(new Claim(ClaimTypes.Role, SessionRoles.Whitelisted));
 
         claims.Add(new Claim("inviteCode", user.InviteCodeId?.ToString() ?? string.Empty));
 

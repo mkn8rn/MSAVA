@@ -78,9 +78,9 @@ public static class JwtSessionParser
         }
 
         session.Roles = ReadRoles(root);
-        session.IsAdmin = session.Roles.Contains("Admin", StringComparer.OrdinalIgnoreCase);
-        session.IsBanned = session.Roles.Contains("Banned", StringComparer.OrdinalIgnoreCase);
-        session.IsWhitelisted = session.Roles.Contains("Whitelisted", StringComparer.OrdinalIgnoreCase);
+        session.IsAdmin = session.Roles.Contains(SessionRoles.Admin, StringComparer.OrdinalIgnoreCase);
+        session.IsBanned = session.Roles.Contains(SessionRoles.Banned, StringComparer.OrdinalIgnoreCase);
+        session.IsWhitelisted = session.Roles.Contains(SessionRoles.Whitelisted, StringComparer.OrdinalIgnoreCase);
         session.AccessGroups = ReadAccessGroups(root);
 
         if (TryReadEpochClaim(root, "iat", out var issuedAt) ||

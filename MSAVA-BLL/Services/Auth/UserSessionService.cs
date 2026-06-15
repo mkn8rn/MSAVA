@@ -59,11 +59,11 @@ public class UserSessionService : IUserSessionService
         var roles = new List<string>(3);
 
         if (userDb.IsAdmin)
-            roles.Add("Admin");
+            roles.Add(SessionRoles.Admin);
         if (userDb.IsBanned)
-            roles.Add("Banned");
+            roles.Add(SessionRoles.Banned);
         if (userDb.IsWhitelisted)
-            roles.Add("Whitelisted");
+            roles.Add(SessionRoles.Whitelisted);
 
         return new SessionDTO
         {
