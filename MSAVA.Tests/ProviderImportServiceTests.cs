@@ -415,6 +415,55 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsUnsupportedInferredExtensionBeforeCopyingDownloadContent()
+    {
+        var responseIndex = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateResponse(HttpStatusCode.OK, "application/octet-stream", "initial ok");
+
+            return CreateStreamResponse(HttpStatusCode.OK, "application/octet-stream", new ThrowingReadStream());
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Google Drive response file extension is not supported: FileExtension 'bin' is not supported.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task OneDriveImportAsync_DeletesTempFileWhenContentCopyFails()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -454,6 +503,45 @@ public class ProviderImportServiceTests
             var tempFilePath = GetLoggedTempFilePath(logger);
             File.Exists(tempFilePath).Should().BeFalse();
             handler.Requests.Should().ContainSingle();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_RejectsUnsupportedInferredExtensionBeforeCopyingContent()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            CreateStreamResponse(HttpStatusCode.OK, "application/octet-stream", new ThrowingReadStream()));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("OneDrive response file extension is not supported: FileExtension 'bin' is not supported.");
+
+            handler.Requests.Should().ContainSingle();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
         }
         finally
         {
@@ -633,6 +721,46 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task YouTubeImportAsync_RejectsUnsupportedContainerBeforeCopyingStream()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var youTubeClient = new UnsupportedContainerYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = accessGroup.Id,
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("YouTube response file extension is not supported: FileExtension 'bin' is not supported.");
+
+            youTubeClient.ManifestCalls.Should().Be(1);
+            youTubeClient.CopyCalls.Should().Be(0);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public void CreateFfmpegStartInfo_UsesArgumentListWithoutShellExecution()
     {
         var videoPath = Path.Combine("C:\\temp", "video input.webm");
@@ -676,6 +804,16 @@ public class ProviderImportServiceTests
         var response = new HttpResponseMessage(statusCode)
         {
             Content = new StringContent(body)
+        };
+        response.Content.Headers.ContentType = new(contentType);
+        return response;
+    }
+
+    private static HttpResponseMessage CreateStreamResponse(HttpStatusCode statusCode, string contentType, Stream stream)
+    {
+        var response = new HttpResponseMessage(statusCode)
+        {
+            Content = new StreamContent(stream)
         };
         response.Content.Headers.ContentType = new(contentType);
         return response;
@@ -905,6 +1043,33 @@ public class ProviderImportServiceTests
             CopyCalls++;
             await destination.WriteAsync(PartialContent, cancellationToken);
             throw new IOException("Simulated YouTube stream failure.");
+        }
+    }
+
+    private sealed class UnsupportedContainerYouTubeDownloadClient : IYouTubeDownloadClient
+    {
+        public int ManifestCalls { get; private set; }
+        public int CopyCalls { get; private set; }
+
+        public Task<YouTubeDownloadManifest> GetDownloadManifestAsync(
+            string youtubeUrl,
+            CancellationToken cancellationToken)
+        {
+            ManifestCalls++;
+            return Task.FromResult(new YouTubeDownloadManifest(
+                "Unsupported Container Video",
+                [new YouTubeStreamInfo(new object(), "bin", "720p", 720, 1_500)],
+                [],
+                []));
+        }
+
+        public Task CopyToAsync(
+            YouTubeStreamInfo streamInfo,
+            Stream destination,
+            CancellationToken cancellationToken)
+        {
+            CopyCalls++;
+            return Task.CompletedTask;
         }
     }
 

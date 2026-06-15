@@ -56,6 +56,25 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("OneDrive returned HTML instead of file content.");
 
+        string finalFileName = "OneDrive File";
+        string inferredExtension = GetExtensionFromResponse(resp);
+
+        if (resp.Content.Headers.ContentDisposition != null)
+        {
+            var cd = resp.Content.Headers.ContentDisposition;
+            var fileName = cd.FileNameStar ?? cd.FileName;
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                fileName = fileName.Trim('"');
+                finalFileName = Path.GetFileNameWithoutExtension(fileName);
+                var fileExt = Path.GetExtension(fileName).TrimStart('.');
+                if (!string.IsNullOrWhiteSpace(fileExt))
+                    inferredExtension = fileExt;
+            }
+        }
+
+        string finalExtension = ProviderFileType.RequireSupportedExtension("OneDrive", inferredExtension);
+
         var tempFilePath = Path.GetTempFileName();
         _serviceLogger.LogInformation($"Downloading OneDrive content to temp path {tempFilePath}");
 
@@ -67,30 +86,10 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
                 await contentStream.CopyToAsync(fs, cancellationToken);
             }
 
-            string finalFileName = "OneDrive File";
-            string inferredExtension = GetExtensionFromResponse(resp);
-
-            if (resp.Content.Headers.ContentDisposition != null)
-            {
-                var cd = resp.Content.Headers.ContentDisposition;
-                var fileName = cd.FileNameStar ?? cd.FileName;
-                if (!string.IsNullOrWhiteSpace(fileName))
-                {
-                    fileName = fileName.Trim('"');
-                    finalFileName = Path.GetFileNameWithoutExtension(fileName);
-                    var fileExt = Path.GetExtension(fileName).TrimStart('.');
-                    if (!string.IsNullOrWhiteSpace(fileExt))
-                        inferredExtension = fileExt;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(inferredExtension))
-                inferredExtension = "bin";
-
             var fetchDto = new SaveFileFromFetchDTO
             {
                 FileName = finalFileName,
-                FileExtension = inferredExtension,
+                FileExtension = finalExtension,
                 TempFilePath = tempFilePath,
                 AccessGroupId = dto.AccessGroupId,
                 Tags = dto.Tags ?? [],

@@ -75,7 +75,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 
                 if (streamInfo != null)
                 {
-                    fileExtension = streamInfo.ContainerName;
+                    fileExtension = ProviderFileType.RequireSupportedExtension("YouTube", streamInfo.ContainerName);
                     await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
                     await _youtubeClient.CopyToAsync(streamInfo, fileStream, cancellationToken);
                 }
@@ -93,14 +93,14 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             else if (dto.DownloadVideo)
             {
                 var videoStream = GetBestVideoStream(downloadManifest.VideoStreams, dto.VideoQuality);
-                fileExtension = videoStream.ContainerName;
+                fileExtension = ProviderFileType.RequireSupportedExtension("YouTube", videoStream.ContainerName);
                 await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
                 await _youtubeClient.CopyToAsync(videoStream, fileStream, cancellationToken);
             }
             else if (dto.DownloadAudio)
             {
                 var audioStream = GetBestAudioStream(downloadManifest.AudioStreams, dto.AudioQuality);
-                fileExtension = audioStream.ContainerName;
+                fileExtension = ProviderFileType.RequireSupportedExtension("YouTube", audioStream.ContainerName);
                 await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
                 await _youtubeClient.CopyToAsync(audioStream, fileStream, cancellationToken);
             }
