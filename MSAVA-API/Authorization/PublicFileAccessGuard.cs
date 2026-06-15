@@ -14,6 +14,12 @@ public static class PublicFileAccessGuard
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        if (!FileContentUtils.IsSafeFilePath(physicalPath))
+        {
+            LogDeniedRequest(context, physicalPath, "physical path is outside the data directory");
+            return false;
+        }
+
         if (!StoredFileName.TryParse(physicalPath, out var storedFileName))
             return false;
 

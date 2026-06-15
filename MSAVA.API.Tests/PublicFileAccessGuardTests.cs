@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
+using MSAVA_INF.Utils;
 
 namespace MSAVA_API.Tests;
 
@@ -34,6 +35,23 @@ public class PublicFileAccessGuardTests
         await context.SaveChangesAsync();
         var httpContext = CreateHttpContext(context);
         string physicalPath = CreatePhysicalPath(hash);
+
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task CanServePublicFile_DeniesPublicSqlReferenceOutsideDataDirectory()
+    {
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        await context.SaveChangesAsync();
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = Path.Combine(
+            $"{FileContentUtils.FilesDirectory}-outside",
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
 
         bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
@@ -184,7 +202,7 @@ public class PublicFileAccessGuardTests
     private static string CreatePhysicalPath(byte[] hash)
     {
         return Path.Combine(
-            Path.GetTempPath(),
+            FileContentUtils.FilesDirectory,
             $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
     }
 
