@@ -43,10 +43,7 @@ public class AuthenticationService : IAuthenticationService
         string username = AuthInputPolicy.NormalizeUsername(request.Username);
         AuthInputPolicy.EnsurePasswordAllowed(request.Password);
 
-        UserDB? user = await _context.Users
-            .AsNoTracking()
-            .Include(u => u.AccessGroups)
-            .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
+        UserDB? user = await GetUniqueUserForLoginAsync(username, cancellationToken);
 
         if (user == null || !PasswordUtils.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
             throw new UnauthorizedAccessException("Username doesn't exist or password is incorrect.");
@@ -61,6 +58,21 @@ public class AuthenticationService : IAuthenticationService
         await _serviceLogger.WriteLogAsync(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
 
         return new LoginResponseDTO { Token = token.TokenString };
+    }
+
+    private async Task<UserDB?> GetUniqueUserForLoginAsync(string username, CancellationToken cancellationToken)
+    {
+        List<UserDB> matchingUsers = await _context.Users
+            .AsNoTracking()
+            .Include(u => u.AccessGroups)
+            .Where(u => u.Username == username)
+            .Take(2)
+            .ToListAsync(cancellationToken);
+
+        if (matchingUsers.Count > 1)
+            throw new InvalidOperationException("Duplicate user records were found for the requested username.");
+
+        return matchingUsers.SingleOrDefault();
     }
 
     private async Task<JwtDB> GenerateJwtTokenAsync(UserDB user, CancellationToken cancellationToken)

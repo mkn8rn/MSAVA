@@ -189,6 +189,28 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_RejectsDuplicateUsernameBeforeJwtIsPersisted()
+    {
+        using var context = CreateContext();
+        context.Users.AddRange(
+            CreateUser("duplicate-user", "correct-password", isBanned: false),
+            CreateUser("duplicate-user", "other-password", isBanned: false));
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = "  duplicate-user  ",
+            Password = "correct-password"
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Duplicate user records were found for the requested username.");
+        context.Jwts.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task LoginAsync_TrimsUsernameBeforeLookup()
     {
         using var context = CreateContext();
