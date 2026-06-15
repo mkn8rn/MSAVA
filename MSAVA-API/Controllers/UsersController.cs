@@ -8,7 +8,7 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/users")]
 [ApiController]
-[Authorize]
+[Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class UsersController : ControllerBase
 {
     private readonly IUserSessionService _userService;

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MSAVA_API.Authorization;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
@@ -9,7 +10,7 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/files/store")]
 [ApiController]
-[Authorize]
+[Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class FilesStoreController : ControllerBase
 {
     private readonly IFileIngestionService _ingestionService;

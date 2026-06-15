@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MSAVA_API.Authorization;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Services.Files;
@@ -13,7 +14,7 @@ namespace MSAVA_API.Controllers;
 /// </summary>
 [Route("api/files/check")]
 [ApiController]
-[Authorize]
+[Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class FilesCheckController : ControllerBase
 {
     private readonly IFileDeduplicationService _deduplicationService;

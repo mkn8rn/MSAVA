@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MSAVA_API.Authorization;
 using MSAVA_BLL.Services.Interfaces;
 using System.ComponentModel.DataAnnotations;
 
@@ -7,7 +8,7 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/accessgroups")]
 [ApiController]
-[Authorize]
+[Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class AccessGroupsController : ControllerBase
 {
     private const string AccessGroupNameRequiredMessage = "Access group name must be provided.";

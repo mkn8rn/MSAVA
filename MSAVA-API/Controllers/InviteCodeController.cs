@@ -9,7 +9,7 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/invitecodes")]
 [ApiController]
-[Authorize]
+[Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class InviteCodeController : ControllerBase
 {
     private const int MaximumInviteCodeLifetimeHours = 24 * 365;

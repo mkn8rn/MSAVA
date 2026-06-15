@@ -38,6 +38,18 @@ public class AdminAuthorizationPolicyTests
     }
 
     [Test]
+    public void ApiAuthorization_CurrentUserPolicyMatchesDefaultAuthenticatedAccess()
+    {
+        var options = new AuthorizationOptions();
+
+        ApiAuthorizationOptions.Configure(options);
+
+        var policy = options.GetPolicy(AuthorizationPolicies.CurrentUser);
+        policy.Should().NotBeNull();
+        AssertRequiresAuthenticatedCurrentUserAccess(policy!);
+    }
+
+    [Test]
     public void AuthenticationController_ExplicitlyAllowsAnonymousAccess()
     {
         typeof(AuthenticationController)
@@ -68,6 +80,25 @@ public class AdminAuthorizationPolicyTests
         AssertUsesCurrentAdminPolicy(typeof(InviteCodeController), nameof(InviteCodeController.CreateInviteCode));
         AssertUsesCurrentAdminPolicy(typeof(InviteCodeController), nameof(InviteCodeController.GetAllInviteCodes));
         AssertUsesCurrentAdminPolicy(typeof(InviteCodeController), nameof(InviteCodeController.GetInviteCodeById));
+    }
+
+    [Test]
+    public void ProtectedControllers_UseCurrentUserPolicy()
+    {
+        AssertUsesCurrentUserPolicy(typeof(AccessGroupsController));
+        AssertUsesCurrentUserPolicy(typeof(FilesCheckController));
+        AssertUsesCurrentUserPolicy(typeof(FilesImportController));
+        AssertUsesCurrentUserPolicy(typeof(FilesRetrieveController));
+        AssertUsesCurrentUserPolicy(typeof(FilesStoreController));
+        AssertUsesCurrentUserPolicy(typeof(InviteCodeController));
+        AssertUsesCurrentUserPolicy(typeof(UsersController));
+    }
+
+    private static void AssertUsesCurrentUserPolicy(Type controllerType)
+    {
+        controllerType.GetCustomAttributes<AuthorizeAttribute>()
+            .Should()
+            .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentUser);
     }
 
     private static void AssertUsesCurrentAdminPolicy(Type controllerType, string methodName)

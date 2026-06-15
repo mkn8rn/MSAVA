@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MSAVA_API.Authorization;
 using MSAVA_Shared.Models;
 using System.ComponentModel.DataAnnotations;
 using MSAVA_BLL.Services.Interfaces;
@@ -8,7 +9,7 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/files/import")]
 [ApiController]
-[Authorize]
+[Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class FilesImportController : ControllerBase
 {
     private readonly IFileImportService<FetchFileYouTubeDTO> _youTubeImportService;
