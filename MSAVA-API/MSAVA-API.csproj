@@ -38,6 +38,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+			<_Parameter1>MSAVA.API.Tests</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
 		<Folder Include="Attributes\" />
 	</ItemGroup>
 

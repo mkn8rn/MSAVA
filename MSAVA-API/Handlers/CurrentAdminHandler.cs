@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
 
 namespace MSAVA_API.Handlers;
@@ -43,7 +44,7 @@ public class CurrentAdminHandler : AuthorizationHandler<CurrentAdminRequirement>
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (RecoverableLookupFailurePolicy.IsRecoverable(ex))
         {
             _logger.LogError(ex, "Failed to validate admin status for user {UserId}", userId);
             context.Fail(new AuthorizationFailureReason(this, "Failed to validate current admin status."));

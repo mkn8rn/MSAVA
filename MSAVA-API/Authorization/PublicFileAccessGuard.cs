@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Utils;
-using System.Data.Common;
 
 namespace MSAVA_API.Authorization;
 
@@ -48,35 +47,11 @@ public static class PublicFileAccessGuard
                     fileReference.FileHash == storedFileName.FileHash &&
                     fileReference.FileExtension == extensionType);
         }
-        catch (Exception ex) when (IsRecoverablePublicLookupFailure(ex))
+        catch (Exception ex) when (RecoverableLookupFailurePolicy.IsRecoverable(ex))
         {
             LogDeniedRequest(context, physicalPath, "public file database lookup failed", ex);
             return false;
         }
-    }
-
-    private static bool IsRecoverablePublicLookupFailure(Exception exception)
-    {
-        if (ContainsCriticalException(exception))
-            return false;
-
-        return exception is DbException
-            or IOException
-            or InvalidOperationException
-            or UnauthorizedAccessException;
-    }
-
-    private static bool ContainsCriticalException(Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-            if (current is OperationCanceledException
-                or OutOfMemoryException
-                or AccessViolationException)
-                return true;
-        }
-
-        return false;
     }
 
     private static void LogDeniedRequest(
