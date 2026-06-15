@@ -18,7 +18,6 @@
     <PackageReference Include="NPOI" />
     <PackageReference Include="SixLabors.ImageSharp" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
-    <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="TagLibSharp" />
     <PackageReference Include="YoutubeExplode" />
   </ItemGroup>
