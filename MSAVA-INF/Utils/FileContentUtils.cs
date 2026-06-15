@@ -2,6 +2,8 @@ namespace MSAVA_INF.Utils;
 
 public static class FileContentUtils
 {
+    private const int Sha256HashByteLength = 32;
+
     public static readonly string BackupDirectory =
        Path.Combine(AppContext.BaseDirectory, "Data", "Backups");
 
@@ -14,6 +16,11 @@ public static class FileContentUtils
     /// </summary>
     public static string GetFullPath(byte[] fileHash, string fileExtension)
     {
+        ArgumentNullException.ThrowIfNull(fileHash);
+
+        if (fileHash.Length != Sha256HashByteLength)
+            throw new ArgumentException("File hash must be a SHA-256 hash (32 bytes).", nameof(fileHash));
+
         // Use stack allocation for small hashes (SHA256 = 32 bytes = 64 hex chars)
         Span<char> hashChars = stackalloc char[fileHash.Length * 2];
         
@@ -34,6 +41,8 @@ public static class FileContentUtils
 
     private static string NormalizeExtension(string fileExtension)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileExtension);
+
         var extension = fileExtension.AsSpan().Trim();
 
         while (extension.Length > 0 && (extension[0] == '.' || extension[0] == '_'))
@@ -41,7 +50,18 @@ public static class FileContentUtils
             extension = extension[1..];
         }
 
-        return extension.ToString().ToLowerInvariant();
+        if (extension.IsWhiteSpace())
+            throw new ArgumentException("File extension must be provided.", nameof(fileExtension));
+
+        string normalizedExtension = extension.ToString().ToLowerInvariant();
+        if (normalizedExtension.Contains('/') ||
+            normalizedExtension.Contains('\\') ||
+            normalizedExtension.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new ArgumentException("File extension contains invalid characters.", nameof(fileExtension));
+        }
+
+        return normalizedExtension;
     }
 
     public static bool IsSafeFilePath(string? fullPath)

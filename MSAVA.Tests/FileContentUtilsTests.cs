@@ -81,6 +81,29 @@ public class FileContentUtilsTests
     }
 
     [Test]
+    public void GetFullPath_RejectsNonSha256HashLength()
+    {
+        Action act = () => FileContentUtils.GetFullPath([0x01, 0x02], "txt");
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("File hash must be a SHA-256 hash (32 bytes).*");
+    }
+
+    [TestCase("")]
+    [TestCase(" ")]
+    [TestCase("../txt")]
+    [TestCase("folder/txt")]
+    [TestCase("folder\\txt")]
+    public void GetFullPath_RejectsUnsafeExtension(string extension)
+    {
+        byte[] hash = new byte[32];
+
+        Action act = () => FileContentUtils.GetFullPath(hash, extension);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Test]
     public void TryGetSafeFullPath_ReturnsPathForSafeStoredFileNameWithoutRequiringFileExists()
     {
         string fileName = $"{new string('a', 64)}.txt";
