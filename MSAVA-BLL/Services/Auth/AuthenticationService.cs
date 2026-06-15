@@ -108,6 +108,7 @@ public class AuthenticationService : IAuthenticationService
             IsAdmin = user.IsAdmin,
             IsBanned = user.IsBanned,
             IsWhitelisted = user.IsWhitelisted,
+            InviteCode = user.InviteCodeId ?? Guid.Empty,
             TokenString = tokenString,
             IssuedAt = issuedAt,
             ExpiresAt = expiresAt

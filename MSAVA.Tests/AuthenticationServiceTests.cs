@@ -208,6 +208,32 @@ public class AuthenticationServiceTests
         context.Jwts.Should().ContainSingle(jwt => jwt.Username == "trimmed-user");
     }
 
+    [Test]
+    public async Task LoginAsync_PersistsInviteCodeOnJwtRecord()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        var user = CreateUser("invited-user", "correct-password", isBanned: false);
+        user.InviteCodeId = inviteCode.Id;
+        context.InviteCodes.Add(inviteCode);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        var response = await service.LoginAsync(new LoginRequestDTO
+        {
+            Username = "invited-user",
+            Password = "correct-password"
+        });
+
+        response.Token.Should().NotBeNullOrWhiteSpace();
+        context.Jwts.Should().ContainSingle(jwt =>
+            jwt.UserId == user.Id &&
+            jwt.Username == "invited-user" &&
+            jwt.InviteCode == inviteCode.Id);
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task RegisterAsync_RejectsMissingUsername(string username)
