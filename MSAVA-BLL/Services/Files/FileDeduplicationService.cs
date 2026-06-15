@@ -222,10 +222,11 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType);
 
         if (isAdmin)
-            return await matchingReferences.FirstOrDefaultAsync(cancellationToken);
+            return await OrderReferencesForStableSelection(matchingReferences)
+                .FirstOrDefaultAsync(cancellationToken);
 
-        return await matchingReferences
-            .Where(fr => fr.PublicDownload || userAccessGroups.Contains(fr.AccessGroupId))
+        return await OrderReferencesForStableSelection(matchingReferences
+                .Where(fr => fr.PublicDownload || userAccessGroups.Contains(fr.AccessGroupId)))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -236,9 +237,17 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     {
         var extensionType = MappingUtils.ParseSupportedFileExtension(extension);
 
-        return await _context.FileRefs
-            .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType)
+        return await OrderReferencesForStableSelection(_context.FileRefs
+                .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private static IOrderedQueryable<SavedFileReferenceDB> OrderReferencesForStableSelection(
+        IQueryable<SavedFileReferenceDB> references)
+    {
+        return references
+            .OrderByDescending(reference => reference.PublicDownload)
+            .ThenBy(reference => reference.Id);
     }
 
     private async Task<SavedFileReferenceDB> CreateNewReferenceAsync(

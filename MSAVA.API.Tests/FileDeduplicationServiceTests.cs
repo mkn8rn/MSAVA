@@ -354,6 +354,55 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsDeterministicExistingAccessibleReference()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-deterministic-existing-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var firstGroup = CreateAccessGroup(sessionUser, "first");
+            var secondGroup = CreateAccessGroup(sessionUser, "second");
+            var laterReference = CreateFileReference(contentHash, secondGroup.Id);
+            laterReference.Id = Guid.Parse("00000000-0000-0000-0000-000000000002");
+            var earlierReference = CreateFileReference(contentHash, firstGroup.Id);
+            earlierReference.Id = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+            context.Users.Add(sessionUser);
+            context.AccessGroups.AddRange(firstGroup, secondGroup);
+            context.FileRefs.AddRange(laterReference, earlierReference);
+            await context.SaveChangesAsync();
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                FileName = "existing-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeTrue();
+            result.ReferenceId.Should().Be(earlierReference.Id);
+            result.NewReferenceCreated.Should().BeFalse();
+            result.Error.Should().BeNull();
+            context.FileRefs.Should().HaveCount(2);
+            metadataStore.GetByFileHash(contentHash, "txt").Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_DoesNotUseStaleTokenAdminRoleForExistingPrivateReference()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-stale-admin-{Guid.NewGuid()}"));
