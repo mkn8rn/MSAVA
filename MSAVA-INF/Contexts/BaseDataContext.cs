@@ -12,8 +12,16 @@ public class BaseDataContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserDB>()
+            .Property(user => user.Username)
+            .HasMaxLength(UserDB.MaximumUsernameLength);
+
+        modelBuilder.Entity<UserDB>()
             .HasIndex(u => u.Username)
             .IsUnique();
+
+        modelBuilder.Entity<AccessGroupDB>()
+            .Property(accessGroup => accessGroup.Name)
+            .HasMaxLength(AccessGroupDB.MaximumNameLength);
 
         modelBuilder.Entity<AccessGroupDB>()
             .HasIndex(accessGroup => new { accessGroup.OwnerId, accessGroup.Name })

@@ -1,8 +1,10 @@
+using MSAVA_INF.Models;
+
 namespace MSAVA_BLL.Services.Auth;
 
 public static class AuthInputPolicy
 {
-    public const int MaximumUsernameLength = 128;
+    public const int MaximumUsernameLength = UserDB.MaximumUsernameLength;
     public const int MaximumPasswordLength = 1024;
 
     public static string NormalizeUsername(string username)

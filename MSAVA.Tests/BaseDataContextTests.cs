@@ -138,6 +138,22 @@ public class BaseDataContextTests
         ownerNameIndex!.IsUnique.Should().BeTrue();
     }
 
+    [Test]
+    public void OnModelCreatingAppliesIdentityTextLengthLimits()
+    {
+        using var context = CreateContext();
+
+        FindProperty(context.Model, typeof(UserDB), nameof(UserDB.Username))
+            .GetMaxLength()
+            .Should()
+            .Be(UserDB.MaximumUsernameLength);
+
+        FindProperty(context.Model, typeof(AccessGroupDB), nameof(AccessGroupDB.Name))
+            .GetMaxLength()
+            .Should()
+            .Be(AccessGroupDB.MaximumNameLength);
+    }
+
     private static IForeignKey FindForeignKey(IModel model, Type entityType, string propertyName)
     {
         var entity = model.FindEntityType(entityType)
@@ -146,6 +162,15 @@ public class BaseDataContextTests
         return entity
             .GetForeignKeys()
             .Single(foreignKey => foreignKey.Properties.Any(property => property.Name == propertyName));
+    }
+
+    private static IProperty FindProperty(IModel model, Type entityType, string propertyName)
+    {
+        var entity = model.FindEntityType(entityType)
+            ?? throw new InvalidOperationException($"Entity {entityType.Name} was not found in the EF model.");
+
+        return entity.FindProperty(propertyName)
+            ?? throw new InvalidOperationException($"Property {entityType.Name}.{propertyName} was not found in the EF model.");
     }
 
     private static BaseDataContext CreateContext()

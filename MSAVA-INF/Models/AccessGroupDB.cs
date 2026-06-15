@@ -8,6 +8,8 @@ namespace MSAVA_INF.Models
 {
     public class AccessGroupDB : IIdentifiableDB
     {
+        public const int MaximumNameLength = 128;
+
         public Guid Id { get; set; }
         public required Guid OwnerId { get; set; }
         public UserDB? Owner { get; set; }

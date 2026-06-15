@@ -8,6 +8,8 @@ namespace MSAVA_INF.Models
 {
     public class UserDB : IIdentifiableDB
     {
+        public const int MaximumUsernameLength = 128;
+
         public Guid Id { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public required string Username { get; set; }

@@ -1,8 +1,10 @@
+using MSAVA_INF.Models;
+
 namespace MSAVA_BLL.Services.Auth;
 
 public static class AccessGroupInputPolicy
 {
-    public const int MaximumNameLength = 128;
+    public const int MaximumNameLength = AccessGroupDB.MaximumNameLength;
 
     public static string NormalizeName(string name)
     {
