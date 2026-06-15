@@ -1,7 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using MSAVA_BLL.Utils;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Utils;
+using System.Data.Common;
 
 namespace MSAVA_API.Authorization;
 
@@ -14,33 +17,39 @@ public static class PublicFileAccessGuard
         if (!StoredFileName.TryParse(physicalPath, out var storedFileName))
             return false;
 
-        var metadataStore = context.RequestServices.GetService<IPublicFileMetadataStore>();
-        if (metadataStore is null)
+        var dbContext = context.RequestServices.GetService<BaseDataContext>();
+        if (dbContext is null)
         {
-            LogDeniedRequest(context, physicalPath, "metadata store is not registered");
+            LogDeniedRequest(context, physicalPath, "base data context is not registered");
             return false;
         }
 
         try
         {
-            return metadataStore.CheckPublicDownloadAccess(storedFileName.FileHash, storedFileName.Extension) is not null;
+            var extensionType = MappingUtils.ParseFileExtension(storedFileName.Extension);
+            return dbContext.FileRefs
+                .AsNoTracking()
+                .Any(fileReference =>
+                    fileReference.PublicDownload &&
+                    fileReference.FileHash == storedFileName.FileHash &&
+                    fileReference.FileExtension == extensionType);
         }
-        catch (Exception ex) when (IsRecoverableMetadataLookupFailure(ex))
+        catch (Exception ex) when (IsRecoverablePublicLookupFailure(ex))
         {
-            LogDeniedRequest(context, physicalPath, "metadata lookup failed", ex);
+            LogDeniedRequest(context, physicalPath, "public file database lookup failed", ex);
             return false;
         }
     }
 
-    private static bool IsRecoverableMetadataLookupFailure(Exception exception)
+    private static bool IsRecoverablePublicLookupFailure(Exception exception)
     {
         if (ContainsCriticalException(exception))
             return false;
 
-        return exception is IOException
+        return exception is DbException
+            or IOException
             or InvalidOperationException
-            or UnauthorizedAccessException
-            || exception.GetType().Namespace == "LiteDB";
+            or UnauthorizedAccessException;
     }
 
     private static bool ContainsCriticalException(Exception exception)

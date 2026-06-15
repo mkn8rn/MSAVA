@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
@@ -10,42 +11,62 @@ namespace MSAVA_API.Tests;
 public class PublicFileAccessGuardTests
 {
     [Test]
-    public void CanServePublicFile_AllowsFileWithPublicDownloadMetadata()
+    public async Task CanServePublicFile_AllowsFileWithPublicDownloadSqlReference()
     {
-        string metadataDirectory = CreateTempDirectory();
+        await using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        await context.SaveChangesAsync();
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = CreatePhysicalPath(hash);
 
-        try
-        {
-            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            metadataStore.AddMetadata(CreateMetadata(hash, publicDownload: true));
-            var context = CreateContext(metadataStore);
-            string physicalPath = Path.Combine(metadataDirectory, $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
-            bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
-
-            result.Should().BeTrue();
-        }
-        finally
-        {
-            DeleteDirectoryIfPresent(metadataDirectory);
-        }
+        result.Should().BeTrue();
     }
 
     [Test]
-    public void CanServePublicFile_DeniesFileWithoutPublicDownloadMetadata()
+    public async Task CanServePublicFile_DeniesFileWithoutPublicDownloadSqlReference()
     {
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        context.FileRefs.Add(CreateReference(hash, publicDownload: false));
+        await context.SaveChangesAsync();
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = CreatePhysicalPath(hash);
+
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task CanServePublicFile_DeniesWhenMetadataIsPublicButSqlReferenceIsPrivate()
+    {
+        await using var context = CreateDataContext();
         string metadataDirectory = CreateTempDirectory();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var privateReference = CreateReference(hash, publicDownload: false);
 
         try
         {
-            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            metadataStore.AddMetadata(CreateMetadata(hash, publicDownload: false));
-            var context = CreateContext(metadataStore);
-            string physicalPath = Path.Combine(metadataDirectory, $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+            context.FileRefs.Add(privateReference);
+            await context.SaveChangesAsync();
 
-            bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = privateReference.Id,
+                FileHash = hash,
+                FileExtension = "txt",
+                AccessGroupId = privateReference.AccessGroupId,
+                PublicDownload = true
+            });
+
+            var httpContext = CreateHttpContext(context, metadataStore);
+            string physicalPath = CreatePhysicalPath(hash);
+
+            bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
             result.Should().BeFalse();
         }
@@ -58,150 +79,113 @@ public class PublicFileAccessGuardTests
     [Test]
     public void CanServePublicFile_DeniesMalformedFileNameWithoutThrowing()
     {
-        string metadataDirectory = CreateTempDirectory();
+        using var context = CreateDataContext();
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = Path.Combine(Path.GetTempPath(), "not-a-hex-hash.txt");
 
-        try
-        {
-            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            var context = CreateContext(metadataStore);
-            string physicalPath = Path.Combine(metadataDirectory, "not-a-hex-hash.txt");
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
-            bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
-
-            result.Should().BeFalse();
-        }
-        finally
-        {
-            DeleteDirectoryIfPresent(metadataDirectory);
-        }
+        result.Should().BeFalse();
     }
 
     [Test]
     public void CanServePublicFile_DeniesHexFileNameThatIsNotSha256Length()
     {
-        string metadataDirectory = CreateTempDirectory();
+        using var context = CreateDataContext();
         byte[] shortHash = Guid.NewGuid().ToByteArray();
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = CreatePhysicalPath(shortHash);
 
-        try
-        {
-            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            metadataStore.AddMetadata(CreateMetadata(shortHash, publicDownload: true));
-            var context = CreateContext(metadataStore);
-            string physicalPath = Path.Combine(metadataDirectory, $"{Convert.ToHexString(shortHash).ToLowerInvariant()}.txt");
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
-            bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
-
-            result.Should().BeFalse();
-        }
-        finally
-        {
-            DeleteDirectoryIfPresent(metadataDirectory);
-        }
+        result.Should().BeFalse();
     }
 
     [Test]
-    public void CanServePublicFile_DeniesMissingMetadata()
+    public void CanServePublicFile_DeniesMissingSqlReference()
     {
-        string metadataDirectory = CreateTempDirectory();
+        using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = CreatePhysicalPath(hash);
 
-        try
-        {
-            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            var context = CreateContext(metadataStore);
-            string physicalPath = Path.Combine(metadataDirectory, $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
-            bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
-
-            result.Should().BeFalse();
-        }
-        finally
-        {
-            DeleteDirectoryIfPresent(metadataDirectory);
-        }
+        result.Should().BeFalse();
     }
 
     [Test]
-    public void CanServePublicFile_DeniesWhenMetadataStoreIsNotRegistered()
+    public void CanServePublicFile_DeniesWhenDataContextIsNotRegistered()
     {
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
         var services = new ServiceCollection().BuildServiceProvider();
-        var context = new DefaultHttpContext
+        var httpContext = new DefaultHttpContext
         {
             RequestServices = services
         };
-        string physicalPath = Path.Combine(
-            Path.GetTempPath(),
-            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+        string physicalPath = CreatePhysicalPath(hash);
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
         result.Should().BeFalse();
     }
 
     [Test]
-    public void CanServePublicFile_DeniesWhenMetadataLookupFailsRecoverably()
+    public void CanServePublicFile_DeniesWhenDatabaseLookupFailsRecoverably()
     {
+        var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        var context = CreateContext(new ThrowingPublicFileMetadataStore(new IOException("Metadata store unavailable.")));
-        string physicalPath = Path.Combine(
-            Path.GetTempPath(),
-            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = CreatePhysicalPath(hash);
+        context.Dispose();
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
 
         result.Should().BeFalse();
     }
 
-    [Test]
-    public void CanServePublicFile_PropagatesCriticalMetadataLookupFailure()
-    {
-        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        var context = CreateContext(new ThrowingPublicFileMetadataStore(new OutOfMemoryException("Critical memory failure.")));
-        string physicalPath = Path.Combine(
-            Path.GetTempPath(),
-            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
-
-        Action act = () => PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
-
-        act.Should().Throw<OutOfMemoryException>();
-    }
-
-    private static DefaultHttpContext CreateContext(IPublicFileMetadataStore metadataStore)
+    private static DefaultHttpContext CreateHttpContext(
+        BaseDataContext context,
+        MetadataStore? metadataStore = null)
     {
         var services = new ServiceCollection()
-            .AddSingleton(metadataStore)
-            .BuildServiceProvider();
+            .AddSingleton(context);
+
+        if (metadataStore is not null)
+            services.AddSingleton(metadataStore);
 
         return new DefaultHttpContext
         {
-            RequestServices = services
+            RequestServices = services.BuildServiceProvider()
         };
     }
 
-    private static DefaultHttpContext CreateContext(MetadataStore metadataStore)
+    private static SavedFileReferenceDB CreateReference(byte[] hash, bool publicDownload)
     {
-        return CreateContext((IPublicFileMetadataStore)metadataStore);
-    }
-
-    private sealed class ThrowingPublicFileMetadataStore(Exception exception) : IPublicFileMetadataStore
-    {
-        public Guid? CheckPublicDownloadAccess(byte[] fileHash, string fileExtension)
+        return new SavedFileReferenceDB
         {
-            throw exception;
-        }
-    }
-
-    private static SavedFileMetaRecord CreateMetadata(byte[] hash, bool publicDownload)
-    {
-        return new SavedFileMetaRecord
-        {
-            RefId = Guid.NewGuid(),
+            Id = Guid.NewGuid(),
             FileHash = hash,
-            FileExtension = "txt",
-            AccessGroupId = Guid.NewGuid(),
-            PublicDownload = publicDownload
+            FileExtension = FileExtensionType._TXT,
+            PublicDownload = publicDownload,
+            AccessGroupId = Guid.NewGuid()
         };
+    }
+
+    private static BaseDataContext CreateDataContext()
+    {
+        var options = new DbContextOptionsBuilder<BaseDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new TestDataContext(options);
+    }
+
+    private static string CreatePhysicalPath(byte[] hash)
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
     }
 
     private static string CreateTempDirectory()
@@ -215,5 +199,18 @@ public class PublicFileAccessGuardTests
     {
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
+    }
+
+    private sealed class TestDataContext : BaseDataContext
+    {
+        public TestDataContext(DbContextOptions<BaseDataContext> options) : base(options)
+        {
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
     }
 }

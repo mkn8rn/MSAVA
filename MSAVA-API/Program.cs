@@ -135,7 +135,6 @@ builder.Services.AddScoped<IAuthorizationHandler, CurrentAdminHandler>();
 
 // Register managers
 builder.Services.AddSingleton<MetadataStore>();
-builder.Services.AddSingleton<IPublicFileMetadataStore>(services => services.GetRequiredService<MetadataStore>());
 builder.Services.AddScoped<FileManager>();
 
 // JWT Authentication setup

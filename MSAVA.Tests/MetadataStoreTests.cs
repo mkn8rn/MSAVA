@@ -8,51 +8,25 @@ namespace MSAVA_App.Tests;
 public class MetadataStoreTests
 {
     [Test]
-    public void CheckPublicDownloadAccess_ReturnsPublicRecordForHashAndExtension()
+    public void GetByFileHash_ReturnsRecordsForHashAndExtension()
     {
         string metadataDirectory = CreateTempDirectory();
-        byte[] sharedHash = SHA256.HashData(Encoding.UTF8.GetBytes($"public-content-{Guid.NewGuid()}"));
-        var privateRecord = CreateRecord(sharedHash, publicDownload: false);
-        var publicRecord = CreateRecord(sharedHash, publicDownload: true);
+        byte[] targetHash = SHA256.HashData(Encoding.UTF8.GetBytes($"target-content-{Guid.NewGuid()}"));
+        byte[] otherHash = SHA256.HashData(Encoding.UTF8.GetBytes($"other-content-{Guid.NewGuid()}"));
+        var targetRecord = CreateRecord(targetHash, fileExtension: "txt");
+        var wrongExtensionRecord = CreateRecord(targetHash, fileExtension: "pdf");
+        var wrongHashRecord = CreateRecord(otherHash, fileExtension: "txt");
 
         try
         {
             using var store = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            store.AddMetadata(privateRecord);
-            store.AddMetadata(publicRecord);
+            store.AddMetadata(targetRecord);
+            store.AddMetadata(wrongExtensionRecord);
+            store.AddMetadata(wrongHashRecord);
 
-            Guid? refId = store.CheckPublicDownloadAccess(sharedHash, "txt");
+            var records = store.GetByFileHash(targetHash, "txt").ToList();
 
-            refId.Should().Be(publicRecord.RefId);
-        }
-        finally
-        {
-            DeleteDirectoryIfPresent(metadataDirectory);
-        }
-    }
-
-    [Test]
-    public void CheckPublicDownloadAccess_DoesNotUseAccessGroupMembership()
-    {
-        string metadataDirectory = CreateTempDirectory();
-        byte[] fileHash = SHA256.HashData(Encoding.UTF8.GetBytes($"private-content-{Guid.NewGuid()}"));
-        Guid accessGroupId = Guid.NewGuid();
-        var privateRecord = CreateRecord(fileHash, publicDownload: false, accessGroupId);
-
-        try
-        {
-            using var store = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            store.AddMetadata(privateRecord);
-
-            Guid? publicRefId = store.CheckPublicDownloadAccess(fileHash, "txt");
-            Guid userRefId = store.CheckAccessOrThrow(
-                Convert.ToHexString(fileHash),
-                "txt",
-                [accessGroupId],
-                isAdmin: false);
-
-            publicRefId.Should().BeNull();
-            userRefId.Should().Be(privateRecord.RefId);
+            records.Should().ContainSingle(record => record.RefId == targetRecord.RefId);
         }
         finally
         {
@@ -90,13 +64,14 @@ public class MetadataStoreTests
     private static SavedFileMetaRecord CreateRecord(
         byte[] fileHash,
         bool publicDownload = false,
-        Guid? accessGroupId = null)
+        Guid? accessGroupId = null,
+        string fileExtension = "txt")
     {
         return new SavedFileMetaRecord
         {
             RefId = Guid.NewGuid(),
             FileHash = fileHash,
-            FileExtension = "txt",
+            FileExtension = fileExtension,
             AccessGroupId = accessGroupId ?? Guid.NewGuid(),
             PublicDownload = publicDownload
         };
