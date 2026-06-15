@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -101,7 +102,7 @@ public class FileUploadClientService
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableResponseBodyFailure(ex))
         {
             _logger.LogError(ex, "Failed to parse GUID from upload response");
             var raw = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -130,10 +131,35 @@ public class FileUploadClientService
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableResponseBodyFailure(ex))
         {
             _logger.LogWarning(ex, "Failed to read upload error response body");
             return response.ReasonPhrase ?? "Unknown error";
         }
+    }
+
+    private static bool IsRecoverableResponseBodyFailure(Exception exception)
+    {
+        if (ContainsCriticalException(exception))
+            return false;
+
+        return exception is HttpRequestException
+            or JsonException
+            or NotSupportedException
+            or InvalidOperationException
+            or IOException;
+    }
+
+    private static bool ContainsCriticalException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException
+                or OutOfMemoryException
+                or AccessViolationException)
+                return true;
+        }
+
+        return false;
     }
 }

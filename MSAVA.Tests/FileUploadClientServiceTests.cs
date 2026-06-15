@@ -58,6 +58,19 @@ public class FileUploadClientServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromFormFileAsync_PropagatesCriticalFailureWhileParsingSuccessfulResponse()
+    {
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingContent(new OutOfMemoryException("Critical memory failure."))
+        });
+
+        var act = async () => await CreateUploadAsync(service);
+
+        await act.Should().ThrowAsync<OutOfMemoryException>();
+    }
+
+    [Test]
     public async Task CreateFileFromFormFileAsync_PropagatesCancellationWhileReadingErrorResponse()
     {
         var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
@@ -69,6 +82,20 @@ public class FileUploadClientServiceTests
         var act = async () => await CreateUploadAsync(service);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_PropagatesCriticalFailureWhileReadingErrorResponse()
+    {
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            ReasonPhrase = "Bad Request",
+            Content = new ThrowingContent(new OutOfMemoryException("Critical memory failure."))
+        });
+
+        var act = async () => await CreateUploadAsync(service);
+
+        await act.Should().ThrowAsync<OutOfMemoryException>();
     }
 
     [Test]
@@ -181,14 +208,22 @@ public class FileUploadClientServiceTests
 
     private sealed class ThrowingContent : HttpContent
     {
+        private readonly Exception _exception;
+
         public ThrowingContent()
+            : this(new IOException("Unable to read content"))
+        {
+        }
+
+        public ThrowingContent(Exception exception)
         {
             Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+            _exception = exception;
         }
 
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
         {
-            throw new IOException("Unable to read content");
+            throw _exception;
         }
 
         protected override Task SerializeToStreamAsync(
@@ -196,7 +231,7 @@ public class FileUploadClientServiceTests
             TransportContext? context,
             CancellationToken cancellationToken)
         {
-            throw new IOException("Unable to read content");
+            throw _exception;
         }
 
         protected override bool TryComputeLength(out long length)
