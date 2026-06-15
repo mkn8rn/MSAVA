@@ -464,6 +464,60 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsOversizeDeclaredDownloadBeforeReadingContent()
+    {
+        var responseIndex = 0;
+        var declaredContent = new DeclaredLengthContent(5, "text/plain");
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateResponse(HttpStatusCode.OK, "text/plain", "initial ok");
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = declaredContent
+            };
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id), maximumFileSizeBytes: 4),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileTooLargeException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            declaredContent.SerializeWasCalled.Should().BeFalse();
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task OneDriveImportAsync_DeletesTempFileWhenContentCopyFails()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -503,6 +557,51 @@ public class ProviderImportServiceTests
             var tempFilePath = GetLoggedTempFilePath(logger);
             File.Exists(tempFilePath).Should().BeFalse();
             handler.Requests.Should().ContainSingle();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_RejectsOversizeUnknownLengthContentWhileCopying()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            CreateStreamResponse(
+                HttpStatusCode.OK,
+                "text/plain",
+                new NonSeekableMemoryStream(Encoding.UTF8.GetBytes("12345"))));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id), maximumFileSizeBytes: 4),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileTooLargeException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().ContainSingle();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
         }
         finally
         {
@@ -761,6 +860,49 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task YouTubeImportAsync_RejectsOversizeStreamWhileCopyingToTempFile()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+        var youTubeClient = new OversizeYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id), maximumFileSizeBytes: 4),
+                new ServiceLogger(logger, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = accessGroup.Id,
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileTooLargeException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            youTubeClient.ManifestCalls.Should().Be(1);
+            youTubeClient.CopyCalls.Should().Be(1);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public void CreateFfmpegStartInfo_UsesArgumentListWithoutShellExecution()
     {
         var videoPath = Path.Combine("C:\\temp", "video input.webm");
@@ -772,7 +914,8 @@ public class ProviderImportServiceTests
             videoPath,
             "webm",
             audioPath,
-            outputPath);
+            outputPath,
+            FileSizePolicy.MaximumFileSizeBytes);
 
         startInfo.FileName.Should().Be("ffmpeg");
         startInfo.UseShellExecute.Should().BeFalse();
@@ -796,6 +939,8 @@ public class ProviderImportServiceTests
             "-shortest",
             "-f",
             "mp4",
+            "-fs",
+            (FileSizePolicy.MaximumFileSizeBytes + 1).ToString(),
             outputPath);
     }
 
@@ -829,14 +974,16 @@ public class ProviderImportServiceTests
         BaseDataContext context,
         MetadataStore metadataStore,
         ILogger<ServiceLogger>? serviceLogger = null,
-        SessionDTO? session = null)
+        SessionDTO? session = null,
+        long maximumFileSizeBytes = FileSizePolicy.MaximumFileSizeBytes)
     {
         return new FilePersistenceService(
             context,
             new FileManager(metadataStore, NullLogger<FileManager>.Instance),
             new TestRequestSessionAccessor(session),
             new ServiceLogger(serviceLogger ?? NullLogger<ServiceLogger>.Instance, context),
-            NullLogger<FilePersistenceService>.Instance);
+            NullLogger<FilePersistenceService>.Instance,
+            maximumFileSizeBytes);
     }
 
     private static BaseDataContext CreateContext()
@@ -1016,6 +1163,54 @@ public class ProviderImportServiceTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
+    private sealed class NonSeekableMemoryStream : MemoryStream
+    {
+        public NonSeekableMemoryStream(byte[] buffer) : base(buffer)
+        {
+        }
+
+        public override bool CanSeek => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin loc)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class DeclaredLengthContent : HttpContent
+    {
+        private readonly long _contentLength;
+
+        public DeclaredLengthContent(long contentLength, string contentType)
+        {
+            _contentLength = contentLength;
+            Headers.ContentType = new(contentType);
+            Headers.ContentLength = contentLength;
+        }
+
+        public bool SerializeWasCalled { get; private set; }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            SerializeWasCalled = true;
+            return Task.CompletedTask;
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = _contentLength;
+            return true;
+        }
+    }
+
     private sealed class ThrowingYouTubeDownloadClient : IYouTubeDownloadClient
     {
         private static readonly byte[] PartialContent = Encoding.UTF8.GetBytes("partial youtube content");
@@ -1043,6 +1238,35 @@ public class ProviderImportServiceTests
             CopyCalls++;
             await destination.WriteAsync(PartialContent, cancellationToken);
             throw new IOException("Simulated YouTube stream failure.");
+        }
+    }
+
+    private sealed class OversizeYouTubeDownloadClient : IYouTubeDownloadClient
+    {
+        private static readonly byte[] OversizeContent = Encoding.UTF8.GetBytes("12345");
+
+        public int ManifestCalls { get; private set; }
+        public int CopyCalls { get; private set; }
+
+        public Task<YouTubeDownloadManifest> GetDownloadManifestAsync(
+            string youtubeUrl,
+            CancellationToken cancellationToken)
+        {
+            ManifestCalls++;
+            return Task.FromResult(new YouTubeDownloadManifest(
+                "Oversize YouTube Video",
+                [new YouTubeStreamInfo(new object(), "mp4", "720p", 720, 1_500)],
+                [],
+                []));
+        }
+
+        public async Task CopyToAsync(
+            YouTubeStreamInfo streamInfo,
+            Stream destination,
+            CancellationToken cancellationToken)
+        {
+            CopyCalls++;
+            await destination.WriteAsync(OversizeContent, cancellationToken);
         }
     }
 

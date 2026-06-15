@@ -74,6 +74,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         }
 
         string finalExtension = ProviderFileType.RequireSupportedExtension("OneDrive", inferredExtension);
+        EnsureDeclaredContentLengthWithinMaximum(resp.Content);
 
         var tempFilePath = Path.GetTempFileName();
         _serviceLogger.LogInformation($"Downloading OneDrive content to temp path {tempFilePath}");
@@ -83,7 +84,8 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
             await using (var contentStream = await resp.Content.ReadAsStreamAsync(cancellationToken))
             await using (var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                await contentStream.CopyToAsync(fs, cancellationToken);
+                var boundedFileStream = new FileSizeLimitedWriteStream(fs, _persistenceService.MaximumFileSizeBytes);
+                await contentStream.CopyToAsync(boundedFileStream, cancellationToken);
             }
 
             var fetchDto = new SaveFileFromFetchDTO
@@ -173,4 +175,9 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         };
     }
 
+    private void EnsureDeclaredContentLengthWithinMaximum(HttpContent content)
+    {
+        if (content.Headers.ContentLength is long contentLength)
+            FileSizePolicy.EnsureWithinMaximum(contentLength, _persistenceService.MaximumFileSizeBytes);
+    }
 }

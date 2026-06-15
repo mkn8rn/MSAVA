@@ -5,6 +5,7 @@ using MSAVA_BLL.Utils;
 using MSAVA_Shared.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace MSAVA_BLL.Services.Import;
 
@@ -76,8 +77,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
                 if (streamInfo != null)
                 {
                     fileExtension = ProviderFileType.RequireSupportedExtension("YouTube", streamInfo.ContainerName);
-                    await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                    await _youtubeClient.CopyToAsync(streamInfo, fileStream, cancellationToken);
+                    await CopyYouTubeStreamToFileAsync(streamInfo, tempFilePath, cancellationToken);
                 }
                 else
                 {
@@ -94,15 +94,13 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             {
                 var videoStream = GetBestVideoStream(downloadManifest.VideoStreams, dto.VideoQuality);
                 fileExtension = ProviderFileType.RequireSupportedExtension("YouTube", videoStream.ContainerName);
-                await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await _youtubeClient.CopyToAsync(videoStream, fileStream, cancellationToken);
+                await CopyYouTubeStreamToFileAsync(videoStream, tempFilePath, cancellationToken);
             }
             else if (dto.DownloadAudio)
             {
                 var audioStream = GetBestAudioStream(downloadManifest.AudioStreams, dto.AudioQuality);
                 fileExtension = ProviderFileType.RequireSupportedExtension("YouTube", audioStream.ContainerName);
-                await using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await _youtubeClient.CopyToAsync(audioStream, fileStream, cancellationToken);
+                await CopyYouTubeStreamToFileAsync(audioStream, tempFilePath, cancellationToken);
             }
 
             var fetchDto = new SaveFileFromFetchDTO
@@ -146,14 +144,18 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         try
         {
             _serviceLogger.LogInformation($"Downloading video to {videoTemp}");
-            await using (var vfs = new FileStream(videoTemp, FileMode.Create, FileAccess.Write, FileShare.None))
-                await youtube.CopyToAsync(videoStream, vfs, cancellationToken);
+            await CopyYouTubeStreamToFileAsync(youtube, videoStream, videoTemp, cancellationToken);
 
             _serviceLogger.LogInformation($"Downloading audio to {audioTemp}");
-            await using (var afs = new FileStream(audioTemp, FileMode.Create, FileAccess.Write, FileShare.None))
-                await youtube.CopyToAsync(audioStream, afs, cancellationToken);
+            await CopyYouTubeStreamToFileAsync(youtube, audioStream, audioTemp, cancellationToken);
 
-            var psi = CreateFfmpegStartInfo(videoFormat, videoTemp, audioFormat, audioTemp, outputPath);
+            var psi = CreateFfmpegStartInfo(
+                videoFormat,
+                videoTemp,
+                audioFormat,
+                audioTemp,
+                outputPath,
+                _persistenceService.MaximumFileSizeBytes);
             _serviceLogger.LogInformation($"Starting FFmpeg mux: {string.Join(' ', psi.ArgumentList)}");
 
             using var process = Process.Start(psi)
@@ -178,6 +180,10 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"FFmpeg failed to mux video and audio: {errorOutput}");
+
+            FileSizePolicy.EnsureWithinMaximum(
+                new FileInfo(outputPath).Length,
+                _persistenceService.MaximumFileSizeBytes);
         }
         finally
         {
@@ -191,8 +197,14 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         string videoTemp,
         string audioFormat,
         string audioTemp,
-        string outputPath)
+        string outputPath,
+        long maximumOutputSizeBytes)
     {
+        maximumOutputSizeBytes = FileSizePolicy.RequireValidMaximum(maximumOutputSizeBytes);
+        long ffmpegOutputSizeLimit = maximumOutputSizeBytes == long.MaxValue
+            ? long.MaxValue
+            : maximumOutputSizeBytes + 1;
+
         var processStartInfo = new ProcessStartInfo
         {
             FileName = "ffmpeg",
@@ -217,6 +229,8 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         processStartInfo.ArgumentList.Add("-shortest");
         processStartInfo.ArgumentList.Add("-f");
         processStartInfo.ArgumentList.Add("mp4");
+        processStartInfo.ArgumentList.Add("-fs");
+        processStartInfo.ArgumentList.Add(ffmpegOutputSizeLimit.ToString(CultureInfo.InvariantCulture));
         processStartInfo.ArgumentList.Add(outputPath);
 
         return processStartInfo;
@@ -270,5 +284,24 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         {
             _logger.LogWarning(ex, "Failed to kill FFmpeg process after timeout");
         }
+    }
+
+    private Task CopyYouTubeStreamToFileAsync(
+        YouTubeStreamInfo streamInfo,
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        return CopyYouTubeStreamToFileAsync(_youtubeClient, streamInfo, filePath, cancellationToken);
+    }
+
+    private async Task CopyYouTubeStreamToFileAsync(
+        IYouTubeDownloadClient youtube,
+        YouTubeStreamInfo streamInfo,
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+        var boundedFileStream = new FileSizeLimitedWriteStream(fileStream, _persistenceService.MaximumFileSizeBytes);
+        await youtube.CopyToAsync(streamInfo, boundedFileStream, cancellationToken);
     }
 }

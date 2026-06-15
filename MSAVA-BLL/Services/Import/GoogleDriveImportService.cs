@@ -104,10 +104,12 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
 
                 var inferredExtension = GetExtensionFromContentType(downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty);
                 finalExtension = ProviderFileType.RequireSupportedExtension("Google Drive", inferredExtension);
+                EnsureDeclaredContentLengthWithinMaximum(downloadResp.Content);
 
                 await using var ms = await downloadResp.Content.ReadAsStreamAsync(cancellationToken);
                 await using var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await ms.CopyToAsync(fs, cancellationToken);
+                var boundedFileStream = new FileSizeLimitedWriteStream(fs, _persistenceService.MaximumFileSizeBytes);
+                await ms.CopyToAsync(boundedFileStream, cancellationToken);
             }
 
             var fetchDto = new SaveFileFromFetchDTO
@@ -185,4 +187,9 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         };
     }
 
+    private void EnsureDeclaredContentLengthWithinMaximum(HttpContent content)
+    {
+        if (content.Headers.ContentLength is long contentLength)
+            FileSizePolicy.EnsureWithinMaximum(contentLength, _persistenceService.MaximumFileSizeBytes);
+    }
 }
