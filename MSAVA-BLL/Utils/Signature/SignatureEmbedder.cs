@@ -119,13 +119,41 @@ public static class SignatureEmbedder
         {
             return Embed(inputStream, extension, signature);
         }
-        catch
+        catch (Exception ex) when (IsRecoverableEmbeddingFailure(ex))
         {
             // If embedding fails, return original stream
             if (inputStream.CanSeek)
                 inputStream.Position = 0;
             return inputStream;
         }
+    }
+
+    private static bool IsRecoverableEmbeddingFailure(Exception exception)
+    {
+        if (ContainsCriticalException(exception))
+            return false;
+
+        return exception is IOException
+            or InvalidDataException
+            or XmlException
+            or ArgumentException
+            or InvalidOperationException
+            or NotSupportedException
+            || exception.GetType().Namespace?.StartsWith("TagLib", StringComparison.Ordinal) == true
+            || exception.GetType().Namespace?.StartsWith("SixLabors.ImageSharp", StringComparison.Ordinal) == true;
+    }
+
+    private static bool ContainsCriticalException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException
+                or OutOfMemoryException
+                or AccessViolationException)
+                return true;
+        }
+
+        return false;
     }
 
     #region Image Embedders
