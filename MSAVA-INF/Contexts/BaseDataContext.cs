@@ -27,6 +27,16 @@ public class BaseDataContext : DbContext
             .HasIndex(accessGroup => new { accessGroup.OwnerId, accessGroup.Name })
             .IsUnique();
 
+        modelBuilder.Entity<JwtDB>()
+            .Property(jwt => jwt.Username)
+            .HasMaxLength(UserDB.MaximumUsernameLength);
+
+        modelBuilder.Entity<JwtDB>()
+            .HasOne(jwt => jwt.User)
+            .WithMany()
+            .HasForeignKey(jwt => jwt.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<SavedFileDataDB>()
             .HasOne(fileData => fileData.FileReference)
             .WithOne()

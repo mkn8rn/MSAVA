@@ -107,6 +107,20 @@ public class BaseDataContextTests
     }
 
     [Test]
+    public void OnModelCreatingRestrictsJwtUserDeletes()
+    {
+        using var context = CreateContext();
+
+        var jwtUserForeignKey = FindForeignKey(
+            context.Model,
+            typeof(JwtDB),
+            nameof(JwtDB.UserId));
+
+        jwtUserForeignKey.PrincipalEntityType.ClrType.Should().Be(typeof(UserDB));
+        jwtUserForeignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+    }
+
+    [Test]
     public void OnModelCreatingEnforcesUniqueUsernames()
     {
         using var context = CreateContext();
@@ -152,6 +166,11 @@ public class BaseDataContextTests
             .GetMaxLength()
             .Should()
             .Be(AccessGroupDB.MaximumNameLength);
+
+        FindProperty(context.Model, typeof(JwtDB), nameof(JwtDB.Username))
+            .GetMaxLength()
+            .Should()
+            .Be(UserDB.MaximumUsernameLength);
     }
 
     private static IForeignKey FindForeignKey(IModel model, Type entityType, string propertyName)
