@@ -15,13 +15,19 @@ public class RequestContextMiddlewareTests
         var userId = Guid.NewGuid();
         var firstAccessGroup = Guid.NewGuid();
         var secondAccessGroup = Guid.NewGuid();
+        const long issuedAtSeconds = 1_700_000_000;
+        const long expiresAtSeconds = 1_700_003_600;
         var context = new DefaultHttpContext
         {
             User = CreatePrincipal(
                 new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
                 new Claim(JwtRegisteredClaimNames.UniqueName, "session-user"),
                 new Claim(ClaimTypes.Role, "Admin"),
-                new Claim("accessGroups", $"{firstAccessGroup},not-a-guid,{Guid.Empty},{secondAccessGroup}"))
+                new Claim("accessGroups", $"{firstAccessGroup},not-a-guid,{Guid.Empty},{secondAccessGroup}"),
+                new Claim(JwtRegisteredClaimNames.Iat, issuedAtSeconds.ToString()),
+                new Claim(JwtRegisteredClaimNames.Exp, expiresAtSeconds.ToString()),
+                new Claim("source", "api-test"),
+                new Claim("source", "duplicate-value"))
         };
         var middleware = new RequestContextMiddleware(_ => Task.CompletedTask);
 
@@ -34,6 +40,31 @@ public class RequestContextMiddlewareTests
         session.IsAdmin.Should().BeTrue();
         session.Roles.Should().Equal("Admin");
         session.AccessGroups.Should().Equal(firstAccessGroup, secondAccessGroup);
+        session.IssuedAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(issuedAtSeconds).UtcDateTime);
+        session.ExpiresAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(expiresAtSeconds).UtcDateTime);
+        session.Claims[JwtRegisteredClaimNames.Sub].Should().Equal(userId.ToString());
+        session.Claims["source"].Should().Equal("api-test", "duplicate-value");
+    }
+
+    [Test]
+    public async Task InvokeAsync_UsesNotBeforeAsIssuedAtFallbackAndIgnoresInvalidEpochClaims()
+    {
+        var userId = Guid.NewGuid();
+        const long notBeforeSeconds = 1_700_010_000;
+        var context = new DefaultHttpContext
+        {
+            User = CreatePrincipal(
+                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+                new Claim(JwtRegisteredClaimNames.Nbf, notBeforeSeconds.ToString()),
+                new Claim(JwtRegisteredClaimNames.Exp, "not-a-number"))
+        };
+        var middleware = new RequestContextMiddleware(_ => Task.CompletedTask);
+
+        await middleware.InvokeAsync(context);
+
+        var session = context.Items[HttpContextRequestSessionAccessor.SessionItemKey].Should().BeOfType<SessionDTO>().Subject;
+        session.IssuedAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(notBeforeSeconds).UtcDateTime);
+        session.ExpiresAt.Should().Be(DateTime.MinValue);
     }
 
     [Test]
