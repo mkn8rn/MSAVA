@@ -7,9 +7,4 @@
     <Nullable>enable</Nullable>
 	<GenerateMvcApplicationPartsAssemblyInfo>false</GenerateMvcApplicationPartsAssemblyInfo>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" />
-  </ItemGroup>
-
 </Project>
