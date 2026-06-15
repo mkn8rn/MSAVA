@@ -5,6 +5,7 @@ using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Loggers;
 using MSAVA_INF.Contexts;
 using Microsoft.EntityFrameworkCore;
+using MSAVA_BLL.Services.Auth;
 
 namespace MSAVA_BLL.Services
 {
@@ -31,8 +32,9 @@ namespace MSAVA_BLL.Services
 
         private async Task<Guid> SeedAdminUserAsync(CancellationToken cancellationToken)
         {
-            string adminUsername = _env.Values.AdminUsername;
+            string adminUsername = AuthInputPolicy.NormalizeUsername(_env.Values.AdminUsername);
             string adminPassword = _env.Values.AdminPassword;
+            AuthInputPolicy.EnsurePasswordAllowed(adminPassword);
 
             UserDB? adminUser = await _context.Users.FirstOrDefaultAsync(
                 u => u.Username == adminUsername,

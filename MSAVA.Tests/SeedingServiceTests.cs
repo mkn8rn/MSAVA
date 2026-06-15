@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services;
+using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Environment;
@@ -77,11 +78,44 @@ public class SeedingServiceTests
         context.Users.Should().BeEmpty();
     }
 
-    private static SeedingService CreateService(BaseDataContext context)
+    [Test]
+    public async Task SeedAsync_RejectsOversizeConfiguredAdminUsernameBeforeCreatingAdmin()
+    {
+        using var context = CreateContext();
+        var service = CreateService(
+            context,
+            adminUsername: new string('a', AuthInputPolicy.MaximumUsernameLength + 1));
+
+        Func<Task> act = () => service.SeedAsync();
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"Username must be {AuthInputPolicy.MaximumUsernameLength} characters or fewer.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task SeedAsync_RejectsOversizeConfiguredAdminPasswordBeforeCreatingAdmin()
+    {
+        using var context = CreateContext();
+        var service = CreateService(
+            context,
+            adminPassword: new string('p', AuthInputPolicy.MaximumPasswordLength + 1));
+
+        Func<Task> act = () => service.SeedAsync();
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"Password must be {AuthInputPolicy.MaximumPasswordLength} characters or fewer.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    private static SeedingService CreateService(
+        BaseDataContext context,
+        string? adminUsername = null,
+        string? adminPassword = null)
     {
         return new SeedingService(
             context,
-            new TestEnvironment(),
+            new TestEnvironment(adminUsername, adminPassword),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
     }
 
@@ -100,25 +134,30 @@ public class SeedingServiceTests
         public const string AdminUsernameValue = "admin";
         public const string AdminPasswordValue = "admin-password";
 
-        public LocalEnvironmentValues Values { get; } = new()
+        public TestEnvironment(string? adminUsername = null, string? adminPassword = null)
         {
-            JwtIssuerSigningKey = SigningKey,
-            JwtIssuerName = "MSAVA.Tests",
-            JwtIssuerAudience = "MSAVA.Tests",
-            AdminUsername = AdminUsernameValue,
-            AdminPassword = AdminPasswordValue,
-            PostgresBaseDbUser = "postgres",
-            PostgresBaseDbPassword = "postgres",
-            PostgresBaseDbHost = "localhost",
-            PostgresBaseDbPort = 5432,
-            PostgresBaseDbDbName = "msava",
-            PostgresBaseDbSslMode = "Disable",
-            SerilogInformationLevel = LogEventLevel.Information,
-            SerilogRollingInterval = Serilog.RollingInterval.Day,
-            SerilogRetainedFileCountLimit = 7,
-            SerilogFileSizeLimitBytes = 1_000_000,
-            SerilogRollOnFileSizeLimit = true
-        };
+            Values = new LocalEnvironmentValues
+            {
+                JwtIssuerSigningKey = SigningKey,
+                JwtIssuerName = "MSAVA.Tests",
+                JwtIssuerAudience = "MSAVA.Tests",
+                AdminUsername = adminUsername ?? AdminUsernameValue,
+                AdminPassword = adminPassword ?? AdminPasswordValue,
+                PostgresBaseDbUser = "postgres",
+                PostgresBaseDbPassword = "postgres",
+                PostgresBaseDbHost = "localhost",
+                PostgresBaseDbPort = 5432,
+                PostgresBaseDbDbName = "msava",
+                PostgresBaseDbSslMode = "Disable",
+                SerilogInformationLevel = LogEventLevel.Information,
+                SerilogRollingInterval = Serilog.RollingInterval.Day,
+                SerilogRetainedFileCountLimit = 7,
+                SerilogFileSizeLimitBytes = 1_000_000,
+                SerilogRollOnFileSizeLimit = true
+            };
+        }
+
+        public LocalEnvironmentValues Values { get; }
 
         public byte[] GetSigningKeyBytes() => System.Text.Encoding.UTF8.GetBytes(SigningKey);
     }

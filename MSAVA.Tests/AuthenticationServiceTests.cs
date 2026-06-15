@@ -130,6 +130,27 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_RejectsOversizePasswordBeforeHashing()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("existing-user", "correct-password", isBanned: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = user.Username,
+            Password = new string('p', AuthInputPolicy.MaximumPasswordLength + 1)
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"Password must be {AuthInputPolicy.MaximumPasswordLength} characters or fewer.*");
+        context.Jwts.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task LoginAsync_RejectsUnknownUsernameAsUnauthorized()
     {
         using var context = CreateContext();
@@ -230,6 +251,50 @@ public class AuthenticationServiceTests
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("Password must be provided.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task RegisterAsync_RejectsOversizeUsernameBeforeInviteValidation()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = new string('u', AuthInputPolicy.MaximumUsernameLength + 1),
+            Password = "password",
+            InviteCode = inviteCode.Id
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"Username must be {AuthInputPolicy.MaximumUsernameLength} characters or fewer.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task RegisterAsync_RejectsOversizePasswordBeforeHashing()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "new-user",
+            Password = new string('p', AuthInputPolicy.MaximumPasswordLength + 1),
+            InviteCode = inviteCode.Id
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"Password must be {AuthInputPolicy.MaximumPasswordLength} characters or fewer.*");
         context.Users.Should().BeEmpty();
     }
 

@@ -40,8 +40,8 @@ public class AuthenticationService : IAuthenticationService
     public async Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        string username = NormalizeUsername(request.Username);
-        EnsurePasswordProvided(request.Password);
+        string username = AuthInputPolicy.NormalizeUsername(request.Username);
+        AuthInputPolicy.EnsurePasswordAllowed(request.Password);
 
         UserDB? user = await _context.Users
             .AsNoTracking()
@@ -122,8 +122,8 @@ public class AuthenticationService : IAuthenticationService
     public async Task<Guid> RegisterAsync(RegisterRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        string username = NormalizeUsername(request.Username);
-        EnsurePasswordProvided(request.Password);
+        string username = AuthInputPolicy.NormalizeUsername(request.Username);
+        AuthInputPolicy.EnsurePasswordAllowed(request.Password);
 
         if (request.InviteCode == Guid.Empty)
             throw new ArgumentException("Invite code is required.", nameof(RegisterRequestDTO.InviteCode));
@@ -161,17 +161,4 @@ public class AuthenticationService : IAuthenticationService
         return user.Id;
     }
 
-    private static string NormalizeUsername(string username)
-    {
-        if (string.IsNullOrWhiteSpace(username))
-            throw new ArgumentException("Username must be provided.", nameof(username));
-
-        return username.Trim();
-    }
-
-    private static void EnsurePasswordProvided(string password)
-    {
-        if (string.IsNullOrWhiteSpace(password))
-            throw new ArgumentException("Password must be provided.", nameof(password));
-    }
 }
