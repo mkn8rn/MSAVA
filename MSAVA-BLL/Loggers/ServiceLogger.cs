@@ -19,7 +19,7 @@ public class ServiceLogger
 
     public void LogInformation(string message)
     {
-        _logger.LogInformation("{Message}", message);
+        _logger.LogInformation("{Message}", SanitizeString(message));
     }
 
     public string SanitizeString(string? message)

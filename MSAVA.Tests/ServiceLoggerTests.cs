@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_INF.Contexts;
@@ -26,6 +27,19 @@ public class ServiceLoggerTests
 
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("context");
+    }
+
+    [Test]
+    public void LogInformation_SanitizesMessageBeforeWriting()
+    {
+        using var context = CreateContext();
+        var captureLogger = new CapturingLogger();
+        var logger = new ServiceLogger(captureLogger, context);
+
+        logger.LogInformation("Download <file>\n& token\t\u0001");
+
+        captureLogger.Messages.Should().ContainSingle()
+            .Which.Should().Be("Download &lt;file&gt; &amp; token ");
     }
 
     [Test]
@@ -102,6 +116,27 @@ public class ServiceLoggerTests
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
+    }
+
+    private sealed class CapturingLogger : ILogger<ServiceLogger>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            NullLogger.Instance.BeginScope(state);
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
         }
     }
 }
