@@ -29,6 +29,44 @@ public class LocalEnvironmentTests
     }
 
     [Test]
+    public void Constructor_ReadsDevelopmentEnvFileFromRepositoryInfrastructureDirectory()
+    {
+        var values = CreateValidEnvironmentValues();
+        string repositoryRoot = Path.Combine(Path.GetTempPath(), "msava-env-tests", Guid.NewGuid().ToString("N"));
+        string infrastructureDirectory = Path.Combine(repositoryRoot, "MSAVA-INF");
+        string apiDirectory = Path.Combine(repositoryRoot, "MSAVA-API");
+        string originalCurrentDirectory = Directory.GetCurrentDirectory();
+
+        using var restore = new EnvironmentVariableRestore(values.Keys.Append("ASPNETCORE_ENVIRONMENT"));
+        ClearEnvironmentValues(values.Keys);
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+
+        try
+        {
+            Directory.CreateDirectory(infrastructureDirectory);
+            Directory.CreateDirectory(apiDirectory);
+            File.WriteAllLines(
+                Path.Combine(infrastructureDirectory, ".env.development"),
+                values.Select(value => $"{value.Key}={value.Value}"));
+
+            Directory.SetCurrentDirectory(apiDirectory);
+
+            var env = new LocalEnvironment();
+
+            env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
+            env.Values.AdminUsername.Should().Be("test-admin");
+            env.Values.PostgresBaseDbDbName.Should().Be("msava-test");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+
+            if (Directory.Exists(repositoryRoot))
+                Directory.Delete(repositoryRoot, recursive: true);
+        }
+    }
+
+    [Test]
     public void GetSigningKeyBytes_RejectsSigningKeyShorterThan32Bytes()
     {
         var values = CreateValidEnvironmentValues();
@@ -75,6 +113,15 @@ public class LocalEnvironmentTests
         {
             Environment.SetEnvironmentVariable(key, null);
             Environment.SetEnvironmentVariable(key.ToUpperInvariant(), value);
+        }
+    }
+
+    private static void ClearEnvironmentValues(IEnumerable<string> keys)
+    {
+        foreach (string key in keys)
+        {
+            Environment.SetEnvironmentVariable(key, null);
+            Environment.SetEnvironmentVariable(key.ToUpperInvariant(), null);
         }
     }
 

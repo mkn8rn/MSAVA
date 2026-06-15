@@ -14,13 +14,15 @@ namespace MSAVA_INF.Environment
 
         public LocalEnvironmentValues Values { get; }
         private readonly Dictionary<string, string> _values;
-        private static readonly string EnvFolder = Path.GetDirectoryName(typeof(LocalEnvironment).Assembly.Location)!;
-        private static readonly string EnvFileName = IsDevelopment() ? ".env.development" : ".env";
-        private static readonly string EnvFilePath = Path.Combine(EnvFolder, EnvFileName);
+        private readonly string _envFileName;
+        private readonly string _envFilePathForErrors;
 
         public LocalEnvironment()
         {
-            _values = LoadEnvFile(EnvFilePath);
+            _envFileName = GetEnvFileName();
+            _envFilePathForErrors = ResolveEnvFilePath(_envFileName)
+                ?? Path.Combine(AppContext.BaseDirectory, _envFileName);
+            _values = LoadEnvFile(_envFilePathForErrors);
             Values = new LocalEnvironmentValues
             {
                 JwtIssuerSigningKey = GetRequiredValue("jwt_issuer_signing_key"),
@@ -53,7 +55,7 @@ namespace MSAVA_INF.Environment
             if (_values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                 return value;
 
-            throw new InvalidOperationException($"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {EnvFileName}.");
+            throw new InvalidOperationException($"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {_envFilePathForErrors}.");
         }
 
         private int ParseRequiredInt(string key)
@@ -126,7 +128,7 @@ namespace MSAVA_INF.Environment
         {
             string key = Values.JwtIssuerSigningKey;
             if (string.IsNullOrWhiteSpace(key))
-                throw new InvalidOperationException($"'jwt_issuer_signing_key' is missing or empty in {EnvFileName}");
+                throw new InvalidOperationException($"'jwt_issuer_signing_key' is missing or empty in {_envFileName}");
 
             byte[] keyBytes = Encoding.UTF8.GetBytes(key);
             if (keyBytes.Length < MinimumJwtSigningKeyBytes)
@@ -136,6 +138,62 @@ namespace MSAVA_INF.Environment
             }
 
             return keyBytes;
+        }
+
+        private static string GetEnvFileName()
+        {
+            return IsDevelopment() ? ".env.development" : ".env";
+        }
+
+        private static string? ResolveEnvFilePath(string envFileName)
+        {
+            foreach (string candidatePath in GetEnvFileCandidates(envFileName))
+            {
+                if (File.Exists(candidatePath))
+                    return candidatePath;
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<string> GetEnvFileCandidates(string envFileName)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string directory in GetSearchDirectories())
+            {
+                foreach (string candidatePath in GetDirectoryCandidates(directory, envFileName))
+                {
+                    if (seen.Add(candidatePath))
+                        yield return candidatePath;
+                }
+            }
+        }
+
+        private static IEnumerable<string> GetSearchDirectories()
+        {
+            foreach (string directory in EnumerateDirectoryAndAncestors(Directory.GetCurrentDirectory()))
+                yield return directory;
+
+            foreach (string directory in EnumerateDirectoryAndAncestors(AppContext.BaseDirectory))
+                yield return directory;
+        }
+
+        private static IEnumerable<string> EnumerateDirectoryAndAncestors(string path)
+        {
+            var directory = new DirectoryInfo(path);
+
+            while (directory is not null)
+            {
+                yield return directory.FullName;
+                directory = directory.Parent;
+            }
+        }
+
+        private static IEnumerable<string> GetDirectoryCandidates(string directory, string envFileName)
+        {
+            yield return Path.Combine(directory, envFileName);
+            yield return Path.Combine(directory, "MSAVA-INF", envFileName);
         }
     }
 }
