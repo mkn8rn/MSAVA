@@ -8,8 +8,8 @@
 # Visual Studio Code detritus
 .vscode/
 
-# ASP.NET Core development server files
-*.db        # SQLite or EF Core local DBs 
+# ASP.NET Core development server and local metadata stores
+*.db
 
 # Blazor WebAssembly build artifacts
 wwwroot/dist/
