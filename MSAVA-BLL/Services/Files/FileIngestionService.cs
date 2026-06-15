@@ -62,6 +62,7 @@ public class FileIngestionService : IFileIngestionService
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
         Uri fileUri = RemoteFileHostPolicy.ParseHttpUri(dto.FileUrl, nameof(dto.FileUrl));
+        await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
         await EnsureSafeResolvedHostAsync(fileUri, cancellationToken);
 
         var httpClient = _httpClientFactory.CreateClient(RemoteFileHttpClientName);

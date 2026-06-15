@@ -85,8 +85,9 @@ public class FileIngestionServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            var service = CreateService(context, metadataStore, httpClientFactory);
-            var dto = CreateUrlDto(fileUrl);
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, httpClientFactory, session: CreateSession(user.Id));
+            var dto = CreateUrlDto(fileUrl, accessGroup.Id);
 
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
@@ -114,17 +115,19 @@ public class FileIngestionServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = CreateService(
                 context,
                 metadataStore,
                 httpClientFactory,
-                (host, cancellationToken) =>
+                session: CreateSession(user.Id),
+                hostAddressResolver: (host, cancellationToken) =>
                 {
                     resolvedHost = host;
                     resolverCancellationToken = cancellationToken;
                     return Task.FromResult(new[] { IPAddress.Parse("127.0.0.1") });
                 });
-            var dto = CreateUrlDto("https://files.example.test/sample.txt");
+            var dto = CreateUrlDto("https://files.example.test/sample.txt", accessGroup.Id);
 
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto, cancellationTokenSource.Token);
 
@@ -133,6 +136,43 @@ public class FileIngestionServiceTests
 
             resolvedHost.Should().Be("files.example.test");
             resolverCancellationToken.Should().Be(cancellationTokenSource.Token);
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromUrlAsync_RejectsMissingSessionBeforeResolvingHostOrCreatingHttpClient()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        bool resolverCalled = false;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                hostAddressResolver: (_, _) =>
+                {
+                    resolverCalled = true;
+                    return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+                });
+            var dto = CreateUrlDto("https://files.example.test/sample.txt");
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User session not found.");
+            resolverCalled.Should().BeFalse();
             httpClientFactory.WasCalled.Should().BeFalse();
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -158,8 +198,9 @@ public class FileIngestionServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            var service = CreateService(context, metadataStore, httpClientFactory);
-            var dto = CreateUrlDto("https://example.com/files/missing.txt");
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, httpClientFactory, session: CreateSession(user.Id));
+            var dto = CreateUrlDto("https://example.com/files/missing.txt", accessGroup.Id);
 
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
@@ -197,8 +238,9 @@ public class FileIngestionServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            var service = CreateService(context, metadataStore, httpClientFactory);
-            var dto = CreateUrlDto("https://example.com/files/redirect.txt");
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, httpClientFactory, session: CreateSession(user.Id));
+            var dto = CreateUrlDto("https://example.com/files/redirect.txt", accessGroup.Id);
 
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
@@ -219,12 +261,17 @@ public class FileIngestionServiceTests
 
     private static SaveFileFromUrlDTO CreateUrlDto(string fileUrl)
     {
+        return CreateUrlDto(fileUrl, Guid.NewGuid());
+    }
+
+    private static SaveFileFromUrlDTO CreateUrlDto(string fileUrl, Guid accessGroupId)
+    {
         return new SaveFileFromUrlDTO
         {
             FileUrl = fileUrl,
             FileName = "sample",
             FileExtension = "txt",
-            AccessGroupId = Guid.NewGuid(),
+            AccessGroupId = accessGroupId,
             Tags = [],
             Categories = [],
             Description = string.Empty,
@@ -237,6 +284,7 @@ public class FileIngestionServiceTests
         BaseDataContext context,
         MetadataStore metadataStore,
         IHttpClientFactory httpClientFactory,
+        SessionDTO? session = null,
         HostAddressResolver? hostAddressResolver = null)
     {
         var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
@@ -244,13 +292,59 @@ public class FileIngestionServiceTests
         var persistenceService = new FilePersistenceService(
             context,
             fileManager,
-            new TestRequestSessionAccessor(),
+            new TestRequestSessionAccessor(session),
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance);
 
         hostAddressResolver ??= (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
 
         return new FileIngestionService(persistenceService, httpClientFactory, hostAddressResolver);
+    }
+
+    private static (UserDB User, AccessGroupDB AccessGroup) SeedUserWithAccessGroup(BaseDataContext context)
+    {
+        var user = new UserDB
+        {
+            Id = Guid.NewGuid(),
+            Username = "url-import-user",
+            PasswordHash = [1],
+            PasswordSalt = [2],
+            IsAdmin = false,
+            IsBanned = false,
+            IsWhitelisted = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        var accessGroup = new AccessGroupDB
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = user.Id,
+            Owner = user,
+            CreatedAt = DateTime.UtcNow,
+            Name = "URL Imports",
+            Users = [],
+            SubGroups = []
+        };
+
+        user.AccessGroups.Add(accessGroup);
+        accessGroup.Users.Add(user);
+        context.Users.Add(user);
+        context.AccessGroups.Add(accessGroup);
+        context.SaveChanges();
+
+        return (user, accessGroup);
+    }
+
+    private static SessionDTO CreateSession(Guid userId)
+    {
+        return new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = userId,
+            Username = "url-import-user",
+            IsWhitelisted = true,
+            Roles = ["Whitelisted"],
+            AccessGroups = []
+        };
     }
 
     private static BaseDataContext CreateContext()
@@ -317,9 +411,9 @@ public class FileIngestionServiceTests
         }
     }
 
-    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
+    private sealed class TestRequestSessionAccessor(SessionDTO? session = null) : IRequestSessionAccessor
     {
-        public SessionDTO? GetSession() => null;
+        public SessionDTO? GetSession() => session;
     }
 
     private sealed class TestDataContext : BaseDataContext

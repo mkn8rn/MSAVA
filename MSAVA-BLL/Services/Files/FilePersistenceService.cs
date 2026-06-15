@@ -40,8 +40,7 @@ public class FilePersistenceService
     {
         ValidateStreamDto(dto);
 
-        Guid sessionUserId = GetRequiredSessionUserId();
-        await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, dto.AccessGroupId, cancellationToken);
+        Guid sessionUserId = await AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
         string tempFilePath = Path.GetTempFileName();
 
@@ -76,8 +75,7 @@ public class FilePersistenceService
         {
             ValidateFetchDto(dto);
 
-            Guid sessionUserId = GetRequiredSessionUserId();
-            await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, dto.AccessGroupId, cancellationToken);
+            Guid sessionUserId = await AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
             long fileLength = new FileInfo(tempFilePath).Length;
             byte[] fileHash = await ComputeFileHashAsync(tempFilePath, cancellationToken);
@@ -96,6 +94,15 @@ public class FilePersistenceService
         {
             TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
+    }
+
+    public async Task<Guid> AuthorizeCreateInAccessGroupAsync(
+        Guid accessGroupId,
+        CancellationToken cancellationToken = default)
+    {
+        Guid sessionUserId = GetRequiredSessionUserId();
+        await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, accessGroupId, cancellationToken);
+        return sessionUserId;
     }
 
     private async Task<Guid> PersistFileRegistrationAsync(

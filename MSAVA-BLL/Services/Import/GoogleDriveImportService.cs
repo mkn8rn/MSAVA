@@ -40,6 +40,8 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         string? fileId = ExtractDriveFileId(dto.FileUrl)
             ?? throw new ArgumentException("Could not extract Google Drive file id from the provided FileUrl.", nameof(dto.FileUrl));
 
+        await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
+
         string baseDownloadUrl = $"https://drive.google.com/uc?export=download&id={WebUtility.UrlEncode(fileId)}";
 
         var http = _httpClientFactory.CreateClient();

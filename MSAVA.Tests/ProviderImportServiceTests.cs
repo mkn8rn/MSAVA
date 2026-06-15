@@ -64,15 +64,16 @@ public class ProviderImportServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = new GoogleDriveImportService(
-                CreatePersistenceService(context, metadataStore),
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
                 new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
                 httpClientFactory,
                 NullLogger<GoogleDriveImportService>.Instance);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
-                AccessGroupId = Guid.NewGuid()
+                AccessGroupId = accessGroup.Id
             };
 
             Func<Task> act = () => service.ImportAsync(dto);
@@ -128,6 +129,43 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsMissingSessionBeforeCreatingHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User session not found.");
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task OneDriveImportAsync_UsesInjectedHttpClientFactory()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -142,15 +180,16 @@ public class ProviderImportServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = new OneDriveImportService(
-                CreatePersistenceService(context, metadataStore),
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
                 new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
                 httpClientFactory,
                 NullLogger<OneDriveImportService>.Instance);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "https://1drv.ms/u/s!abcDEF12345",
-                AccessGroupId = Guid.NewGuid()
+                AccessGroupId = accessGroup.Id
             };
 
             Func<Task> act = () => service.ImportAsync(dto);
@@ -242,6 +281,43 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task OneDriveImportAsync_RejectsMissingSessionBeforeCreatingHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User session not found.");
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GoogleDriveImportAsync_DeletesTempFileWhenFinalDownloadFails()
     {
         var responseIndex = 0;
@@ -261,15 +337,16 @@ public class ProviderImportServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = new GoogleDriveImportService(
-                CreatePersistenceService(context, metadataStore, logger),
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
                 NullLogger<GoogleDriveImportService>.Instance);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
-                AccessGroupId = Guid.NewGuid()
+                AccessGroupId = accessGroup.Id
             };
 
             Func<Task> act = () => service.ImportAsync(dto);
@@ -310,15 +387,16 @@ public class ProviderImportServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = new GoogleDriveImportService(
-                CreatePersistenceService(context, metadataStore, logger),
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
                 NullLogger<GoogleDriveImportService>.Instance);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
-                AccessGroupId = Guid.NewGuid()
+                AccessGroupId = accessGroup.Id
             };
 
             Func<Task> act = () => service.ImportAsync(dto);
@@ -356,15 +434,16 @@ public class ProviderImportServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = new OneDriveImportService(
-                CreatePersistenceService(context, metadataStore, logger),
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
                 NullLogger<OneDriveImportService>.Instance);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "https://1drv.ms/u/s!abcDEF12345",
-                AccessGroupId = Guid.NewGuid()
+                AccessGroupId = accessGroup.Id
             };
 
             Func<Task> act = () => service.ImportAsync(dto);
@@ -476,6 +555,44 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task YouTubeImportAsync_RejectsMissingSessionBeforeRequestingManifest()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var youTubeClient = new ThrowingYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = Guid.NewGuid(),
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User session not found.");
+            youTubeClient.ManifestCalls.Should().Be(0);
+            youTubeClient.CopyCalls.Should().Be(0);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task YouTubeImportAsync_DeletesTempFileWhenStreamCopyFails()
     {
         var metadataDirectory = CreateTempDirectory();
@@ -486,15 +603,16 @@ public class ProviderImportServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
             var service = new YouTubeImportService(
-                CreatePersistenceService(context, metadataStore, logger),
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 NullLogger<YouTubeImportService>.Instance,
                 youTubeClient);
             var dto = new FetchFileYouTubeDTO
             {
                 YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
-                AccessGroupId = Guid.NewGuid(),
+                AccessGroupId = accessGroup.Id,
                 DownloadVideo = true,
                 DownloadAudio = true
             };
@@ -622,6 +740,18 @@ public class ProviderImportServiceTests
             Roles = ["Whitelisted"],
             AccessGroups = []
         };
+    }
+
+    private static (UserDB User, AccessGroupDB AccessGroup) SeedUserWithAccessGroup(BaseDataContext context)
+    {
+        var user = CreateUser("provider-import-owner");
+        var accessGroup = CreateAccessGroup(user, "Provider Imports");
+
+        context.Users.Add(user);
+        context.AccessGroups.Add(accessGroup);
+        context.SaveChanges();
+
+        return (user, accessGroup);
     }
 
     private static UserDB CreateUser(string username)
@@ -752,12 +882,14 @@ public class ProviderImportServiceTests
     {
         private static readonly byte[] PartialContent = Encoding.UTF8.GetBytes("partial youtube content");
 
+        public int ManifestCalls { get; private set; }
         public int CopyCalls { get; private set; }
 
         public Task<YouTubeDownloadManifest> GetDownloadManifestAsync(
             string youtubeUrl,
             CancellationToken cancellationToken)
         {
+            ManifestCalls++;
             return Task.FromResult(new YouTubeDownloadManifest(
                 "Test YouTube Video",
                 [new YouTubeStreamInfo(new object(), "mp4", "720p", 720, 1_500)],

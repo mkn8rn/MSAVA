@@ -37,6 +37,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
         Uri fileUri = ParseFileUrl(dto.FileUrl);
+        await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
         var http = _httpClientFactory.CreateClient();
         var shareId = "u!" + Base64UrlEncode(fileUri.AbsoluteUri);

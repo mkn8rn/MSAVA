@@ -46,6 +46,8 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         if (!dto.DownloadVideo && !dto.DownloadAudio)
             throw new ArgumentException("At least one YouTube stream type must be selected.", nameof(dto));
 
+        await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
+
         var downloadManifest = await _youtubeClient.GetDownloadManifestAsync(dto.YouTubeUrl, cancellationToken);
         string fileName = string.IsNullOrWhiteSpace(downloadManifest.Title) ? "YouTube Video" : downloadManifest.Title;
         string fileExtension = "mp4";
