@@ -95,14 +95,22 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         // File exists but user has no access - create a new reference for them
-        var newReference = await CreateNewReferenceAsync(
-            request,
-            fileHash,
-            extension,
-            anyExistingReference,
-            sessionUserId,
-            currentUserAccess.AccessGroupIds,
-            cancellationToken);
+        SavedFileReferenceDB newReference;
+        try
+        {
+            newReference = await CreateNewReferenceAsync(
+                request,
+                fileHash,
+                extension,
+                anyExistingReference,
+                sessionUserId,
+                currentUserAccess.AccessGroupIds,
+                cancellationToken);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return HashCheckResult.Failed(hashHex, ex.Message);
+        }
 
         await _serviceLogger.WriteLogAsync(
             AccessLogActions.NewReferenceAddedToExistingFile,

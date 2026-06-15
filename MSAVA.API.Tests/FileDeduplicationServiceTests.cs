@@ -344,7 +344,7 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
-    public async Task CheckAndGetReferenceAsync_RejectsRequestedAccessGroupOutsideCurrentUserMembership()
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForRequestedAccessGroupOutsideCurrentUserMembership()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-unauthorized-group-{Guid.NewGuid()}"));
         var metadataDirectory = CreateTempDirectory();
@@ -382,10 +382,13 @@ public class FileDeduplicationServiceTests
                 PublicDownload = false
             };
 
-            Func<Task> act = () => service.CheckAndGetReferenceAsync(request);
+            var result = await service.CheckAndGetReferenceAsync(request);
 
-            await act.Should().ThrowAsync<UnauthorizedAccessException>()
-                .WithMessage("User cannot create a file reference in the requested access group.");
+            result.Error.Should().Be("User cannot create a file reference in the requested access group.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().Be(Convert.ToHexString(contentHash));
 
             metadataStore.GetByFileHash(contentHash, "txt")
                 .Should()
