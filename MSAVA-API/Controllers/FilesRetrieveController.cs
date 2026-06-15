@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_API.Attributes;
+using MSAVA_BLL.Services.Files;
 
 namespace MSAVA_API.Controllers;
 
@@ -63,9 +64,12 @@ public class FilesRetrieveController : ControllerBase
     }
 
     [HttpGet("meta/all")]
-    public async Task<ActionResult<List<SearchFileDataDTO>>> GetAllFileMetadata(CancellationToken cancellationToken)
+    public async Task<ActionResult<List<SearchFileDataDTO>>> GetAllFileMetadata(
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = FileQueryPagePolicy.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _queryService.GetAllFileMetadataAsync(cancellationToken);
+        var result = await _queryService.GetAllFileMetadataAsync(skip, take, cancellationToken);
         return Ok(result);
     }
 
@@ -75,9 +79,11 @@ public class FilesRetrieveController : ControllerBase
         [FromQuery] string? category,
         [FromQuery] string? name,
         [FromQuery] string? description,
-        CancellationToken cancellationToken)
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = FileQueryPagePolicy.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _queryService.GetFileGuidsByAllFieldsAsync(tag, category, name, description, cancellationToken);
+        var result = await _queryService.GetFileGuidsByAllFieldsAsync(tag, category, name, description, skip, take, cancellationToken);
         return Ok(result);
     }
 
@@ -87,9 +93,11 @@ public class FilesRetrieveController : ControllerBase
         [FromQuery] string? category,
         [FromQuery] string? name,
         [FromQuery] string? description,
-        CancellationToken cancellationToken)
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = FileQueryPagePolicy.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _queryService.GetFileDataByAllFieldsAsync(tag, category, name, description, cancellationToken);
+        var result = await _queryService.GetFileDataByAllFieldsAsync(tag, category, name, description, skip, take, cancellationToken);
         return Ok(result);
     }
 }

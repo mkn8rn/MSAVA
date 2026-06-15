@@ -21,20 +21,28 @@ public class FileQueryService : IFileQueryService
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
     }
 
-    public async Task<List<Guid>> GetAllFileGuidsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<Guid>> GetAllFileGuidsAsync(
+        int skip = 0,
+        int take = FileQueryPagePolicy.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
         var session = await GetActiveSessionAsync(cancellationToken);
+        var page = FileQueryPagePolicy.Normalize(skip, take);
 
-        return await GetVisibleFileDataQuery(session)
+        return await ApplyPage(GetVisibleFileDataQuery(session), page)
             .Select(f => f.FileReferenceId)
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(CancellationToken cancellationToken = default)
+    public async Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(
+        int skip = 0,
+        int take = FileQueryPagePolicy.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
         var session = await GetActiveSessionAsync(cancellationToken);
+        var page = FileQueryPagePolicy.Normalize(skip, take);
 
-        var dbList = await GetVisibleFileDataQuery(session)
+        var dbList = await ApplyPage(GetVisibleFileDataQuery(session), page)
             .Include(f => f.FileReference)
             .ToListAsync(cancellationToken);
 
@@ -46,15 +54,20 @@ public class FileQueryService : IFileQueryService
         string? category,
         string? name,
         string? description,
+        int skip = 0,
+        int take = FileQueryPagePolicy.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
         var session = await GetActiveSessionAsync(cancellationToken);
+        var page = FileQueryPagePolicy.Normalize(skip, take);
 
         var query = GetVisibleFileDataQuery(session);
 
         query = ApplySearchFilters(query, tag, category, name, description);
 
-        return await query.Select(f => f.FileReferenceId).ToListAsync(cancellationToken);
+        return await ApplyPage(query, page)
+            .Select(f => f.FileReferenceId)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<SearchFileDataDTO>> GetFileDataByAllFieldsAsync(
@@ -62,9 +75,12 @@ public class FileQueryService : IFileQueryService
         string? category,
         string? name,
         string? description,
+        int skip = 0,
+        int take = FileQueryPagePolicy.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
         var session = await GetActiveSessionAsync(cancellationToken);
+        var page = FileQueryPagePolicy.Normalize(skip, take);
 
         var query = GetVisibleFileDataQuery(session)
             .Include(f => f.FileReference)
@@ -72,7 +88,7 @@ public class FileQueryService : IFileQueryService
 
         query = ApplySearchFilters(query, tag, category, name, description);
 
-        var dbList = await query.ToListAsync(cancellationToken);
+        var dbList = await ApplyPage(query, page).ToListAsync(cancellationToken);
         return dbList.Select(MappingUtils.MapSearchFileDataDTO).ToList();
     }
 
@@ -146,6 +162,17 @@ public class FileQueryService : IFileQueryService
         }
 
         return query;
+    }
+
+    private static IQueryable<SavedFileDataDB> ApplyPage(
+        IQueryable<SavedFileDataDB> query,
+        FileQueryPage page)
+    {
+        return query
+            .OrderByDescending(fileData => fileData.SavedAt)
+            .ThenBy(fileData => fileData.Id)
+            .Skip(page.Skip)
+            .Take(page.Take);
     }
 
     internal static string BuildExactLikePattern(string value)

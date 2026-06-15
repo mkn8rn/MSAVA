@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Controllers;
+using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_Shared.Models;
 
@@ -100,11 +101,50 @@ public class FilesRetrieveControllerTests
         var controller = new FilesRetrieveController(new TestFileDownloadService(), queryService);
         using var cancellationTokenSource = new CancellationTokenSource();
 
-        var response = await controller.GetAllFileMetadata(cancellationTokenSource.Token);
+        var response = await controller.GetAllFileMetadata(cancellationToken: cancellationTokenSource.Token);
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeSameAs(queryService.AllMetadata);
+        queryService.AllMetadataSkip.Should().Be(0);
+        queryService.AllMetadataTake.Should().Be(FileQueryPagePolicy.DefaultPageSize);
         queryService.AllMetadataCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task GetAllFileMetadata_PassesPagingParameters()
+    {
+        var queryService = new TestFileQueryService();
+        var controller = new FilesRetrieveController(new TestFileDownloadService(), queryService);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        await controller.GetAllFileMetadata(
+            skip: 20,
+            take: 30,
+            cancellationToken: cancellationTokenSource.Token);
+
+        queryService.AllMetadataSkip.Should().Be(20);
+        queryService.AllMetadataTake.Should().Be(30);
+        queryService.AllMetadataCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task SearchFileGuidsByAllFields_PassesPagingParameters()
+    {
+        var queryService = new TestFileQueryService();
+        var controller = new FilesRetrieveController(new TestFileDownloadService(), queryService);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        await controller.SearchFileGuidsByAllFields(
+            tag: "tag",
+            category: "category",
+            name: "name",
+            description: "description",
+            skip: 3,
+            take: 4,
+            cancellationToken: cancellationTokenSource.Token);
+
+        queryService.GuidSearch.Should().Be(("tag", "category", "name", "description", 3, 4));
+        queryService.GuidSearchCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
     private sealed class TestFileDownloadService : IFileDownloadService
@@ -205,14 +245,22 @@ public class FilesRetrieveControllerTests
         ];
 
         public CancellationToken AllMetadataCancellationToken { get; private set; }
+        public int AllMetadataSkip { get; private set; }
+        public int AllMetadataTake { get; private set; }
+        public (string? Tag, string? Category, string? Name, string? Description, int Skip, int Take) GuidSearch { get; private set; }
+        public CancellationToken GuidSearchCancellationToken { get; private set; }
 
         public Task<List<Guid>> GetFileGuidsByAllFieldsAsync(
             string? tag,
             string? category,
             string? name,
             string? description,
+            int skip = 0,
+            int take = FileQueryPagePolicy.DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
+            GuidSearch = (tag, category, name, description, skip, take);
+            GuidSearchCancellationToken = cancellationToken;
             return Task.FromResult(new List<Guid>());
         }
 
@@ -221,18 +269,28 @@ public class FilesRetrieveControllerTests
             string? category,
             string? name,
             string? description,
+            int skip = 0,
+            int take = FileQueryPagePolicy.DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new List<SearchFileDataDTO>());
         }
 
-        public Task<List<Guid>> GetAllFileGuidsAsync(CancellationToken cancellationToken = default)
+        public Task<List<Guid>> GetAllFileGuidsAsync(
+            int skip = 0,
+            int take = FileQueryPagePolicy.DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new List<Guid>());
         }
 
-        public Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(CancellationToken cancellationToken = default)
+        public Task<List<SearchFileDataDTO>> GetAllFileMetadataAsync(
+            int skip = 0,
+            int take = FileQueryPagePolicy.DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
+            AllMetadataSkip = skip;
+            AllMetadataTake = take;
             AllMetadataCancellationToken = cancellationToken;
             return Task.FromResult(AllMetadata);
         }

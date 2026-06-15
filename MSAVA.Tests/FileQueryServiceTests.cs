@@ -88,6 +88,105 @@ public class FileQueryServiceTests
     }
 
     [Test]
+    public async Task GetAllFileMetadataAsync_DefaultPageCapsResultsAndOrdersNewestFirst()
+    {
+        using var context = CreateContext();
+        var accessGroupId = Guid.NewGuid();
+        var start = DateTime.UtcNow.AddHours(-3);
+        var files = Enumerable.Range(0, FileQueryPagePolicy.MaximumPageSize + 5)
+            .Select(index => CreateFileData(
+                $"file-{index:D3}",
+                accessGroupId,
+                publicViewing: false,
+                savedAt: start.AddMinutes(index)))
+            .ToList();
+        context.FileRefs.AddRange(files.Select(file => file.FileReference!));
+        context.FileData.AddRange(files);
+        await context.SaveChangesAsync();
+
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [accessGroupId],
+            IsAdmin = false,
+            IsWhitelisted = true
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+
+        var metadata = await service.GetAllFileMetadataAsync();
+
+        metadata.Should().HaveCount(FileQueryPagePolicy.MaximumPageSize);
+        metadata.Select(file => file.Name)
+            .Should()
+            .Equal(files.OrderByDescending(file => file.SavedAt)
+                .ThenBy(file => file.Id)
+                .Take(FileQueryPagePolicy.MaximumPageSize)
+                .Select(file => file.Name));
+    }
+
+    [Test]
+    public async Task GetAllFileGuidsAsync_AppliesExplicitPage()
+    {
+        using var context = CreateContext();
+        var accessGroupId = Guid.NewGuid();
+        var start = DateTime.UtcNow.AddHours(-1);
+        var files = Enumerable.Range(0, 5)
+            .Select(index => CreateFileData(
+                $"match-{index}",
+                accessGroupId,
+                publicViewing: false,
+                savedAt: start.AddMinutes(index)))
+            .ToList();
+        context.FileRefs.AddRange(files.Select(file => file.FileReference!));
+        context.FileData.AddRange(files);
+        await context.SaveChangesAsync();
+
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [accessGroupId],
+            IsAdmin = false,
+            IsWhitelisted = true
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+
+        var ids = await service.GetAllFileGuidsAsync(skip: 1, take: 2);
+
+        ids
+            .Should()
+            .Equal(files.OrderByDescending(file => file.SavedAt)
+                .ThenBy(file => file.Id)
+                .Skip(1)
+                .Take(2)
+                .Select(file => file.FileReferenceId));
+    }
+
+    [Test]
+    public async Task GetAllFileMetadataAsync_RejectsPageSizeAboveMaximum()
+    {
+        using var context = CreateContext();
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [],
+            IsAdmin = false,
+            IsWhitelisted = true
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+
+        Func<Task> act = () => service.GetAllFileMetadataAsync(take: FileQueryPagePolicy.MaximumPageSize + 1);
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
+            .WithMessage($"File query take must be between 1 and {FileQueryPagePolicy.MaximumPageSize}.*");
+    }
+
+    [Test]
     public async Task GetFileGuidsByAllFieldsAsync_ReturnsReferenceIdsForVisibleFiles()
     {
         using var context = CreateContext();
@@ -199,7 +298,11 @@ public class FileQueryServiceTests
             .WithMessage("Banned users cannot query files.");
     }
 
-    private static SavedFileDataDB CreateFileData(string name, Guid accessGroupId, bool publicViewing)
+    private static SavedFileDataDB CreateFileData(
+        string name,
+        Guid accessGroupId,
+        bool publicViewing,
+        DateTime? savedAt = null)
     {
         var reference = new SavedFileReferenceDB
         {
@@ -226,7 +329,7 @@ public class FileQueryServiceTests
             Metadata = JsonDocument.Parse("{}"),
             PublicViewing = publicViewing,
             DownloadCount = 0,
-            SavedAt = DateTime.UtcNow,
+            SavedAt = savedAt ?? DateTime.UtcNow,
             OriginalCreator = Guid.NewGuid(),
             LastModifiedAt = DateTime.UtcNow,
             LastModifiedById = Guid.NewGuid()
