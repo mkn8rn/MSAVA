@@ -21,6 +21,24 @@ public class BaseDataContext : DbContext
             .HasForeignKey<SavedFileDataDB>(fileData => fileData.FileReferenceId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<SavedFileReferenceDB>()
+            .HasOne(fileReference => fileReference.AccessGroup)
+            .WithMany()
+            .HasForeignKey(fileReference => fileReference.AccessGroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SavedFileDataDB>()
+            .HasOne(fileData => fileData.Creator)
+            .WithMany()
+            .HasForeignKey(fileData => fileData.OriginalCreator)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SavedFileDataDB>()
+            .HasOne(fileData => fileData.LastModifiedBy)
+            .WithMany()
+            .HasForeignKey(fileData => fileData.LastModifiedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<AccessGroupDB>()
             .HasOne(ag => ag.Owner)
             .WithMany()

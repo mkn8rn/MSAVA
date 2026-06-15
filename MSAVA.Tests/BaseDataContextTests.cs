@@ -79,6 +79,34 @@ public class BaseDataContextTests
     }
 
     [Test]
+    public void OnModelCreatingRestrictsFileAccessAndOwnershipDeletes()
+    {
+        using var context = CreateContext();
+
+        var accessGroupForeignKey = FindForeignKey(
+            context.Model,
+            typeof(SavedFileReferenceDB),
+            nameof(SavedFileReferenceDB.AccessGroupId));
+        var creatorForeignKey = FindForeignKey(
+            context.Model,
+            typeof(SavedFileDataDB),
+            nameof(SavedFileDataDB.OriginalCreator));
+        var lastModifiedByForeignKey = FindForeignKey(
+            context.Model,
+            typeof(SavedFileDataDB),
+            nameof(SavedFileDataDB.LastModifiedById));
+
+        accessGroupForeignKey.PrincipalEntityType.ClrType.Should().Be(typeof(AccessGroupDB));
+        accessGroupForeignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+
+        creatorForeignKey.PrincipalEntityType.ClrType.Should().Be(typeof(UserDB));
+        creatorForeignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+
+        lastModifiedByForeignKey.PrincipalEntityType.ClrType.Should().Be(typeof(UserDB));
+        lastModifiedByForeignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+    }
+
+    [Test]
     public void OnModelCreatingEnforcesUniqueUsernames()
     {
         using var context = CreateContext();
