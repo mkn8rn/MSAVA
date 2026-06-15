@@ -63,6 +63,22 @@ public class BaseDataContextTests
             .Be(DeleteBehavior.Restrict);
     }
 
+    [Test]
+    public void OnModelCreatingEnforcesUniqueUsernames()
+    {
+        using var context = CreateContext();
+
+        var usernameIndex = context.Model
+            .FindEntityType(typeof(UserDB))
+            ?.GetIndexes()
+            .SingleOrDefault(index =>
+                index.Properties.Select(property => property.Name)
+                    .SequenceEqual([nameof(UserDB.Username)]));
+
+        usernameIndex.Should().NotBeNull();
+        usernameIndex!.IsUnique.Should().BeTrue();
+    }
+
     private static IForeignKey FindForeignKey(IModel model, Type entityType, string propertyName)
     {
         var entity = model.FindEntityType(entityType)

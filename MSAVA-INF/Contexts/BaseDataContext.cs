@@ -11,6 +11,10 @@ public class BaseDataContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<UserDB>()
+            .HasIndex(u => u.Username)
+            .IsUnique();
+
         modelBuilder.Entity<AccessGroupDB>()
             .HasOne(ag => ag.Owner)
             .WithMany()
