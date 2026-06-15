@@ -15,6 +15,9 @@ public static class PasswordUtils
 
     public static byte[] HashPassword(string password, byte[] salt)
     {
+        ArgumentNullException.ThrowIfNull(password);
+        EnsureExpectedSalt(salt);
+
         return Rfc2898DeriveBytes.Pbkdf2(
             password,
             salt,
@@ -25,7 +28,25 @@ public static class PasswordUtils
 
     public static bool VerifyPassword(string password, byte[] storedHash, byte[] storedSalt)
     {
+        ArgumentNullException.ThrowIfNull(password);
+
+        if (!HasExpectedLength(storedHash, HashByteSize) || !HasExpectedLength(storedSalt, SaltSize))
+            return false;
+
         var hash = HashPassword(password, storedSalt);
         return CryptographicOperations.FixedTimeEquals(hash, storedHash);
+    }
+
+    private static void EnsureExpectedSalt(byte[] salt)
+    {
+        ArgumentNullException.ThrowIfNull(salt);
+
+        if (salt.Length != SaltSize)
+            throw new ArgumentException($"Password salt must be {SaltSize} bytes.", nameof(salt));
+    }
+
+    private static bool HasExpectedLength(byte[]? bytes, int expectedLength)
+    {
+        return bytes?.Length == expectedLength;
     }
 }
