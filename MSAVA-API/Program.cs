@@ -99,7 +99,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Register main database context
-string baseDbConnectionString = $"Host={env.Values.PostgresBaseDbHost};Port={env.Values.PostgresBaseDbPort};Database={env.Values.PostgresBaseDbDbName};Username={env.Values.PostgresBaseDbUser};Password={env.Values.PostgresBaseDbPassword};Ssl Mode={env.Values.PostgresBaseDbSslMode}";
+string baseDbConnectionString = PostgresConnectionStringFactory.CreateBaseDbConnectionString(env.Values);
 builder.Services.AddDbContext<BaseDataContext>(options =>
     options.UseNpgsql(baseDbConnectionString));
 
