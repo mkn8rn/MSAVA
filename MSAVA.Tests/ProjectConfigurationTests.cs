@@ -20,6 +20,21 @@ public class ProjectConfigurationTests
         dotenvCopyItems.Should().BeEmpty("dotenv files should not be copied into bin directories");
     }
 
+    [Test]
+    public void SharedModels_DoNotExposeBearerTokenFields()
+    {
+        string sharedModelsDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-Shared", "Models");
+
+        var filesWithBearerTokenFields = Directory
+            .EnumerateFiles(sharedModelsDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains("BearerToken", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        filesWithBearerTokenFields.Should().BeEmpty(
+            "shared API contracts should not carry provider bearer tokens or other credential-shaped fields");
+    }
+
     private static bool IsDotEnvItem(string? itemPath)
     {
         return string.Equals(itemPath, ".env", StringComparison.OrdinalIgnoreCase)
