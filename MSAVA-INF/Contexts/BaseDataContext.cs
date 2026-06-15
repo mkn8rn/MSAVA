@@ -15,6 +15,12 @@ public class BaseDataContext : DbContext
             .HasIndex(u => u.Username)
             .IsUnique();
 
+        modelBuilder.Entity<SavedFileDataDB>()
+            .HasOne(fileData => fileData.FileReference)
+            .WithOne()
+            .HasForeignKey<SavedFileDataDB>(fileData => fileData.FileReferenceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<AccessGroupDB>()
             .HasOne(ag => ag.Owner)
             .WithMany()

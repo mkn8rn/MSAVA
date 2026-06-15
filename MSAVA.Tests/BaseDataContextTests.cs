@@ -64,6 +64,21 @@ public class BaseDataContextTests
     }
 
     [Test]
+    public void OnModelCreatingKeepsFileDataOneToOneWithReference()
+    {
+        using var context = CreateContext();
+
+        var fileReferenceForeignKey = FindForeignKey(
+            context.Model,
+            typeof(SavedFileDataDB),
+            nameof(SavedFileDataDB.FileReferenceId));
+
+        fileReferenceForeignKey.PrincipalEntityType.ClrType.Should().Be(typeof(SavedFileReferenceDB));
+        fileReferenceForeignKey.IsUnique.Should().BeTrue();
+        fileReferenceForeignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
+    }
+
+    [Test]
     public void OnModelCreatingEnforcesUniqueUsernames()
     {
         using var context = CreateContext();

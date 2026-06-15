@@ -306,8 +306,8 @@ public class FilePersistenceService
 
     private void DetachPendingFileEntities(SavedFileReferenceDB fileReference, SavedFileDataDB? fileData)
     {
-        DetachIfTracked(fileReference);
         DetachIfTracked(fileData);
+        DetachIfTracked(fileReference);
     }
 
     private void DetachIfTracked(object? entity)
