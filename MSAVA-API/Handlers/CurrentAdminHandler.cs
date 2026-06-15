@@ -29,7 +29,12 @@ public class CurrentAdminHandler : AuthorizationHandler<CurrentAdminRequirement>
         {
             bool userIsCurrentAdmin = await _context.Users
                 .AsNoTracking()
-                .AnyAsync(user => user.Id == userId.Value && user.IsAdmin && !user.IsBanned, cancellationToken);
+                .AnyAsync(
+                    user => user.Id == userId.Value &&
+                        user.IsAdmin &&
+                        !user.IsBanned &&
+                        user.IsWhitelisted,
+                    cancellationToken);
 
             if (userIsCurrentAdmin)
                 context.Succeed(requirement);

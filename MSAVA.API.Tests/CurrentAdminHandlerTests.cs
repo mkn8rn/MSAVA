@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Handlers;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Tests;
 
@@ -53,6 +53,22 @@ public class CurrentAdminHandlerTests
         await context.SaveChangesAsync();
 
         var authorizationContext = CreateAuthorizationContext(user.Id);
+        var handler = new CurrentAdminHandler(context, NullLogger<CurrentAdminHandler>.Instance);
+
+        await handler.HandleAsync(authorizationContext);
+
+        authorizationContext.HasSucceeded.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task HandleAsync_DoesNotSucceedWhenDatabaseAdminIsNotWhitelisted()
+    {
+        using var context = CreateContext();
+        var user = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var authorizationContext = CreateAuthorizationContext(user.Id, includeStaleAdminRole: true);
         var handler = new CurrentAdminHandler(context, NullLogger<CurrentAdminHandler>.Instance);
 
         await handler.HandleAsync(authorizationContext);
@@ -113,11 +129,11 @@ public class CurrentAdminHandlerTests
     {
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, userId.ToString())
+            new(SessionClaimNames.Subject, userId.ToString())
         };
 
         if (includeStaleAdminRole)
-            claims.Add(new Claim(ClaimTypes.Role, "Admin"));
+            claims.Add(new Claim(ClaimTypes.Role, SessionRoles.Admin));
 
         var requirement = new CurrentAdminRequirement();
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
@@ -142,7 +158,7 @@ public class CurrentAdminHandlerTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(bool isAdmin, bool isBanned)
+    private static UserDB CreateUser(bool isAdmin, bool isBanned, bool isWhitelisted = true)
     {
         return new UserDB
         {
@@ -152,7 +168,7 @@ public class CurrentAdminHandlerTests
             PasswordSalt = [2],
             IsAdmin = isAdmin,
             IsBanned = isBanned,
-            IsWhitelisted = true,
+            IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
     }
