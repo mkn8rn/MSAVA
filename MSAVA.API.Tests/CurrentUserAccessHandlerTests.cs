@@ -10,18 +10,18 @@ using MSAVA_INF.Models;
 
 namespace MSAVA_API.Tests;
 
-public class NotBannedHandlerTests
+public class CurrentUserAccessHandlerTests
 {
     [Test]
-    public async Task HandleAsync_SucceedsWhenDatabaseUserIsNotBanned()
+    public async Task HandleAsync_SucceedsWhenDatabaseUserIsWhitelistedAndNotBanned()
     {
         using var context = CreateContext();
-        var user = CreateUser(isBanned: false);
+        var user = CreateUser(isBanned: false, isWhitelisted: true);
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
         var authorizationContext = CreateAuthorizationContext(user.Id);
-        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+        var handler = new CurrentUserAccessHandler(context, NullLogger<CurrentUserAccessHandler>.Instance);
 
         await handler.HandleAsync(authorizationContext);
 
@@ -32,12 +32,28 @@ public class NotBannedHandlerTests
     public async Task HandleAsync_DoesNotSucceedWhenDatabaseUserIsBannedEvenIfTokenIsNotBanned()
     {
         using var context = CreateContext();
-        var user = CreateUser(isBanned: true);
+        var user = CreateUser(isBanned: true, isWhitelisted: true);
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
         var authorizationContext = CreateAuthorizationContext(user.Id);
-        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+        var handler = new CurrentUserAccessHandler(context, NullLogger<CurrentUserAccessHandler>.Instance);
+
+        await handler.HandleAsync(authorizationContext);
+
+        authorizationContext.HasSucceeded.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task HandleAsync_DoesNotSucceedWhenDatabaseUserIsNotWhitelistedEvenIfTokenIsWhitelisted()
+    {
+        using var context = CreateContext();
+        var user = CreateUser(isBanned: false, isWhitelisted: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var authorizationContext = CreateAuthorizationContext(user.Id, includeStaleWhitelistedRole: true);
+        var handler = new CurrentUserAccessHandler(context, NullLogger<CurrentUserAccessHandler>.Instance);
 
         await handler.HandleAsync(authorizationContext);
 
@@ -49,7 +65,7 @@ public class NotBannedHandlerTests
     {
         using var context = CreateContext();
         var authorizationContext = CreateAuthorizationContext(Guid.NewGuid());
-        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+        var handler = new CurrentUserAccessHandler(context, NullLogger<CurrentUserAccessHandler>.Instance);
 
         await handler.HandleAsync(authorizationContext);
 
@@ -62,8 +78,8 @@ public class NotBannedHandlerTests
         using var context = CreateContext();
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
-        var authorizationContext = CreateAuthorizationContext(Guid.NewGuid(), cancellation.Token);
-        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+        var authorizationContext = CreateAuthorizationContext(Guid.NewGuid(), requestAborted: cancellation.Token);
+        var handler = new CurrentUserAccessHandler(context, NullLogger<CurrentUserAccessHandler>.Instance);
 
         var act = async () => await handler.HandleAsync(authorizationContext);
 
@@ -72,26 +88,37 @@ public class NotBannedHandlerTests
     }
 
     [Test]
-    public async Task HandleAsync_FailsAuthorizationWhenBanLookupFails()
+    public async Task HandleAsync_FailsAuthorizationWhenAccessLookupFails()
     {
         using var context = CreateContext();
         context.Dispose();
         var authorizationContext = CreateAuthorizationContext(Guid.NewGuid());
-        var handler = new NotBannedHandler(context, NullLogger<NotBannedHandler>.Instance);
+        var handler = new CurrentUserAccessHandler(context, NullLogger<CurrentUserAccessHandler>.Instance);
 
         await handler.HandleAsync(authorizationContext);
 
         authorizationContext.HasSucceeded.Should().BeFalse();
         authorizationContext.HasFailed.Should().BeTrue();
         authorizationContext.FailureReasons.Should().ContainSingle(reason =>
-            reason.Message == "Failed to validate ban status.");
+            reason.Message == "Failed to validate current user access.");
     }
 
-    private static AuthorizationHandlerContext CreateAuthorizationContext(Guid userId, CancellationToken requestAborted = default)
+    private static AuthorizationHandlerContext CreateAuthorizationContext(
+        Guid userId,
+        bool includeStaleWhitelistedRole = false,
+        CancellationToken requestAborted = default)
     {
-        var requirement = new NotBannedRequirement();
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, userId.ToString())
+        };
+
+        if (includeStaleWhitelistedRole)
+            claims.Add(new Claim(ClaimTypes.Role, "Whitelisted"));
+
+        var requirement = new CurrentUserAccessRequirement();
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(JwtRegisteredClaimNames.Sub, userId.ToString())],
+            claims,
             authenticationType: "Test",
             nameType: ClaimTypes.Name,
             roleType: ClaimTypes.Role));
@@ -112,7 +139,7 @@ public class NotBannedHandlerTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(bool isBanned)
+    private static UserDB CreateUser(bool isBanned, bool isWhitelisted)
     {
         return new UserDB
         {
@@ -122,7 +149,7 @@ public class NotBannedHandlerTests
             PasswordSalt = [2],
             IsAdmin = false,
             IsBanned = isBanned,
-            IsWhitelisted = true,
+            IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
     }

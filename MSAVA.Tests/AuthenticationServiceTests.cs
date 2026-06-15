@@ -72,6 +72,27 @@ public class AuthenticationServiceTests
         context.Jwts.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task LoginAsync_RejectsNonWhitelistedUserBeforeJwtIsPersisted()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("pending-user", "correct-password", isBanned: false, isWhitelisted: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = user.Username,
+            Password = "correct-password"
+        });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before logging in.");
+        context.Jwts.Should().BeEmpty();
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task LoginAsync_RejectsMissingUsername(string username)
@@ -288,6 +309,7 @@ public class AuthenticationServiceTests
         });
 
         context.Users.Should().ContainSingle(user => user.Username == "new-user");
+        context.Users.Single(user => user.Username == "new-user").IsWhitelisted.Should().BeTrue();
     }
 
     [Test]
@@ -338,7 +360,11 @@ public class AuthenticationServiceTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(string username, string password, bool isBanned)
+    private static UserDB CreateUser(
+        string username,
+        string password,
+        bool isBanned,
+        bool isWhitelisted = true)
     {
         var salt = PasswordUtils.GenerateSalt();
         return new UserDB
@@ -349,7 +375,7 @@ public class AuthenticationServiceTests
             PasswordSalt = salt,
             IsAdmin = false,
             IsBanned = isBanned,
-            IsWhitelisted = true,
+            IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
     }

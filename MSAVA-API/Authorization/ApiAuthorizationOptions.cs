@@ -9,7 +9,7 @@ public static class ApiAuthorizationOptions
     {
         var authenticatedUserPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .AddRequirements(new NotBannedRequirement())
+            .AddRequirements(new CurrentUserAccessRequirement())
             .Build();
 
         options.DefaultPolicy = authenticatedUserPolicy;
@@ -18,7 +18,7 @@ public static class ApiAuthorizationOptions
         options.AddPolicy(AuthorizationPolicies.CurrentAdmin, policy =>
         {
             policy.RequireAuthenticatedUser();
-            policy.AddRequirements(new NotBannedRequirement(), new CurrentAdminRequirement());
+            policy.AddRequirements(new CurrentUserAccessRequirement(), new CurrentAdminRequirement());
         });
     }
 }

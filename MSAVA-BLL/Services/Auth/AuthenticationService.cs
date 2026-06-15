@@ -54,6 +54,9 @@ public class AuthenticationService : IAuthenticationService
         if (user.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot log in.");
 
+        if (!user.IsWhitelisted)
+            throw new UnauthorizedAccessException("Users must be whitelisted before logging in.");
+
         JwtDB token = await GenerateJwtTokenAsync(user, cancellationToken);
         await _serviceLogger.WriteLogAsync(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
 
@@ -146,7 +149,7 @@ public class AuthenticationService : IAuthenticationService
             PasswordSalt = salt,
             IsAdmin = false,
             IsBanned = false,
-            IsWhitelisted = false,
+            IsWhitelisted = true,
             InviteCodeId = request.InviteCode,
         };
 

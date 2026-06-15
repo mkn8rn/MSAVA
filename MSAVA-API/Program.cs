@@ -130,7 +130,7 @@ builder.Services.AddScoped<FilePersistenceService>();
 builder.Services.AddScoped<ServiceLogger>();
 
 // Register authorization handlers
-builder.Services.AddScoped<IAuthorizationHandler, NotBannedHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, CurrentUserAccessHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, CurrentAdminHandler>();
 
 // Register managers

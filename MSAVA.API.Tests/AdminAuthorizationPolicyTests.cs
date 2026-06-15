@@ -11,7 +11,7 @@ namespace MSAVA_API.Tests;
 public class AdminAuthorizationPolicyTests
 {
     [Test]
-    public void ApiAuthorization_UsesAuthenticatedNotBannedFallbackPolicy()
+    public void ApiAuthorization_UsesAuthenticatedCurrentUserAccessFallbackPolicy()
     {
         var options = new AuthorizationOptions();
 
@@ -19,8 +19,8 @@ public class AdminAuthorizationPolicyTests
 
         options.DefaultPolicy.Should().NotBeNull();
         options.FallbackPolicy.Should().NotBeNull();
-        AssertRequiresAuthenticatedNotBannedUser(options.DefaultPolicy);
-        AssertRequiresAuthenticatedNotBannedUser(options.FallbackPolicy!);
+        AssertRequiresAuthenticatedCurrentUserAccess(options.DefaultPolicy);
+        AssertRequiresAuthenticatedCurrentUserAccess(options.FallbackPolicy!);
     }
 
     [Test]
@@ -33,7 +33,7 @@ public class AdminAuthorizationPolicyTests
         var policy = options.GetPolicy(AuthorizationPolicies.CurrentAdmin);
         policy.Should().NotBeNull();
         policy!.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().Should().ContainSingle();
-        policy.Requirements.OfType<NotBannedRequirement>().Should().ContainSingle();
+        policy.Requirements.OfType<CurrentUserAccessRequirement>().Should().ContainSingle();
         policy.Requirements.OfType<CurrentAdminRequirement>().Should().ContainSingle();
     }
 
@@ -80,9 +80,9 @@ public class AdminAuthorizationPolicyTests
             .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentAdmin);
     }
 
-    private static void AssertRequiresAuthenticatedNotBannedUser(AuthorizationPolicy policy)
+    private static void AssertRequiresAuthenticatedCurrentUserAccess(AuthorizationPolicy policy)
     {
         policy.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().Should().ContainSingle();
-        policy.Requirements.OfType<NotBannedRequirement>().Should().ContainSingle();
+        policy.Requirements.OfType<CurrentUserAccessRequirement>().Should().ContainSingle();
     }
 }
