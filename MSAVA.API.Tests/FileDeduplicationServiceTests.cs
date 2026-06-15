@@ -410,6 +410,131 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureWhenDefaultAccessGroupDoesNotExist()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-no-default-group-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.Add(existingGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                FileName = "default-group-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("User has no access groups.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().Be(Convert.ToHexString(contentHash));
+
+            metadataStore.GetByFileHash(contentHash, "txt")
+                .Should()
+                .ContainSingle(record => record.RefId == existingReference.Id);
+            context.FileRefs.Count().Should().Be(1);
+            context.FileData.Count().Should().Be(1);
+            context.ChangeTracker.Entries<SavedFileReferenceDB>()
+                .Should()
+                .NotContain(entry => entry.State == EntityState.Added);
+            context.ChangeTracker.Entries<SavedFileDataDB>()
+                .Should()
+                .NotContain(entry => entry.State == EntityState.Added);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForEmptyRequestedAccessGroup()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-empty-group-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var sessionGroup = CreateAccessGroup(sessionUser, "session");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(sessionGroup, existingGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = Guid.Empty,
+                FileName = "empty-group-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("Access group id must be provided.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().Be(Convert.ToHexString(contentHash));
+
+            metadataStore.GetByFileHash(contentHash, "txt")
+                .Should()
+                .ContainSingle(record => record.RefId == existingReference.Id);
+            metadataStore.GetByAccessGroup(sessionGroup.Id).Should().BeEmpty();
+            context.FileRefs.Count().Should().Be(1);
+            context.FileData.Count().Should().Be(1);
+            context.ChangeTracker.Entries<SavedFileReferenceDB>()
+                .Should()
+                .NotContain(entry => entry.State == EntityState.Added);
+            context.ChangeTracker.Entries<SavedFileDataDB>()
+                .Should()
+                .NotContain(entry => entry.State == EntityState.Added);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_RemovesNewMetadataAndPendingEntitiesWhenDatabaseSaveFails()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-rollback-{Guid.NewGuid()}"));

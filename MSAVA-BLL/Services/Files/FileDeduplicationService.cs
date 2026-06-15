@@ -94,23 +94,26 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.NotFound(hashHex);
         }
 
+        var accessGroupResolution = await ResolveReferenceAccessGroupAsync(
+            request.AccessGroupId,
+            sessionUserId,
+            currentUserAccess.AccessGroupIds,
+            cancellationToken);
+
+        if (!accessGroupResolution.Succeeded)
+        {
+            return HashCheckResult.Failed(hashHex, accessGroupResolution.Error);
+        }
+
         // File exists but user has no access - create a new reference for them
-        SavedFileReferenceDB newReference;
-        try
-        {
-            newReference = await CreateNewReferenceAsync(
-                request,
-                fileHash,
-                extension,
-                anyExistingReference,
-                sessionUserId,
-                currentUserAccess.AccessGroupIds,
-                cancellationToken);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return HashCheckResult.Failed(hashHex, ex.Message);
-        }
+        var newReference = await CreateNewReferenceAsync(
+            request,
+            fileHash,
+            extension,
+            anyExistingReference,
+            sessionUserId,
+            accessGroupResolution.AccessGroupId,
+            cancellationToken);
 
         await _serviceLogger.WriteLogAsync(
             AccessLogActions.NewReferenceAddedToExistingFile,
@@ -252,19 +255,13 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         string extension,
         SavedFileReferenceDB existingReference,
         Guid userId,
-        List<Guid> userAccessGroups,
+        Guid accessGroupId,
         CancellationToken cancellationToken)
     {
         // Get existing file data for metadata
         var existingData = await _context.FileData
             .Where(fd => fd.FileReferenceId == existingReference.Id)
             .FirstOrDefaultAsync(cancellationToken);
-
-        var accessGroupId = await ResolveReferenceAccessGroupAsync(
-            request.AccessGroupId,
-            userId,
-            userAccessGroups,
-            cancellationToken);
 
         // Create new reference
         var newReference = new SavedFileReferenceDB
@@ -328,22 +325,27 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         return newReference;
     }
 
-    private async Task<Guid> ResolveReferenceAccessGroupAsync(
+    private async Task<ReferenceAccessGroupResolution> ResolveReferenceAccessGroupAsync(
         Guid? requestedAccessGroupId,
         Guid userId,
         List<Guid> userAccessGroups,
         CancellationToken cancellationToken)
     {
         if (requestedAccessGroupId is null)
-            return await GetDefaultAccessGroupAsync(userId, cancellationToken);
+        {
+            var defaultAccessGroupId = await GetDefaultAccessGroupAsync(userId, cancellationToken);
+            return defaultAccessGroupId is null
+                ? ReferenceAccessGroupResolution.Failed("User has no access groups.")
+                : ReferenceAccessGroupResolution.Success(defaultAccessGroupId.Value);
+        }
 
         if (requestedAccessGroupId == Guid.Empty)
-            throw new ArgumentException("Access group id must be provided.", nameof(requestedAccessGroupId));
+            return ReferenceAccessGroupResolution.Failed("Access group id must be provided.");
 
         if (userAccessGroups.Contains(requestedAccessGroupId.Value))
-            return requestedAccessGroupId.Value;
+            return ReferenceAccessGroupResolution.Success(requestedAccessGroupId.Value);
 
-        throw new UnauthorizedAccessException("User cannot create a file reference in the requested access group.");
+        return ReferenceAccessGroupResolution.Failed("User cannot create a file reference in the requested access group.");
     }
 
     private void RollbackNewReference(
@@ -378,7 +380,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             entry.State = EntityState.Detached;
     }
 
-    private async Task<Guid> GetDefaultAccessGroupAsync(Guid userId, CancellationToken cancellationToken)
+    private async Task<Guid?> GetDefaultAccessGroupAsync(Guid userId, CancellationToken cancellationToken)
     {
         // Get user's first owned access group, or any they're a member of
         var accessGroup = await _context.AccessGroups
@@ -396,7 +398,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             .FirstOrDefaultAsync(cancellationToken);
 
         if (accessGroup == Guid.Empty)
-            throw new InvalidOperationException("User has no access groups.");
+            return null;
 
         return accessGroup;
     }
@@ -418,6 +420,18 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     }
 
     private sealed record CurrentUserFileAccess(List<Guid> AccessGroupIds, bool IsAdmin);
+
+    private sealed record ReferenceAccessGroupResolution(
+        bool Succeeded,
+        Guid AccessGroupId,
+        string Error)
+    {
+        public static ReferenceAccessGroupResolution Success(Guid accessGroupId) =>
+            new(true, accessGroupId, string.Empty);
+
+        public static ReferenceAccessGroupResolution Failed(string error) =>
+            new(false, Guid.Empty, error);
+    }
 
     [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.Compiled)]
     private static partial Regex Sha256HexRegex();
