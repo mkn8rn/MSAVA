@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
 using MSAVA_App.Services.Files;
 
@@ -145,6 +146,7 @@ public class FileUploadClientServiceTests
     {
         var api = new ApiService(
             new StaticHttpClientFactory(new HttpClient(new StaticHttpMessageHandler(response))),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
             NullLogger<ApiService>.Instance);
 
         return new FileUploadClientService(api, NullLogger<FileUploadClientService>.Instance);

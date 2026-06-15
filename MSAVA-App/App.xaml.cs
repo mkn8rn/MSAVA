@@ -83,10 +83,11 @@ public partial class App : Application
                 services.AddTransient<DelegatingHandler, DebugHttpHandler>();
 #endif
                     // Named HttpClient for the API (ASP.NET Core default dev ports)
+                    var apiClientOptions = LoadApiClientOptions(context.Configuration);
+                    services.AddSingleton(apiClientOptions);
                     services.AddHttpClient("MSAVA-Api", client =>
                     {
-                        // MSAVA-API runs on HTTPS port 7029 in development
-                        client.BaseAddress = new Uri("https://localhost:7029/");
+                        client.BaseAddress = apiClientOptions.RequireBaseAddress();
                     });
                 })
                 .UseAuthentication(auth =>
@@ -134,6 +135,15 @@ public partial class App : Application
 
         Host = await builder.NavigateAsync<Shell>
             (initialNavigate: (services, navigator) => Task.CompletedTask);
+    }
+
+    private static ApiClientOptions LoadApiClientOptions(
+        Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        return new ApiClientOptions
+        {
+            Url = configuration[ApiClientOptions.UrlKey]
+        };
     }
 
     private static void RegisterRoutes(IViewRegistry views, IRouteRegistry routes)

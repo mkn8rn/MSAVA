@@ -8,24 +8,28 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using MSAVA_App.Models;
 
 namespace MSAVA_App.Services.Api;
 public class ApiService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ApiService> _logger;
+    private readonly Uri _baseAddress;
 
     // Cached access token for automatic auth header injection
     private string? _accessToken;
 
-    public ApiService(IHttpClientFactory httpClientFactory, ILogger<ApiService> logger)
+    public ApiService(
+        IHttpClientFactory httpClientFactory,
+        ApiClientOptions apiClientOptions,
+        ILogger<ApiService> logger)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        ArgumentNullException.ThrowIfNull(apiClientOptions);
+        _baseAddress = apiClientOptions.RequireBaseAddress();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
-
-    // Centralized API constants
-    public const string BaseAddress = "https://localhost:7029/"; // Dev API base URL
 
     public static class Routes
     {
@@ -48,10 +52,10 @@ public class ApiService
 
     public HttpClient CreateClient()
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient("MSAVA-Api");
         if (client.BaseAddress == null)
         {
-            client.BaseAddress = new Uri(BaseAddress);
+            client.BaseAddress = _baseAddress;
         }
         // Default to JSON
         if (!client.DefaultRequestHeaders.Accept.Contains(new MediaTypeWithQualityHeaderValue("application/json")))

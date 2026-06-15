@@ -3,12 +3,50 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
 
 namespace MSAVA_App.Tests;
 
 public class ApiServiceTests
 {
+    [Test]
+    public void Constructor_RejectsMissingApiBaseUrl()
+    {
+        Action act = () => _ = new ApiService(
+            new StaticHttpClientFactory(new HttpClient()),
+            new ApiClientOptions(),
+            NullLogger<ApiService>.Instance);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("ApiClient:Url must be an absolute HTTP or HTTPS URL.");
+    }
+
+    [Test]
+    public void Constructor_RejectsNonHttpApiBaseUrl()
+    {
+        Action act = () => _ = new ApiService(
+            new StaticHttpClientFactory(new HttpClient()),
+            new ApiClientOptions { Url = "file:///tmp/msava" },
+            NullLogger<ApiService>.Instance);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("ApiClient:Url must be an absolute HTTP or HTTPS URL.");
+    }
+
+    [Test]
+    public void CreateClient_AppliesConfiguredBaseAddressWhenFactoryClientHasNone()
+    {
+        var api = new ApiService(
+            new StaticHttpClientFactory(new HttpClient()),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
+            NullLogger<ApiService>.Instance);
+
+        var client = api.CreateClient();
+
+        client.BaseAddress.Should().Be(new Uri("https://api.msava.test/"));
+    }
+
     [Test]
     public async Task SendForAsync_PropagatesCancellationDuringJsonDeserialization()
     {
@@ -94,6 +132,7 @@ public class ApiServiceTests
     {
         return new ApiService(
             new StaticHttpClientFactory(new HttpClient(new StaticHttpMessageHandler(response))),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
             NullLogger<ApiService>.Instance);
     }
 

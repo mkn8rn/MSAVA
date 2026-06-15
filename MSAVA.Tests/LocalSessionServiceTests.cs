@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
 using MSAVA_App.Services.Session;
 
@@ -130,6 +131,7 @@ public class LocalSessionServiceTests
         var client = new HttpClient(handler);
         var api = new ApiService(
             new StaticHttpClientFactory(client),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
             NullLogger<ApiService>.Instance);
 
         return new LocalSessionService(NullLogger<LocalSessionService>.Instance, api);
