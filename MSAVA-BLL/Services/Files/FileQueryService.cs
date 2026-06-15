@@ -94,15 +94,11 @@ public class FileQueryService : IFileQueryService
 
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
-        SessionDTO session = SessionGuard.RequireActive(
+        return SessionGuard.RequireActiveWhitelisted(
             await _userService.GetSessionClaimsAsync(cancellationToken),
             "Session user is required to query files.",
-            "Banned users cannot query files.");
-
-        if (!session.IsWhitelisted)
-            throw new UnauthorizedAccessException("Users must be whitelisted before querying files.");
-
-        return session;
+            "Banned users cannot query files.",
+            "Users must be whitelisted before querying files.");
     }
 
     private IQueryable<SavedFileDataDB> GetVisibleFileDataQuery(SessionDTO session)

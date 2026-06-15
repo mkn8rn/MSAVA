@@ -16,6 +16,20 @@ public static class SessionGuard
         return activeSession;
     }
 
+    public static SessionDTO RequireActiveWhitelisted(
+        SessionDTO? session,
+        string missingSessionMessage,
+        string bannedSessionMessage,
+        string nonWhitelistedSessionMessage)
+    {
+        SessionDTO activeSession = RequireActive(session, missingSessionMessage, bannedSessionMessage);
+
+        if (!activeSession.IsWhitelisted)
+            throw new UnauthorizedAccessException(nonWhitelistedSessionMessage);
+
+        return activeSession;
+    }
+
     public static bool TryRequireActive(
         SessionDTO? session,
         [NotNullWhen(true)] out SessionDTO? activeSession,

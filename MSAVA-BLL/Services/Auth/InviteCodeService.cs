@@ -137,13 +137,11 @@ public class InviteCodeService
 
     private async Task<SessionDTO> GetAuthorizedAdminSessionAsync(CancellationToken cancellationToken)
     {
-        SessionDTO session = SessionGuard.RequireActive(
+        SessionDTO session = SessionGuard.RequireActiveWhitelisted(
             await _userService.GetSessionClaimsAsync(cancellationToken),
             "Only active admins can manage invite codes.",
-            "Only active admins can manage invite codes.");
-
-        if (!session.IsWhitelisted)
-            throw new UnauthorizedAccessException("Users must be whitelisted before managing invite codes.");
+            "Only active admins can manage invite codes.",
+            "Users must be whitelisted before managing invite codes.");
 
         if (!session.IsAdmin)
             throw new UnauthorizedAccessException("Only active admins can manage invite codes.");

@@ -235,15 +235,11 @@ public class FileDownloadService : IFileDownloadService
 
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
-        SessionDTO session = SessionGuard.RequireActive(
+        return SessionGuard.RequireActiveWhitelisted(
             await _userService.GetSessionClaimsAsync(cancellationToken),
             "Session user is required to download files.",
-            "Banned users cannot download files.");
-
-        if (!session.IsWhitelisted)
-            throw new UnauthorizedAccessException("Users must be whitelisted before downloading files.");
-
-        return session;
+            "Banned users cannot download files.",
+            "Users must be whitelisted before downloading files.");
     }
 
     private readonly record struct FilePathAccess(Guid RefId, SessionDTO Session);

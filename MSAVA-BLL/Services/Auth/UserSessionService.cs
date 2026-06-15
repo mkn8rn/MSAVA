@@ -160,15 +160,11 @@ public class UserSessionService : IUserSessionService
         string nonWhitelistedSessionMessage,
         CancellationToken cancellationToken)
     {
-        SessionDTO session = SessionGuard.RequireActive(
+        return SessionGuard.RequireActiveWhitelisted(
             (await GetCurrentSessionAsync(cancellationToken)).Session,
             missingSessionMessage,
-            bannedSessionMessage);
-
-        if (!session.IsWhitelisted)
-            throw new UnauthorizedAccessException(nonWhitelistedSessionMessage);
-
-        return session;
+            bannedSessionMessage,
+            nonWhitelistedSessionMessage);
     }
 
     private async Task<ActiveSessionUser> RequireCurrentUserAccessSessionUserAsync(
@@ -178,13 +174,11 @@ public class UserSessionService : IUserSessionService
         CancellationToken cancellationToken)
     {
         CurrentSession currentSession = await GetCurrentSessionAsync(cancellationToken);
-        SessionDTO activeSession = SessionGuard.RequireActive(
+        SessionDTO activeSession = SessionGuard.RequireActiveWhitelisted(
             currentSession.Session,
             missingSessionMessage,
-            bannedSessionMessage);
-
-        if (!activeSession.IsWhitelisted)
-            throw new UnauthorizedAccessException(nonWhitelistedSessionMessage);
+            bannedSessionMessage,
+            nonWhitelistedSessionMessage);
 
         return new ActiveSessionUser(
             activeSession,

@@ -24,6 +24,26 @@ public class SessionGuardTests
     }
 
     [Test]
+    public void RequireActiveWhitelisted_ReturnsLoggedInNonBannedWhitelistedSession()
+    {
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "active",
+            IsWhitelisted = true
+        };
+
+        var result = SessionGuard.RequireActiveWhitelisted(
+            session,
+            "missing",
+            "banned",
+            "not whitelisted");
+
+        result.Should().BeSameAs(session);
+    }
+
+    [Test]
     public void RequireActive_RejectsMissingSessionWithCallerMessage()
     {
         Action act = () => SessionGuard.RequireActive(
@@ -33,6 +53,27 @@ public class SessionGuardTests
 
         act.Should().Throw<UnauthorizedAccessException>()
             .WithMessage("session required");
+    }
+
+    [Test]
+    public void RequireActiveWhitelisted_RejectsNonWhitelistedSessionWithCallerMessage()
+    {
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "pending",
+            IsWhitelisted = false
+        };
+
+        Action act = () => SessionGuard.RequireActiveWhitelisted(
+            session,
+            "missing",
+            "banned",
+            "whitelist required");
+
+        act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("whitelist required");
     }
 
     [Test]
