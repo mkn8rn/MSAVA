@@ -147,10 +147,36 @@ public static partial class DocumentMetadataExtractor
                 Size = size
             });
         }
-        catch
+        catch (Exception ex) when (IsRecoverableLegacyExcelFailure(ex))
         {
             return MetadataExtractor.CreateInvalidMetadata(size, "Failed to read Excel file");
         }
+    }
+
+    private static bool IsRecoverableLegacyExcelFailure(Exception exception)
+    {
+        if (ContainsCriticalException(exception))
+            return false;
+
+        return exception is IOException
+            or InvalidDataException
+            or ArgumentException
+            or InvalidOperationException
+            or NotSupportedException
+            || exception.GetType().Namespace?.StartsWith("NPOI", StringComparison.Ordinal) == true;
+    }
+
+    private static bool ContainsCriticalException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException
+                or OutOfMemoryException
+                or AccessViolationException)
+                return true;
+        }
+
+        return false;
     }
 
     #endregion
