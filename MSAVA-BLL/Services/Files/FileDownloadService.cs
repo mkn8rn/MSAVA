@@ -148,35 +148,72 @@ public class FileDownloadService : IFileDownloadService
 
     private async Task<FilePathAccess> CanSessionUserAccessFileAsync(string fileNameWithExtension, CancellationToken cancellationToken)
     {
-        SessionDTO claims = await GetActiveSessionAsync(cancellationToken);
-        try
-        {
-            Guid refId = _fileManager.CheckFileAccessByPath(fileNameWithExtension, claims.AccessGroups, claims.IsAdmin);
-            return new FilePathAccess(refId, claims);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            throw new UnauthorizedAccessException("User does not have permission to access this file.");
-        }
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
+        SavedFileReferenceDB fileReference = await GetFileReferenceByPathAsync(fileNameWithExtension, session, cancellationToken);
+        return new FilePathAccess(fileReference.Id, session);
     }
 
     private async Task<SessionDTO> CanSessionUserAccessFileAsync(SavedFileReferenceDB fileReference, CancellationToken cancellationToken)
     {
         SessionDTO claims = await GetActiveSessionAsync(cancellationToken);
 
-        if (claims.IsAdmin)
-            return claims;
-
-        if (fileReference.PublicDownload)
-            return claims;
-
-        List<Guid> userAccessGroups = claims.AccessGroups ?? [];
-        bool canAccess = userAccessGroups.Contains(fileReference.AccessGroupId);
-
-        if (!canAccess)
+        if (!CanSessionAccessFile(fileReference, claims))
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
         return claims;
+    }
+
+    private async Task<SavedFileReferenceDB> GetFileReferenceByPathAsync(
+        string fileNameWithExtension,
+        SessionDTO claims,
+        CancellationToken cancellationToken)
+    {
+        if (!FileContentUtils.IsSafeFileName(fileNameWithExtension))
+            throw new UnauthorizedAccessException("User does not have permission to access this file.");
+
+        string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
+        if (!FileContentUtils.IsSafeFilePath(fullPath))
+            throw new UnauthorizedAccessException("User does not have permission to access this file.");
+
+        if (!StoredFileName.TryParse(fileNameWithExtension, out var storedFileName))
+            throw new UnauthorizedAccessException("User does not have permission to access this file.");
+
+        FileExtensionType extensionType = MappingUtils.ParseFileExtension(storedFileName.Extension);
+        var references = _context.FileRefs
+            .AsNoTracking()
+            .Where(fileReference =>
+                fileReference.FileHash == storedFileName.FileHash &&
+                fileReference.FileExtension == extensionType);
+
+        var accessibleReference = await references
+            .Where(fileReference =>
+                claims.IsAdmin ||
+                fileReference.PublicDownload ||
+                (claims.AccessGroups != null && claims.AccessGroups.Contains(fileReference.AccessGroupId)))
+            .OrderByDescending(fileReference => fileReference.PublicDownload)
+            .ThenBy(fileReference => fileReference.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (accessibleReference is not null)
+            return accessibleReference;
+
+        bool exists = await references.AnyAsync(cancellationToken);
+        if (!exists)
+            throw new FileNotFoundException($"No file reference found for file: {fileNameWithExtension}");
+
+        throw new UnauthorizedAccessException("User does not have permission to access this file.");
+    }
+
+    private static bool CanSessionAccessFile(SavedFileReferenceDB fileReference, SessionDTO claims)
+    {
+        if (claims.IsAdmin)
+            return true;
+
+        if (fileReference.PublicDownload)
+            return true;
+
+        List<Guid> userAccessGroups = claims.AccessGroups ?? [];
+        return userAccessGroups.Contains(fileReference.AccessGroupId);
     }
 
     private async Task IncrementDownloadCountAsync(Guid fileReferenceId, CancellationToken cancellationToken)

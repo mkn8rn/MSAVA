@@ -103,36 +103,6 @@ public class FileManager
         return new FileStream(fullPath, options);
     }
 
-    public Guid CheckFileAccessByPath(string fileNameWithExtension, List<Guid>? userAccessGroups, bool isAdmin = false)
-    {
-        EnsureSafeFileName(fileNameWithExtension);
-
-        var storedFileName = ParseStoredFileName(fileNameWithExtension);
-        return _metadataStore.CheckAccessOrThrow(
-            storedFileName.FileHashHex,
-            storedFileName.Extension,
-            userAccessGroups,
-            isAdmin);
-    }
-
-    private static void EnsureSafeFileName(string fileNameWithExtension)
-    {
-        if (!FileContentUtils.IsSafeFileName(fileNameWithExtension))
-            throw new UnauthorizedAccessException($"Unsafe file name: {fileNameWithExtension}");
-
-        string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
-        if (!FileContentUtils.IsSafeFilePath(fullPath))
-            throw new UnauthorizedAccessException($"Unsafe file path: {fullPath}");
-    }
-
-    private static StoredFileName ParseStoredFileName(string fileNameWithExtension)
-    {
-        if (!StoredFileName.TryParse(fileNameWithExtension, out var storedFileName))
-            throw new UnauthorizedAccessException("Invalid file name format.");
-
-        return storedFileName;
-    }
-
     private void DeleteTempFileIfPresent(string tempFilePath)
     {
         if (!File.Exists(tempFilePath))

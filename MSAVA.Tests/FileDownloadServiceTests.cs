@@ -204,7 +204,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public async Task GetFileStreamByPathAsync_DeniesUnauthorizedMetadataBeforeCheckingPhysicalFileExists()
+    public async Task GetFileStreamByPathAsync_DeniesUnauthorizedSqlReferenceBeforeCheckingPhysicalFileExists()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -258,7 +258,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public async Task GetFileStreamByPathAsync_IncrementsDownloadCountForAuthorizedMetadata()
+    public async Task GetFileStreamByPathAsync_IncrementsDownloadCountForAuthorizedSqlReference()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -310,6 +310,122 @@ public class FileDownloadServiceTests
                 .DownloadCount
                 .Should()
                 .Be(5);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByPathAsync_DeniesWhenMetadataAccessGroupDiffersFromSqlReference()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var sqlAccessGroupId = Guid.NewGuid();
+        var metadataAccessGroupId = Guid.NewGuid();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string fileNameWithExtension = $"{Convert.ToHexString(fileHash).ToLowerInvariant()}.txt";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+        var fileReference = new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = fileHash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = sqlAccessGroupId,
+            PublicDownload = false
+        };
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "metadata-access-drift");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = fileReference.Id,
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = metadataAccessGroupId,
+                PublicDownload = false
+            });
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference, downloadCount: 7));
+            await context.SaveChangesAsync();
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "metadata-only-user",
+                AccessGroups = [metadataAccessGroupId],
+                IsAdmin = false
+            });
+
+            Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("User does not have permission to access this file.");
+            context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
+                .DownloadCount
+                .Should()
+                .Be(7);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByPathAsync_AllowsSqlAuthorizedReferenceWithoutMetadata()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var accessGroupId = Guid.NewGuid();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string fileNameWithExtension = $"{Convert.ToHexString(fileHash).ToLowerInvariant()}.txt";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+        var fileReference = new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = fileHash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = accessGroupId,
+            PublicDownload = false
+        };
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "sql-authorized-path-download");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference));
+            await context.SaveChangesAsync();
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "sql-authorized-user",
+                AccessGroups = [accessGroupId],
+                IsAdmin = false
+            });
+
+            var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);
+
+            result.FileName.Should().Be(Path.GetFileNameWithoutExtension(fileNameWithExtension));
+            result.FileExtension.Should().Be("txt");
+            using var fileStream = result.FileStream;
+            using var reader = new StreamReader(fileStream);
+            reader.ReadToEnd().Should().Be("sql-authorized-path-download");
         }
         finally
         {
