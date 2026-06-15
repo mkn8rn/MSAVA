@@ -59,7 +59,7 @@ public class FilePersistenceService
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
     {
-        ValidateStreamDto(dto);
+        NormalizeAndValidateStreamDto(dto);
 
         Guid sessionUserId = await AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
@@ -98,7 +98,7 @@ public class FilePersistenceService
 
         try
         {
-            ValidateFetchDto(dto);
+            NormalizeAndValidateFetchDto(dto);
 
             Guid sessionUserId = await AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
@@ -167,12 +167,15 @@ public class FilePersistenceService
         }
     }
 
-    private static void ValidateStreamDto(SaveFileFromStreamDTO dto)
+    private static void NormalizeAndValidateStreamDto(SaveFileFromStreamDTO dto)
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        if (string.IsNullOrWhiteSpace(dto.FileName))
-            throw new ArgumentException("FileName must be provided.", nameof(dto));
+        dto.FileName = FileMetadataPolicy.NormalizeFileName(dto.FileName);
+        dto.Description = FileMetadataPolicy.NormalizeDescription(dto.Description);
+        dto.Tags = FileMetadataPolicy.NormalizeMetadataValues(dto.Tags, nameof(dto.Tags));
+        dto.Categories = FileMetadataPolicy.NormalizeMetadataValues(dto.Categories, nameof(dto.Categories));
+
         if (string.IsNullOrWhiteSpace(dto.FileExtension))
             throw new ArgumentException("FileExtension must be provided.", nameof(dto));
         MappingUtils.ParseSupportedFileExtension(dto.FileExtension);
@@ -182,10 +185,13 @@ public class FilePersistenceService
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
     }
 
-    private static void ValidateFetchDto(SaveFileFromFetchDTO dto)
+    private static void NormalizeAndValidateFetchDto(SaveFileFromFetchDTO dto)
     {
-        if (string.IsNullOrWhiteSpace(dto.FileName))
-            throw new ArgumentException("FileName must be provided.", nameof(dto));
+        dto.FileName = FileMetadataPolicy.NormalizeFileName(dto.FileName);
+        dto.Description = FileMetadataPolicy.NormalizeDescription(dto.Description);
+        dto.Tags = FileMetadataPolicy.NormalizeMetadataValues(dto.Tags, nameof(dto.Tags));
+        dto.Categories = FileMetadataPolicy.NormalizeMetadataValues(dto.Categories, nameof(dto.Categories));
+
         if (string.IsNullOrWhiteSpace(dto.FileExtension))
             throw new ArgumentException("FileExtension must be provided.", nameof(dto));
         MappingUtils.ParseSupportedFileExtension(dto.FileExtension);

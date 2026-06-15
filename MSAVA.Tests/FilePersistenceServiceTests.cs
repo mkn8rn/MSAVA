@@ -333,6 +333,117 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_NormalizesMetadataBeforePersisting()
+    {
+        var content = Encoding.UTF8.GetBytes($"normalized-stream-metadata-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+            dto.FileName = "  normalized-name  ";
+            dto.Description = "  normalized description  ";
+            dto.Tags = ["  alpha  ", "beta"];
+            dto.Categories = ["  reference  "];
+
+            Guid fileRefId = await service.CreateFileFromStreamAsync(dto);
+
+            var fileData = context.ChangeTracker.Entries<SavedFileDataDB>()
+                .Select(entry => entry.Entity)
+                .Single(fileData => fileData.FileReferenceId == fileRefId);
+            fileData.Name.Should().Be("normalized-name");
+            fileData.Description.Should().Be("normalized description");
+            fileData.Tags.Should().Equal("alpha", "beta");
+            fileData.Categories.Should().Equal("reference");
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromStreamAsync_RejectsOversizedFileNameBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"oversized-name-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+            dto.FileName = new string('n', FileMetadataPolicy.MaximumFileNameLength + 1);
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage($"FileName must be {FileMetadataPolicy.MaximumFileNameLength} characters or fewer.");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromStreamAsync_RejectsBlankTagBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"blank-tag-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+            dto.Tags = [" "];
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("Tags values must be provided.");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_RejectsUnsupportedExtensionBeforeWritingContent()
     {
         var content = Encoding.UTF8.GetBytes($"unsupported-extension-{Guid.NewGuid()}");
@@ -444,6 +555,50 @@ public class FilePersistenceServiceTests
         }
         finally
         {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromTempFileAsync_NormalizesMetadataBeforePersisting()
+    {
+        var content = Encoding.UTF8.GetBytes($"normalized-temp-metadata-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var tempFilePath = Path.GetTempFileName();
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            await File.WriteAllBytesAsync(tempFilePath, content);
+
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateFetchDto(tempFilePath, accessGroup.Id);
+            dto.FileName = "  normalized-fetch-name  ";
+            dto.Description = "  normalized fetch description  ";
+            dto.Tags = ["  fetched  "];
+            dto.Categories = ["  imports  ", "tests"];
+
+            Guid fileRefId = await service.CreateFileFromTempFileAsync(dto);
+
+            var fileData = context.ChangeTracker.Entries<SavedFileDataDB>()
+                .Select(entry => entry.Entity)
+                .Single(fileData => fileData.FileReferenceId == fileRefId);
+            fileData.Name.Should().Be("normalized-fetch-name");
+            fileData.Description.Should().Be("normalized fetch description");
+            fileData.Tags.Should().Equal("fetched");
+            fileData.Categories.Should().Equal("imports", "tests");
+            File.Exists(tempFilePath).Should().BeFalse();
+        }
+        finally
+        {
+            DeleteFileIfPresent(tempFilePath);
             DeleteFileIfPresent(contentPath);
             DeleteDirectoryIfPresent(metadataDirectory);
         }

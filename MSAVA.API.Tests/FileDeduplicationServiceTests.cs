@@ -574,6 +574,127 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_NormalizesMetadataForNewReference()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-normalized-metadata-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var targetGroup = CreateAccessGroup(sessionUser, "target");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(targetGroup, existingGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = targetGroup.Id,
+                FileName = "  normalized-copy  ",
+                Description = "  normalized dedupe description  ",
+                Tags = ["  copy  ", "shared"],
+                Categories = ["  tests  "],
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeTrue();
+            result.NewReferenceCreated.Should().BeTrue();
+            result.ReferenceId.Should().NotBeNull();
+            result.Error.Should().BeNull();
+
+            var newData = context.FileData.Single(fileData => fileData.FileReferenceId == result.ReferenceId);
+            newData.Name.Should().Be("normalized-copy");
+            newData.Description.Should().Be("normalized dedupe description");
+            newData.Tags.Should().Equal("copy", "shared");
+            newData.Categories.Should().Equal("tests");
+            metadataStore.GetByAccessGroup(targetGroup.Id)
+                .Should()
+                .ContainSingle(record => record.RefId == result.ReferenceId);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForInvalidNewReferenceMetadata()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-invalid-metadata-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var targetGroup = CreateAccessGroup(sessionUser, "target");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(targetGroup, existingGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = targetGroup.Id,
+                FileName = "invalid-copy",
+                Tags = [" "],
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("Tags values must be provided.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().Be(Convert.ToHexString(contentHash));
+
+            metadataStore.GetByFileHash(contentHash, "txt")
+                .Should()
+                .ContainSingle(record => record.RefId == existingReference.Id);
+            metadataStore.GetByAccessGroup(targetGroup.Id).Should().BeEmpty();
+            context.FileRefs.Count().Should().Be(1);
+            context.FileData.Count().Should().Be(1);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_RemovesNewMetadataAndPendingEntitiesWhenDatabaseSaveFails()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-rollback-{Guid.NewGuid()}"));

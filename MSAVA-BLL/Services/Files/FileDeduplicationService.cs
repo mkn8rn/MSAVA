@@ -106,14 +106,22 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         // File exists but user has no access - create a new reference for them
-        var newReference = await CreateNewReferenceAsync(
-            request,
-            fileHash,
-            extension,
-            anyExistingReference,
-            sessionUserId,
-            accessGroupResolution.AccessGroupId,
-            cancellationToken);
+        SavedFileReferenceDB newReference;
+        try
+        {
+            newReference = await CreateNewReferenceAsync(
+                request,
+                fileHash,
+                extension,
+                anyExistingReference,
+                sessionUserId,
+                accessGroupResolution.AccessGroupId,
+                cancellationToken);
+        }
+        catch (FileMetadataValidationException ex)
+        {
+            return HashCheckResult.Failed(hashHex, ex.Message);
+        }
 
         await _serviceLogger.WriteLogAsync(
             AccessLogActions.NewReferenceAddedToExistingFile,
@@ -264,6 +272,13 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             PublicDownload = request.PublicDownload
         };
 
+        string fileName = FileMetadataPolicy.NormalizeFileName(request.FileName ?? existingData?.Name ?? "Unnamed");
+        string description = FileMetadataPolicy.NormalizeDescription(request.Description ?? existingData?.Description);
+        IEnumerable<string>? tagValues = request.Tags is not null ? request.Tags : existingData?.Tags;
+        IEnumerable<string>? categoryValues = request.Categories is not null ? request.Categories : existingData?.Categories;
+        var tags = FileMetadataPolicy.NormalizeMetadataValues(tagValues, nameof(request.Tags));
+        var categories = FileMetadataPolicy.NormalizeMetadataValues(categoryValues, nameof(request.Categories));
+
         // Create file data record
         var newData = new SavedFileDataDB
         {
@@ -271,12 +286,12 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             FileReferenceId = newReference.Id,
             SizeInBytes = existingData?.SizeInBytes ?? 0,
             Checksum = Convert.ToHexString(fileHash),
-            Name = request.FileName ?? existingData?.Name ?? "Unnamed",
-            Description = request.Description ?? existingData?.Description ?? "",
+            Name = fileName,
+            Description = description,
             MimeType = existingData?.MimeType ?? MetadataExtractor.GetContentType(extension),
             FileExtension = extension,
-            Tags = request.Tags?.ToArray() ?? existingData?.Tags ?? [],
-            Categories = request.Categories?.ToArray() ?? existingData?.Categories ?? [],
+            Tags = tags.ToArray(),
+            Categories = categories.ToArray(),
             Metadata = existingData?.Metadata ?? JsonDocument.Parse("{}"),
             PublicViewing = request.PublicViewing,
             OriginalCreator = userId,
