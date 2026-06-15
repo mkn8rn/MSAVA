@@ -23,7 +23,7 @@ public class FileQueryService : IFileQueryService
         var session = await GetActiveSessionAsync(cancellationToken);
 
         return await GetVisibleFileDataQuery(session)
-            .Select(f => f.Id)
+            .Select(f => f.FileReferenceId)
             .ToListAsync(cancellationToken);
     }
 
@@ -51,7 +51,7 @@ public class FileQueryService : IFileQueryService
 
         query = ApplySearchFilters(query, tag, category, name, description);
 
-        return await query.Select(f => f.Id).ToListAsync(cancellationToken);
+        return await query.Select(f => f.FileReferenceId).ToListAsync(cancellationToken);
     }
 
     public async Task<List<SearchFileDataDTO>> GetFileDataByAllFieldsAsync(

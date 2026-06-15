@@ -37,7 +37,7 @@ public class FileQueryServiceTests
         var ids = await service.GetAllFileGuidsAsync();
 
         metadata.Select(file => file.Name).Should().BeEquivalentTo(["session-private", "other-public"]);
-        ids.Should().BeEquivalentTo([sessionFile.Id, publicFile.Id]);
+        ids.Should().BeEquivalentTo([sessionFile.FileReferenceId, publicFile.FileReferenceId]);
     }
 
     [Test]
@@ -65,7 +65,37 @@ public class FileQueryServiceTests
         var ids = await service.GetAllFileGuidsAsync();
 
         metadata.Select(file => file.Name).Should().BeEquivalentTo(["first", "second", "public"]);
-        ids.Should().BeEquivalentTo([firstFile.Id, secondFile.Id, publicFile.Id]);
+        ids.Should().BeEquivalentTo([firstFile.FileReferenceId, secondFile.FileReferenceId, publicFile.FileReferenceId]);
+    }
+
+    [Test]
+    public async Task GetFileGuidsByAllFieldsAsync_ReturnsReferenceIdsForVisibleFiles()
+    {
+        using var context = CreateContext();
+        var sessionGroupId = Guid.NewGuid();
+        var sessionFile = CreateFileData("session-private", sessionGroupId, publicViewing: false);
+        var publicFile = CreateFileData("other-public", Guid.NewGuid(), publicViewing: true);
+        var hiddenFile = CreateFileData("other-private", Guid.NewGuid(), publicViewing: false);
+        context.FileRefs.AddRange(sessionFile.FileReference!, publicFile.FileReference!, hiddenFile.FileReference!);
+        context.FileData.AddRange(sessionFile, publicFile, hiddenFile);
+        await context.SaveChangesAsync();
+
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [sessionGroupId],
+            IsAdmin = false
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+
+        var ids = await service.GetFileGuidsByAllFieldsAsync(null, null, null, null);
+
+        ids.Should().BeEquivalentTo([sessionFile.FileReferenceId, publicFile.FileReferenceId]);
+        ids.Should().NotContain(sessionFile.Id);
+        ids.Should().NotContain(publicFile.Id);
+        ids.Should().NotContain(hiddenFile.Id);
     }
 
     [Test]
