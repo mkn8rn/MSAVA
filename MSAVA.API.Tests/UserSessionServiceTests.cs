@@ -293,6 +293,37 @@ public class UserSessionServiceTests
     }
 
     [Test]
+    public async Task GetUserById_RejectsNonWhitelistedAdminUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var pendingAdmin = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: false);
+        var otherUser = CreateUser(isAdmin: false, isBanned: false, isWhitelisted: true);
+        context.Users.AddRange(pendingAdmin, otherUser);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = pendingAdmin.Id,
+                Username = pendingAdmin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Admin", "Whitelisted"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Func<Task> act = () => service.GetUserByIdAsync(otherUser.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before accessing users.");
+    }
+
+    [Test]
     public async Task GetAllUsers_RejectsNonAdminUsingCurrentDatabaseState()
     {
         using var context = CreateContext();
@@ -351,6 +382,36 @@ public class UserSessionServiceTests
     }
 
     [Test]
+    public async Task GetAllUsers_RejectsNonWhitelistedAdminUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var pendingAdmin = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: false);
+        context.Users.Add(pendingAdmin);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = pendingAdmin.Id,
+                Username = pendingAdmin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Admin", "Whitelisted"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Func<Task> act = () => service.GetAllUsersAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before listing users.");
+    }
+
+    [Test]
     public async Task GetSessionUserId_RejectsBannedUserUsingCurrentDatabaseState()
     {
         using var context = CreateContext();
@@ -376,6 +437,35 @@ public class UserSessionServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot access the current user.");
+    }
+
+    [Test]
+    public async Task GetSessionUserId_RejectsNonWhitelistedUserUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var pendingUser = CreateUser(isAdmin: false, isBanned: false, isWhitelisted: false);
+        context.Users.Add(pendingUser);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = pendingUser.Id,
+                Username = pendingUser.Username,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Whitelisted"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Func<Task> act = () => service.GetSessionUserIdAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before accessing the current user.");
     }
 
     [Test]
@@ -429,6 +519,36 @@ public class UserSessionServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Banned users cannot check admin status.");
+    }
+
+    [Test]
+    public async Task IsSessionUserAdmin_RejectsNonWhitelistedAdminUsingCurrentDatabaseState()
+    {
+        using var context = CreateContext();
+        var pendingAdmin = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: false);
+        context.Users.Add(pendingAdmin);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = pendingAdmin.Id,
+                Username = pendingAdmin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Admin", "Whitelisted"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Func<Task> act = () => service.IsSessionUserAdminAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before checking admin status.");
     }
 
     private static UserSessionService CreateService(BaseDataContext context, SessionDTO session)

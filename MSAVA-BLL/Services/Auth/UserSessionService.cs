@@ -32,9 +32,10 @@ public class UserSessionService : IUserSessionService
 
     public async Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default)
     {
-        return (await RequireActiveSessionAsync(
+        return (await RequireCurrentUserAccessSessionAsync(
             "Session user is required to access the current user.",
             "Banned users cannot access the current user.",
+            "Users must be whitelisted before accessing the current user.",
             cancellationToken)).UserId;
     }
 
@@ -82,9 +83,10 @@ public class UserSessionService : IUserSessionService
 
     public async Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default)
     {
-        return (await RequireActiveSessionAsync(
+        return (await RequireCurrentUserAccessSessionAsync(
             "Session user is required to check admin status.",
             "Banned users cannot check admin status.",
+            "Users must be whitelisted before checking admin status.",
             cancellationToken)).IsAdmin;
     }
 
@@ -93,9 +95,10 @@ public class UserSessionService : IUserSessionService
 
     public async Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default)
     {
-        return (await RequireActiveSessionUserAsync(
+        return (await RequireCurrentUserAccessSessionUserAsync(
             "Session user is required to access the current user.",
             "Banned users cannot access the current user.",
+            "Users must be whitelisted before accessing the current user.",
             cancellationToken)).User;
     }
 
@@ -124,9 +127,10 @@ public class UserSessionService : IUserSessionService
 
     private async Task RequireActiveAdminSessionAsync(CancellationToken cancellationToken)
     {
-        SessionDTO session = await RequireActiveSessionAsync(
+        SessionDTO session = await RequireCurrentUserAccessSessionAsync(
             "Session user is required to list users.",
             "Banned users cannot list users.",
+            "Users must be whitelisted before listing users.",
             cancellationToken);
 
         if (!session.IsAdmin)
@@ -138,9 +142,10 @@ public class UserSessionService : IUserSessionService
         if (userId == Guid.Empty)
             throw new ArgumentException("User id must be provided.", nameof(userId));
 
-        ActiveSessionUser currentUser = await RequireActiveSessionUserAsync(
+        ActiveSessionUser currentUser = await RequireCurrentUserAccessSessionUserAsync(
             "Session user is required to access users.",
             "Banned users cannot access users.",
+            "Users must be whitelisted before accessing users.",
             cancellationToken);
 
         if (!currentUser.Session.IsAdmin && currentUser.Session.UserId != userId)
@@ -149,20 +154,27 @@ public class UserSessionService : IUserSessionService
         return currentUser;
     }
 
-    private async Task<SessionDTO> RequireActiveSessionAsync(
+    private async Task<SessionDTO> RequireCurrentUserAccessSessionAsync(
         string missingSessionMessage,
         string bannedSessionMessage,
+        string nonWhitelistedSessionMessage,
         CancellationToken cancellationToken)
     {
-        return SessionGuard.RequireActive(
+        SessionDTO session = SessionGuard.RequireActive(
             (await GetCurrentSessionAsync(cancellationToken)).Session,
             missingSessionMessage,
             bannedSessionMessage);
+
+        if (!session.IsWhitelisted)
+            throw new UnauthorizedAccessException(nonWhitelistedSessionMessage);
+
+        return session;
     }
 
-    private async Task<ActiveSessionUser> RequireActiveSessionUserAsync(
+    private async Task<ActiveSessionUser> RequireCurrentUserAccessSessionUserAsync(
         string missingSessionMessage,
         string bannedSessionMessage,
+        string nonWhitelistedSessionMessage,
         CancellationToken cancellationToken)
     {
         CurrentSession currentSession = await GetCurrentSessionAsync(cancellationToken);
@@ -170,6 +182,9 @@ public class UserSessionService : IUserSessionService
             currentSession.Session,
             missingSessionMessage,
             bannedSessionMessage);
+
+        if (!activeSession.IsWhitelisted)
+            throw new UnauthorizedAccessException(nonWhitelistedSessionMessage);
 
         return new ActiveSessionUser(
             activeSession,
