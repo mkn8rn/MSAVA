@@ -10,6 +10,23 @@ namespace MSAVA_App.Tests;
 
 public class FileQueryServiceTests
 {
+    [TestCase("literal", "literal")]
+    [TestCase("100%", "100\\%")]
+    [TestCase("file_name", "file\\_name")]
+    [TestCase("C:\\Temp\\100%_done", "C:\\\\Temp\\\\100\\%\\_done")]
+    public void BuildExactLikePattern_EscapesPostgresLikeWildcards(string value, string expectedPattern)
+    {
+        FileQueryService.BuildExactLikePattern(value).Should().Be(expectedPattern);
+    }
+
+    [Test]
+    public void BuildContainsLikePattern_EscapesWildcardsInsideSubstringPattern()
+    {
+        string pattern = FileQueryService.BuildContainsLikePattern("  50%_done\\today  ");
+
+        pattern.Should().Be("%50\\%\\_done\\\\today%");
+    }
+
     [Test]
     public async Task GetAllFileMetadataAsync_ReturnsCurrentGroupsAndPublicViewingForNonAdmin()
     {
