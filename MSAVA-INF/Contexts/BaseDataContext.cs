@@ -78,6 +78,60 @@ public class BaseDataContext : DbContext
             .WithMany()
             .HasForeignKey(ic => ic.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AccessLogDB>()
+            .HasOne(log => log.User)
+            .WithMany()
+            .HasForeignKey(log => log.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AccessLogDB>()
+            .HasOne(log => log.FileRef)
+            .WithMany()
+            .HasForeignKey(log => log.FileRefId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<UserLogDB>()
+            .HasOne(log => log.User)
+            .WithMany()
+            .HasForeignKey(log => log.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<UserLogDB>()
+            .HasOne(log => log.Admin)
+            .WithMany()
+            .HasForeignKey(log => log.AdminId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GroupLogDB>()
+            .HasOne(log => log.User)
+            .WithMany()
+            .HasForeignKey(log => log.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GroupLogDB>()
+            .HasOne(log => log.Group)
+            .WithMany()
+            .HasForeignKey(log => log.GroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<InviteLogDB>()
+            .HasOne(log => log.User)
+            .WithMany()
+            .HasForeignKey(log => log.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<InviteLogDB>()
+            .HasOne(log => log.InviteCode)
+            .WithMany()
+            .HasForeignKey(log => log.InviteCodeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ErrorLogDB>()
+            .HasOne(log => log.User)
+            .WithMany()
+            .HasForeignKey(log => log.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     public DbSet<InviteCodeDB> InviteCodes => Set<InviteCodeDB>();

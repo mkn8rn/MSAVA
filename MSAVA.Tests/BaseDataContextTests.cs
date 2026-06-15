@@ -121,6 +121,22 @@ public class BaseDataContextTests
     }
 
     [Test]
+    public void OnModelCreatingRestrictsAuditLogDeletes()
+    {
+        using var context = CreateContext();
+
+        AssertRestrictForeignKey(context.Model, typeof(AccessLogDB), nameof(AccessLogDB.UserId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(AccessLogDB), nameof(AccessLogDB.FileRefId), typeof(SavedFileReferenceDB));
+        AssertRestrictForeignKey(context.Model, typeof(UserLogDB), nameof(UserLogDB.UserId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(UserLogDB), nameof(UserLogDB.AdminId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(GroupLogDB), nameof(GroupLogDB.UserId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(GroupLogDB), nameof(GroupLogDB.GroupId), typeof(AccessGroupDB));
+        AssertRestrictForeignKey(context.Model, typeof(InviteLogDB), nameof(InviteLogDB.UserId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(InviteLogDB), nameof(InviteLogDB.InviteCodeId), typeof(InviteCodeDB));
+        AssertRestrictForeignKey(context.Model, typeof(ErrorLogDB), nameof(ErrorLogDB.UserId), typeof(UserDB));
+    }
+
+    [Test]
     public void OnModelCreatingEnforcesUniqueUsernames()
     {
         using var context = CreateContext();
@@ -134,6 +150,18 @@ public class BaseDataContextTests
 
         usernameIndex.Should().NotBeNull();
         usernameIndex!.IsUnique.Should().BeTrue();
+    }
+
+    private static void AssertRestrictForeignKey(
+        IModel model,
+        Type entityType,
+        string propertyName,
+        Type principalEntityType)
+    {
+        var foreignKey = FindForeignKey(model, entityType, propertyName);
+
+        foreignKey.PrincipalEntityType.ClrType.Should().Be(principalEntityType);
+        foreignKey.DeleteBehavior.Should().Be(DeleteBehavior.Restrict);
     }
 
     [Test]
