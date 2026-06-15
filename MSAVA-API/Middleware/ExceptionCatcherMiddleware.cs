@@ -118,12 +118,6 @@ namespace MSAVA_API.Middleware
                 case JsonException _:
                 case System.Xml.XmlException _:
                 case CryptographicException _:
-                case IndexOutOfRangeException _:
-                case OverflowException _:
-                case DivideByZeroException _:
-                case ObjectDisposedException _:
-                case InvalidCastException:
-                case NotFiniteNumberException:
                     statusCode = StatusCodes.Status400BadRequest;
                     break;
                 case UnauthorizedAccessException _:
@@ -155,6 +149,10 @@ namespace MSAVA_API.Middleware
                 case TaskCanceledException _:
                     statusCode = StatusCodes.Status408RequestTimeout;
                     break;
+                // --- 500 Internal Server Error ---
+                case ObjectDisposedException _:
+                    statusCode = StatusCodes.Status500InternalServerError;
+                    break;
                 // --- 409 Conflict ---
                 case DbUpdateConcurrencyException _:
                 case InvalidOperationException _:
@@ -182,6 +180,11 @@ namespace MSAVA_API.Middleware
                 case MissingMethodException _:
                 case MemberAccessException _:
                 case NullReferenceException _:
+                case IndexOutOfRangeException _:
+                case OverflowException _:
+                case DivideByZeroException _:
+                case InvalidCastException _:
+                case NotFiniteNumberException _:
                 case AccessViolationException _:
                 case ExternalException _:
                     statusCode = StatusCodes.Status500InternalServerError;
