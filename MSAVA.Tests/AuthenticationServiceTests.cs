@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
@@ -237,8 +238,10 @@ public class AuthenticationServiceTests
         var inviteCode = CreateInviteCode(Guid.NewGuid());
         var user = CreateUser("invited-user", "correct-password", isBanned: false);
         user.InviteCodeId = inviteCode.Id;
+        var accessGroup = CreateAccessGroup(user, "invited-files");
         context.InviteCodes.Add(inviteCode);
         context.Users.Add(user);
+        context.AccessGroups.Add(accessGroup);
         await context.SaveChangesAsync();
 
         var service = CreateService(context);
@@ -254,6 +257,15 @@ public class AuthenticationServiceTests
             jwt.UserId == user.Id &&
             jwt.Username == "invited-user" &&
             jwt.InviteCode == inviteCode.Id);
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(response.Token);
+        token.Claims.Single(claim => claim.Type == SessionClaimNames.InviteCode)
+            .Value
+            .Should()
+            .Be(inviteCode.Id.ToString());
+        token.Claims.Single(claim => claim.Type == SessionClaimNames.AccessGroups)
+            .Value
+            .Should()
+            .Be(accessGroup.Id.ToString());
     }
 
     [TestCase("")]
@@ -503,6 +515,25 @@ public class AuthenticationServiceTests
             ExpiresAt = DateTime.UtcNow.AddHours(1),
             MaxUses = 1
         };
+    }
+
+    private static AccessGroupDB CreateAccessGroup(UserDB owner, string name)
+    {
+        var accessGroup = new AccessGroupDB
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = owner.Id,
+            Owner = owner,
+            CreatedAt = DateTime.UtcNow,
+            Name = name,
+            Users = [],
+            SubGroups = []
+        };
+
+        owner.AccessGroups.Add(accessGroup);
+        accessGroup.Users.Add(owner);
+
+        return accessGroup;
     }
 
     private sealed class TestUserSessionService : IUserSessionService

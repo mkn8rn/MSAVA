@@ -64,14 +64,14 @@ public static class JwtSessionParser
             Claims = ReadClaims(root)
         };
 
-        if (root.TryGetProperty("sub", out var subEl) &&
+        if (root.TryGetProperty(SessionClaimNames.Subject, out var subEl) &&
             subEl.ValueKind == JsonValueKind.String &&
             Guid.TryParse(subEl.GetString(), out var userId))
         {
             session.UserId = userId;
         }
 
-        if (root.TryGetProperty("unique_name", out var usernameEl) &&
+        if (root.TryGetProperty(SessionClaimNames.UniqueName, out var usernameEl) &&
             usernameEl.ValueKind == JsonValueKind.String)
         {
             session.Username = usernameEl.GetString() ?? string.Empty;
@@ -83,8 +83,8 @@ public static class JwtSessionParser
         session.IsWhitelisted = session.Roles.Contains(SessionRoles.Whitelisted, StringComparer.OrdinalIgnoreCase);
         session.AccessGroups = ReadAccessGroups(root);
 
-        if (TryReadEpochClaim(root, "iat", out var issuedAt) ||
-            TryReadEpochClaim(root, "nbf", out issuedAt))
+        if (TryReadEpochClaim(root, SessionClaimNames.IssuedAt, out var issuedAt) ||
+            TryReadEpochClaim(root, SessionClaimNames.NotBefore, out issuedAt))
         {
             session.IssuedAt = issuedAt;
         }
@@ -93,7 +93,7 @@ public static class JwtSessionParser
             session.IssuedAt = DateTime.MinValue;
         }
 
-        session.ExpiresAt = TryReadEpochClaim(root, "exp", out var expiresAt)
+        session.ExpiresAt = TryReadEpochClaim(root, SessionClaimNames.ExpiresAt, out var expiresAt)
             ? expiresAt
             : DateTime.MinValue;
 
@@ -118,11 +118,11 @@ public static class JwtSessionParser
     {
         var roles = new List<string>();
 
-        if (root.TryGetProperty("role", out var roleEl))
+        if (root.TryGetProperty(SessionClaimNames.Role, out var roleEl))
         {
             AddRoleValues(roleEl, roles);
         }
-        else if (root.TryGetProperty("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", out var roleUriEl))
+        else if (root.TryGetProperty(SessionClaimNames.RoleUri, out var roleUriEl))
         {
             AddRoleValues(roleUriEl, roles);
         }
@@ -152,7 +152,7 @@ public static class JwtSessionParser
     {
         var accessGroups = new List<Guid>();
 
-        if (!root.TryGetProperty("accessGroups", out var accessGroupsElement) ||
+        if (!root.TryGetProperty(SessionClaimNames.AccessGroups, out var accessGroupsElement) ||
             accessGroupsElement.ValueKind != JsonValueKind.String)
         {
             return accessGroups;

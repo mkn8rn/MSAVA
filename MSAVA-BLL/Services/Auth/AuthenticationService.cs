@@ -83,8 +83,8 @@ public class AuthenticationService : IAuthenticationService
 
         List<Claim> claims =
         [
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.Username)
+            new Claim(SessionClaimNames.Subject, user.Id.ToString()),
+            new Claim(SessionClaimNames.UniqueName, user.Username)
         ];
 
         if (user.IsAdmin)
@@ -94,10 +94,10 @@ public class AuthenticationService : IAuthenticationService
         if (user.IsWhitelisted)
             claims.Add(new Claim(ClaimTypes.Role, SessionRoles.Whitelisted));
 
-        claims.Add(new Claim("inviteCode", user.InviteCodeId?.ToString() ?? string.Empty));
+        claims.Add(new Claim(SessionClaimNames.InviteCode, user.InviteCodeId?.ToString() ?? string.Empty));
 
         List<Guid> accessGroupGuids = user.AccessGroups?.Select(g => g.Id).ToList() ?? [];
-        claims.Add(new Claim("accessGroups", string.Join(",", accessGroupGuids)));
+        claims.Add(new Claim(SessionClaimNames.AccessGroups, string.Join(",", accessGroupGuids)));
 
         var key = new SymmetricSecurityKey(_jwtKeyBytes);
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

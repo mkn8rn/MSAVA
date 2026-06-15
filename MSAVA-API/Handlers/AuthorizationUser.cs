@@ -1,5 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Handlers;
 
@@ -11,7 +11,7 @@ internal static class AuthorizationUser
             return null;
 
         string? userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            ?? user.FindFirstValue(SessionClaimNames.Subject);
 
         return Guid.TryParse(userIdClaim, out var userId) && userId != Guid.Empty
             ? userId

@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using MSAVA_API.Middleware;
@@ -20,12 +19,12 @@ public class RequestContextMiddlewareTests
         var context = new DefaultHttpContext
         {
             User = CreatePrincipal(
-                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new Claim(JwtRegisteredClaimNames.UniqueName, "session-user"),
-                new Claim(ClaimTypes.Role, "Admin"),
-                new Claim("accessGroups", $"{firstAccessGroup},not-a-guid,{Guid.Empty},{secondAccessGroup}"),
-                new Claim(JwtRegisteredClaimNames.Iat, issuedAtSeconds.ToString()),
-                new Claim(JwtRegisteredClaimNames.Exp, expiresAtSeconds.ToString()),
+                new Claim(SessionClaimNames.Subject, userId.ToString()),
+                new Claim(SessionClaimNames.UniqueName, "session-user"),
+                new Claim(ClaimTypes.Role, SessionRoles.Admin),
+                new Claim(SessionClaimNames.AccessGroups, $"{firstAccessGroup},not-a-guid,{Guid.Empty},{secondAccessGroup}"),
+                new Claim(SessionClaimNames.IssuedAt, issuedAtSeconds.ToString()),
+                new Claim(SessionClaimNames.ExpiresAt, expiresAtSeconds.ToString()),
                 new Claim("source", "api-test"),
                 new Claim("source", "duplicate-value"))
         };
@@ -38,11 +37,11 @@ public class RequestContextMiddlewareTests
         session.UserId.Should().Be(userId);
         session.Username.Should().Be("session-user");
         session.IsAdmin.Should().BeTrue();
-        session.Roles.Should().Equal("Admin");
+        session.Roles.Should().Equal(SessionRoles.Admin);
         session.AccessGroups.Should().Equal(firstAccessGroup, secondAccessGroup);
         session.IssuedAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(issuedAtSeconds).UtcDateTime);
         session.ExpiresAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(expiresAtSeconds).UtcDateTime);
-        session.Claims[JwtRegisteredClaimNames.Sub].Should().Equal(userId.ToString());
+        session.Claims[SessionClaimNames.Subject].Should().Equal(userId.ToString());
         session.Claims["source"].Should().Equal("api-test", "duplicate-value");
     }
 
@@ -54,9 +53,9 @@ public class RequestContextMiddlewareTests
         var context = new DefaultHttpContext
         {
             User = CreatePrincipal(
-                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new Claim(JwtRegisteredClaimNames.Nbf, notBeforeSeconds.ToString()),
-                new Claim(JwtRegisteredClaimNames.Exp, "not-a-number"))
+                new Claim(SessionClaimNames.Subject, userId.ToString()),
+                new Claim(SessionClaimNames.NotBefore, notBeforeSeconds.ToString()),
+                new Claim(SessionClaimNames.ExpiresAt, "not-a-number"))
         };
         var middleware = new RequestContextMiddleware(_ => Task.CompletedTask);
 
@@ -89,8 +88,8 @@ public class RequestContextMiddlewareTests
         var context = new DefaultHttpContext
         {
             User = CreatePrincipal(
-                new Claim(JwtRegisteredClaimNames.UniqueName, "session-user"),
-                new Claim(ClaimTypes.Role, "Admin"))
+                new Claim(SessionClaimNames.UniqueName, "session-user"),
+                new Claim(ClaimTypes.Role, SessionRoles.Admin))
         };
         var middleware = new RequestContextMiddleware(_ => Task.CompletedTask);
 

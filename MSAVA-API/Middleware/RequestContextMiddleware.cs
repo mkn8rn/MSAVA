@@ -3,7 +3,6 @@ using MSAVA_BLL.Services.Auth;
 using MSAVA_Shared.Models;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
 using System.Globalization;
 
 namespace MSAVA_API.Middleware;
@@ -39,7 +38,7 @@ public class RequestContextMiddleware
             return CreateAnonymousSession();
 
         var username = user.FindFirstValue(ClaimTypes.Name) 
-                    ?? user.FindFirstValue(JwtRegisteredClaimNames.UniqueName) 
+                    ?? user.FindFirstValue(SessionClaimNames.UniqueName)
                     ?? string.Empty;
 
         var roles = new List<string>(4);
@@ -49,14 +48,14 @@ public class RequestContextMiddleware
                 roles.Add(claim.Value);
         }
 
-        var accessGroupsClaim = user.FindFirstValue("accessGroups");
+        var accessGroupsClaim = user.FindFirstValue(SessionClaimNames.AccessGroups);
         var accessGroups = ParseAccessGroups(accessGroupsClaim);
         var claims = BuildClaims(user.Claims);
-        DateTime issuedAt = TryReadEpochClaim(user, JwtRegisteredClaimNames.Iat, out var issuedAtValue)
-            || TryReadEpochClaim(user, JwtRegisteredClaimNames.Nbf, out issuedAtValue)
+        DateTime issuedAt = TryReadEpochClaim(user, SessionClaimNames.IssuedAt, out var issuedAtValue)
+            || TryReadEpochClaim(user, SessionClaimNames.NotBefore, out issuedAtValue)
                 ? issuedAtValue
                 : DateTime.MinValue;
-        DateTime expiresAt = TryReadEpochClaim(user, JwtRegisteredClaimNames.Exp, out var expiresAtValue)
+        DateTime expiresAt = TryReadEpochClaim(user, SessionClaimNames.ExpiresAt, out var expiresAtValue)
             ? expiresAtValue
             : DateTime.MinValue;
 

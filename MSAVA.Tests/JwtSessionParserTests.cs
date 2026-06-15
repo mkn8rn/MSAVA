@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text;
 using MSAVA_App.Services.Session;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
 
@@ -16,12 +17,12 @@ public class JwtSessionParserTests
         const long expiresAtSeconds = 1_700_003_600;
         string payload = $$"""
             {
-              "sub": "{{userId}}",
-              "unique_name": "alice",
-              "role": ["Admin", "Whitelisted"],
-              "accessGroups": "{{firstAccessGroup}}, {{secondAccessGroup}}",
-              "iat": {{issuedAtSeconds}},
-              "exp": "{{expiresAtSeconds}}",
+              "{{SessionClaimNames.Subject}}": "{{userId}}",
+              "{{SessionClaimNames.UniqueName}}": "alice",
+              "{{SessionClaimNames.Role}}": ["{{SessionRoles.Admin}}", "{{SessionRoles.Whitelisted}}"],
+              "{{SessionClaimNames.AccessGroups}}": "{{firstAccessGroup}}, {{secondAccessGroup}}",
+              "{{SessionClaimNames.IssuedAt}}": {{issuedAtSeconds}},
+              "{{SessionClaimNames.ExpiresAt}}": "{{expiresAtSeconds}}",
               "custom": ["one", 2],
               "profile": { "department": "ops" },
               "empty": null
@@ -34,7 +35,7 @@ public class JwtSessionParserTests
         session!.LoggedIn.Should().BeTrue();
         session!.UserId.Should().Be(userId);
         session.Username.Should().Be("alice");
-        session.Roles.Should().Equal("Admin", "Whitelisted");
+        session.Roles.Should().Equal(SessionRoles.Admin, SessionRoles.Whitelisted);
         session.IsAdmin.Should().BeTrue();
         session.IsWhitelisted.Should().BeTrue();
         session.IsBanned.Should().BeFalse();
@@ -52,8 +53,8 @@ public class JwtSessionParserTests
         const long notBeforeSeconds = 1_700_010_000;
         string payload = $$"""
             {
-              "http://schemas.microsoft.com/ws/2008/06/identity/claims/role": "Banned",
-              "nbf": "{{notBeforeSeconds}}"
+              "{{SessionClaimNames.RoleUri}}": "{{SessionRoles.Banned}}",
+              "{{SessionClaimNames.NotBefore}}": "{{notBeforeSeconds}}"
             }
             """;
 
@@ -61,7 +62,7 @@ public class JwtSessionParserTests
 
         session.Should().NotBeNull();
         session!.LoggedIn.Should().BeFalse();
-        session.Roles.Should().Equal("Banned");
+        session.Roles.Should().Equal(SessionRoles.Banned);
         session.IsBanned.Should().BeTrue();
         session.IssuedAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(notBeforeSeconds).UtcDateTime);
         session.ExpiresAt.Should().Be(DateTime.MinValue);
@@ -86,10 +87,10 @@ public class JwtSessionParserTests
     [Test]
     public void Parse_IgnoresOutOfRangeEpochClaims()
     {
-        string payload = """
+        string payload = $$"""
             {
-              "iat": 253402300800,
-              "exp": -62135596801
+              "{{SessionClaimNames.IssuedAt}}": 253402300800,
+              "{{SessionClaimNames.ExpiresAt}}": -62135596801
             }
             """;
 
