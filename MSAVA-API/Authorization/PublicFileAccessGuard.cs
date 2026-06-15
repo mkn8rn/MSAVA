@@ -14,7 +14,7 @@ public static class PublicFileAccessGuard
         if (!StoredFileName.TryParse(physicalPath, out var storedFileName))
             return false;
 
-        var metadataStore = context.RequestServices.GetService<MetadataStore>();
+        var metadataStore = context.RequestServices.GetService<IPublicFileMetadataStore>();
         if (metadataStore is null)
         {
             LogDeniedRequest(context, physicalPath, "metadata store is not registered");
@@ -25,11 +25,35 @@ public static class PublicFileAccessGuard
         {
             return metadataStore.CheckPublicDownloadAccess(storedFileName.FileHash, storedFileName.Extension) is not null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableMetadataLookupFailure(ex))
         {
             LogDeniedRequest(context, physicalPath, "metadata lookup failed", ex);
             return false;
         }
+    }
+
+    private static bool IsRecoverableMetadataLookupFailure(Exception exception)
+    {
+        if (ContainsCriticalException(exception))
+            return false;
+
+        return exception is IOException
+            or InvalidOperationException
+            or UnauthorizedAccessException
+            || exception.GetType().Namespace == "LiteDB";
+    }
+
+    private static bool ContainsCriticalException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException
+                or OutOfMemoryException
+                or AccessViolationException)
+                return true;
+        }
+
+        return false;
     }
 
     private static void LogDeniedRequest(

@@ -139,7 +139,35 @@ public class PublicFileAccessGuardTests
         result.Should().BeFalse();
     }
 
-    private static DefaultHttpContext CreateContext(MetadataStore metadataStore)
+    [Test]
+    public void CanServePublicFile_DeniesWhenMetadataLookupFailsRecoverably()
+    {
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var context = CreateContext(new ThrowingPublicFileMetadataStore(new IOException("Metadata store unavailable.")));
+        string physicalPath = Path.Combine(
+            Path.GetTempPath(),
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+
+        bool result = PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
+    [Test]
+    public void CanServePublicFile_PropagatesCriticalMetadataLookupFailure()
+    {
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var context = CreateContext(new ThrowingPublicFileMetadataStore(new OutOfMemoryException("Critical memory failure.")));
+        string physicalPath = Path.Combine(
+            Path.GetTempPath(),
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+
+        Action act = () => PublicFileAccessGuard.CanServePublicFile(context, physicalPath);
+
+        act.Should().Throw<OutOfMemoryException>();
+    }
+
+    private static DefaultHttpContext CreateContext(IPublicFileMetadataStore metadataStore)
     {
         var services = new ServiceCollection()
             .AddSingleton(metadataStore)
@@ -149,6 +177,19 @@ public class PublicFileAccessGuardTests
         {
             RequestServices = services
         };
+    }
+
+    private static DefaultHttpContext CreateContext(MetadataStore metadataStore)
+    {
+        return CreateContext((IPublicFileMetadataStore)metadataStore);
+    }
+
+    private sealed class ThrowingPublicFileMetadataStore(Exception exception) : IPublicFileMetadataStore
+    {
+        public Guid? CheckPublicDownloadAccess(byte[] fileHash, string fileExtension)
+        {
+            throw exception;
+        }
     }
 
     private static SavedFileMetaRecord CreateMetadata(byte[] hash, bool publicDownload)

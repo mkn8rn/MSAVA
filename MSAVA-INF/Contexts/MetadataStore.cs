@@ -8,7 +8,7 @@ namespace MSAVA_INF.Contexts;
 /// Fast file metadata store using LiteDB for sub-millisecond access checks.
 /// Includes in-memory caching for frequently accessed records.
 /// </summary>
-public class MetadataStore : IDisposable
+public class MetadataStore : IPublicFileMetadataStore, IDisposable
 {
     private readonly LiteDatabase _db;
     private readonly ILiteCollection<SavedFileMetaRecord> _files;
