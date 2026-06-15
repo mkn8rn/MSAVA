@@ -1,6 +1,7 @@
 using System;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -73,11 +74,21 @@ public class LocalSessionService
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableLoginFailure(ex))
         {
             _logger.LogError(ex, "Failed to call authentication API");
             return null;
         }
+    }
+
+    private static bool IsRecoverableLoginFailure(Exception exception)
+    {
+        return exception is HttpRequestException
+            or TaskCanceledException
+            or JsonException
+            or NotSupportedException
+            or InvalidOperationException
+            or IOException;
     }
 
     public void Logout()

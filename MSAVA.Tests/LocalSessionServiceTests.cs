@@ -27,6 +27,51 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_ReturnsNullForRecoverableHttpFailure()
+    {
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException("Network unavailable.")));
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoginAsync_PropagatesCriticalFailureWithoutChangingSessionState()
+    {
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new OutOfMemoryException("Critical memory failure.")));
+        var service = CreateService(handler);
+
+        var act = async () => await service.LoginAsync("alice", "password");
+
+        await act.Should().ThrowAsync<OutOfMemoryException>();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoginAsync_ReturnsNullForHttpTimeoutWhenCallerDidNotCancel()
+    {
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new TaskCanceledException("Request timed out.")));
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
     public async Task LoginAsync_StoresAccessTokenAndParsedSession()
     {
         var userId = Guid.NewGuid();
