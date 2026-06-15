@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
 using MSAVA_INF.Contexts;
+using MSAVA_BLL.Services.Files;
 
 namespace MSAVA_API.Middleware
 {
@@ -95,6 +96,10 @@ namespace MSAVA_API.Middleware
                 // --- Use status code from exception ---
                 case BadHttpRequestException badReq:
                     statusCode = badReq.StatusCode;
+                    break;
+                // --- 413 Payload Too Large ---
+                case FileTooLargeException _:
+                    statusCode = StatusCodes.Status413PayloadTooLarge;
                     break;
                 // --- 501 Not Implemented ---
                 case PlatformNotSupportedException _:

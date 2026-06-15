@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Middleware;
+using MSAVA_BLL.Services.Files;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
 using MSAVA_Shared.Models;
@@ -119,6 +120,28 @@ public class ExceptionCatcherMiddlewareTests
         response.Should().NotBeNull();
         response!.UserId.Should().Be(userId);
         errorLog.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        errorLog.UserId.Should().Be(userId);
+    }
+
+    [Test]
+    public async Task InvokeAsync_ReturnsPayloadTooLargeForFileTooLargeException()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var userId = Guid.NewGuid();
+        var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new FileTooLargeException(5, 4));
+
+        await middleware.InvokeAsync(context);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status413PayloadTooLarge);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+        response.UserId.Should().Be(userId);
+        errorLog.StatusCode.Should().Be(StatusCodes.Status413PayloadTooLarge);
         errorLog.UserId.Should().Be(userId);
     }
 

@@ -286,7 +286,7 @@ public class FileIngestionServiceTests
 
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
+            await act.Should().ThrowAsync<FileTooLargeException>()
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
             responseContent.SerializeWasCalled.Should().BeFalse();
@@ -332,7 +332,7 @@ public class FileIngestionServiceTests
 
             Func<Task> act = () => service.CreateFileFromFormFileAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
+            await act.Should().ThrowAsync<FileTooLargeException>()
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
             formFile.OpenReadStreamWasCalled.Should().BeFalse();

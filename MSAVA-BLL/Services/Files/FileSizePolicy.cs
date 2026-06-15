@@ -40,11 +40,10 @@ public static class FileSizePolicy
             throw CreateFileTooLargeException(currentFileSizeBytes + nextChunkBytes, maximumFileSizeBytes);
     }
 
-    internal static InvalidOperationException CreateFileTooLargeException(
+    internal static FileTooLargeException CreateFileTooLargeException(
         long fileSizeBytes,
         long maximumFileSizeBytes)
     {
-        return new InvalidOperationException(
-            $"File size {fileSizeBytes} bytes exceeds the maximum allowed size of {maximumFileSizeBytes} bytes.");
+        return new FileTooLargeException(fileSizeBytes, maximumFileSizeBytes);
     }
 }

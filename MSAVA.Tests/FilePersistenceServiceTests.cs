@@ -388,7 +388,7 @@ public class FilePersistenceServiceTests
 
             Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
+            await act.Should().ThrowAsync<FileTooLargeException>()
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
             File.Exists(contentPath).Should().BeFalse();
@@ -472,7 +472,7 @@ public class FilePersistenceServiceTests
 
             Func<Task> act = () => service.CreateFileFromTempFileAsync(dto);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
+            await act.Should().ThrowAsync<FileTooLargeException>()
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
             File.Exists(tempFilePath).Should().BeFalse();
