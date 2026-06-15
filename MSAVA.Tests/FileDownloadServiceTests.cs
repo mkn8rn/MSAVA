@@ -62,13 +62,44 @@ public class FileDownloadServiceTests
                 Username = "banned",
                 AccessGroups = [],
                 IsAdmin = true,
-                IsBanned = true
+                IsBanned = true,
+                IsWhitelisted = true
             });
 
             Func<Task> act = () => service.GetFileStreamByPathAsync("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.txt");
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("Banned users cannot download files.");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByPathAsync_RejectsNonWhitelistedSessionBeforeMetadataLookup()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "not-whitelisted",
+                AccessGroups = [],
+                IsAdmin = true,
+                IsWhitelisted = false
+            });
+
+            Func<Task> act = () => service.GetFileStreamByPathAsync("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.txt");
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("Users must be whitelisted before downloading files.");
         }
         finally
         {
@@ -101,7 +132,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             };
             var service = CreateService(context, metadataStore, session, out var userSessionService);
 
@@ -143,7 +175,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             var result = await service.GetFileStreamByIdAsync(fileReference.Id);
@@ -185,7 +218,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
@@ -242,7 +276,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
@@ -300,7 +335,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [accessGroupId],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);
@@ -362,7 +398,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "metadata-only-user",
                 AccessGroups = [metadataAccessGroupId],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
@@ -416,7 +453,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "sql-authorized-user",
                 AccessGroups = [accessGroupId],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);
@@ -476,7 +514,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [accessGroupId],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
@@ -509,7 +548,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "active-user",
                 AccessGroups = [],
-                IsAdmin = false
+                IsAdmin = false,
+                IsWhitelisted = true
             });
 
             Func<Task> act = () => service.GetFileStreamByPathAsync("abc.txt");
@@ -565,7 +605,8 @@ public class FileDownloadServiceTests
                 UserId = Guid.NewGuid(),
                 Username = "admin-user",
                 AccessGroups = [],
-                IsAdmin = true
+                IsAdmin = true,
+                IsWhitelisted = true
             });
 
             var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);

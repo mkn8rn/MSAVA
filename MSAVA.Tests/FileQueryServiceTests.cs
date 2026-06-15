@@ -29,7 +29,8 @@ public class FileQueryServiceTests
             UserId = Guid.NewGuid(),
             Username = "session",
             AccessGroups = [sessionGroupId],
-            IsAdmin = false
+            IsAdmin = false,
+            IsWhitelisted = true
         };
         var service = new FileQueryService(context, new TestUserSessionService(session));
 
@@ -57,7 +58,8 @@ public class FileQueryServiceTests
             UserId = Guid.NewGuid(),
             Username = "admin",
             AccessGroups = [],
-            IsAdmin = true
+            IsAdmin = true,
+            IsWhitelisted = true
         };
         var service = new FileQueryService(context, new TestUserSessionService(session));
 
@@ -86,7 +88,8 @@ public class FileQueryServiceTests
             UserId = Guid.NewGuid(),
             Username = "session",
             AccessGroups = [sessionGroupId],
-            IsAdmin = false
+            IsAdmin = false,
+            IsWhitelisted = true
         };
         var service = new FileQueryService(context, new TestUserSessionService(session));
 
@@ -96,6 +99,33 @@ public class FileQueryServiceTests
         ids.Should().NotContain(sessionFile.Id);
         ids.Should().NotContain(publicFile.Id);
         ids.Should().NotContain(hiddenFile.Id);
+    }
+
+    [Test]
+    public async Task GetAllFileMetadataAsync_RejectsNonWhitelistedSession()
+    {
+        using var context = CreateContext();
+        var publicFile = CreateFileData("public", Guid.NewGuid(), publicViewing: true);
+        context.FileRefs.Add(publicFile.FileReference!);
+        context.FileData.Add(publicFile);
+        await context.SaveChangesAsync();
+
+        var service = new FileQueryService(
+            context,
+            new TestUserSessionService(new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "not-whitelisted",
+                AccessGroups = [],
+                IsAdmin = true,
+                IsWhitelisted = false
+            }));
+
+        Func<Task> act = () => service.GetAllFileMetadataAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before querying files.");
     }
 
     [Test]
@@ -142,7 +172,8 @@ public class FileQueryServiceTests
                 Username = "banned",
                 AccessGroups = [],
                 IsAdmin = false,
-                IsBanned = true
+                IsBanned = true,
+                IsWhitelisted = true
             }));
 
         Func<Task> act = () => service.GetAllFileMetadataAsync();
