@@ -49,18 +49,10 @@ public class BaseDataContextTests
     {
         using var context = CreateContext();
 
-        FindForeignKey(context.Model, typeof(AccessGroupDB), nameof(AccessGroupDB.OwnerId))
-            .DeleteBehavior
-            .Should()
-            .Be(DeleteBehavior.Restrict);
-        FindForeignKey(context.Model, typeof(UserDB), nameof(UserDB.InviteCodeId))
-            .DeleteBehavior
-            .Should()
-            .Be(DeleteBehavior.Restrict);
-        FindForeignKey(context.Model, typeof(InviteCodeDB), nameof(InviteCodeDB.OwnerId))
-            .DeleteBehavior
-            .Should()
-            .Be(DeleteBehavior.Restrict);
+        AssertRestrictForeignKey(context.Model, typeof(AccessGroupDB), nameof(AccessGroupDB.OwnerId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(UserDB), nameof(UserDB.InviteCodeId), typeof(InviteCodeDB));
+        AssertRestrictForeignKey(context.Model, typeof(InviteCodeDB), nameof(InviteCodeDB.OwnerId), typeof(UserDB));
+        AssertRestrictForeignKey(context.Model, typeof(AccessCodeDB), nameof(AccessCodeDB.OwnerId), typeof(UserDB));
     }
 
     [Test]

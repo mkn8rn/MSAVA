@@ -79,6 +79,12 @@ public class BaseDataContext : DbContext
             .HasForeignKey(ic => ic.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<AccessCodeDB>()
+            .HasOne(accessCode => accessCode.Owner)
+            .WithMany()
+            .HasForeignKey(accessCode => accessCode.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<AccessLogDB>()
             .HasOne(log => log.User)
             .WithMany()
