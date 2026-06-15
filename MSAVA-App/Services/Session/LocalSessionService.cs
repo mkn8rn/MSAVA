@@ -61,13 +61,16 @@ public class LocalSessionService
                 return null;
             }
 
+            var session = JwtSessionParser.Parse(token, _logger);
+            if (session?.LoggedIn != true)
+            {
+                _logger.LogWarning("Login response token did not contain an active session");
+                return null;
+            }
+
             _accessToken = token;
             _api.SetAccessToken(token);
-            _session = JwtSessionParser.Parse(token, _logger);
-            if (_session != null)
-            {
-                _session.LoggedIn = true;
-            }
+            _session = session;
             return token;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

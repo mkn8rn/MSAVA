@@ -97,6 +97,8 @@ public static class JwtSessionParser
             ? expiresAt
             : DateTime.MinValue;
 
+        session.LoggedIn = session.UserId != Guid.Empty;
+
         return session;
     }
 

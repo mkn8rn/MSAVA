@@ -101,6 +101,30 @@ public class LocalSessionServiceTests
         service.CurrentSession.IsAdmin.Should().BeTrue();
     }
 
+    [Test]
+    public async Task LoginAsync_ReturnsNullWhenTokenDoesNotContainActiveSession()
+    {
+        string token = CreateToken("""
+            {
+              "unique_name": "alice",
+              "role": "Admin"
+            }
+            """);
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($$"""{ "token": "{{token}}" }""", Encoding.UTF8, "application/json")
+            }));
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
     private static LocalSessionService CreateService(HttpMessageHandler handler)
     {
         var client = new HttpClient(handler);

@@ -31,6 +31,7 @@ public class JwtSessionParserTests
         var session = JwtSessionParser.Parse(CreateToken(payload));
 
         session.Should().NotBeNull();
+        session!.LoggedIn.Should().BeTrue();
         session!.UserId.Should().Be(userId);
         session.Username.Should().Be("alice");
         session.Roles.Should().Equal("Admin", "Whitelisted");
@@ -59,7 +60,8 @@ public class JwtSessionParserTests
         var session = JwtSessionParser.Parse(CreateToken(payload));
 
         session.Should().NotBeNull();
-        session!.Roles.Should().Equal("Banned");
+        session!.LoggedIn.Should().BeFalse();
+        session.Roles.Should().Equal("Banned");
         session.IsBanned.Should().BeTrue();
         session.IssuedAt.Should().Be(DateTimeOffset.FromUnixTimeSeconds(notBeforeSeconds).UtcDateTime);
         session.ExpiresAt.Should().Be(DateTime.MinValue);
