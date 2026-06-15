@@ -219,6 +219,74 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_DoesNotUseStaleTokenAdminRoleForExistingPrivateReference()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-stale-admin-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session", isAdmin: false);
+            var existingOwner = CreateUser("owner");
+            var sessionGroup = CreateAccessGroup(sessionUser, "session");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(sessionGroup, existingGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = sessionUser.Id,
+                Username = sessionUser.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Admin", "Whitelisted"],
+                Claims = [],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-1),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = sessionGroup.Id,
+                FileName = "demoted-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeTrue();
+            result.ReferenceId.Should().NotBe(existingReference.Id);
+            result.NewReferenceCreated.Should().BeTrue();
+            result.Error.Should().BeNull();
+            context.FileRefs.Should().HaveCount(2);
+            context.FileData.Should().HaveCount(2);
+            metadataStore.GetByAccessGroup(sessionGroup.Id)
+                .Should()
+                .ContainSingle(record => record.RefId == result.ReferenceId);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_RejectsRequestedAccessGroupOutsideCurrentUserMembership()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-unauthorized-group-{Guid.NewGuid()}"));

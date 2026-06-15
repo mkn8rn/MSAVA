@@ -62,12 +62,23 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         Guid sessionUserId = session.UserId;
         var fileHash = Convert.FromHexString(hashHex);
 
-        // Get user's access groups
-        var userAccessGroups = await GetUserAccessGroupsAsync(sessionUserId, cancellationToken);
+        CurrentUserFileAccess currentUserAccess;
+        try
+        {
+            currentUserAccess = await GetCurrentUserFileAccessAsync(sessionUserId, cancellationToken);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return HashCheckResult.Failed(hashHex, ex.Message);
+        }
 
         // Check if user already has a reference they can access
         var existingReference = await FindExistingAccessibleReferenceAsync(
-            fileHash, extension, userAccessGroups, session.IsAdmin, cancellationToken);
+            fileHash,
+            extension,
+            currentUserAccess.AccessGroupIds,
+            currentUserAccess.IsAdmin,
+            cancellationToken);
 
         if (existingReference != null)
         {
@@ -85,7 +96,13 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 
         // File exists but user has no access - create a new reference for them
         var newReference = await CreateNewReferenceAsync(
-            request, fileHash, extension, anyExistingReference, sessionUserId, userAccessGroups, cancellationToken);
+            request,
+            fileHash,
+            extension,
+            anyExistingReference,
+            sessionUserId,
+            currentUserAccess.AccessGroupIds,
+            cancellationToken);
 
         await _serviceLogger.WriteLogAsync(
             AccessLogActions.NewReferenceAddedToExistingFile,
@@ -164,12 +181,26 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         return true;
     }
 
-    private async Task<List<Guid>> GetUserAccessGroupsAsync(Guid userId, CancellationToken cancellationToken)
+    private async Task<CurrentUserFileAccess> GetCurrentUserFileAccessAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
     {
-        return await _context.AccessGroups
+        var user = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => new { user.IsAdmin, user.IsBanned })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
+
+        if (user.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot check file hashes.");
+
+        var accessGroupIds = await _context.AccessGroups
             .Where(ag => ag.OwnerId == userId || ag.Users.Any(u => u.Id == userId))
             .Select(ag => ag.Id)
             .ToListAsync(cancellationToken);
+
+        return new CurrentUserFileAccess(accessGroupIds, user.IsAdmin);
     }
 
     private async Task<SavedFileReferenceDB?> FindExistingAccessibleReferenceAsync(
@@ -374,6 +405,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         session = activeSession;
         return true;
     }
+
+    private sealed record CurrentUserFileAccess(List<Guid> AccessGroupIds, bool IsAdmin);
 
     [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.Compiled)]
     private static partial Regex Sha256HexRegex();
