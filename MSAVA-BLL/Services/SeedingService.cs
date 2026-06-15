@@ -36,7 +36,7 @@ namespace MSAVA_BLL.Services
             string adminPassword = _env.Values.AdminPassword;
             AuthInputPolicy.EnsurePasswordAllowed(adminPassword);
 
-            UserDB? adminUser = await _context.Users.FirstOrDefaultAsync(
+            UserDB? adminUser = await _context.Users.SingleOrDefaultAsync(
                 u => u.Username == adminUsername,
                 cancellationToken);
 

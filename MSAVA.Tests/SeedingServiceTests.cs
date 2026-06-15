@@ -65,6 +65,22 @@ public class SeedingServiceTests
     }
 
     [Test]
+    public async Task SeedAsync_RejectsDuplicateConfiguredAdminUsers()
+    {
+        using var context = CreateContext();
+        context.Users.AddRange(
+            CreateUser(TestEnvironment.AdminUsernameValue),
+            CreateUser(TestEnvironment.AdminUsernameValue));
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.SeedAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        context.Users.Should().HaveCount(2);
+    }
+
+    [Test]
     public async Task SeedAsync_HonorsCanceledTokenBeforeCreatingAdmin()
     {
         using var context = CreateContext();
@@ -126,6 +142,21 @@ public class SeedingServiceTests
             .Options;
 
         return new TestDataContext(options);
+    }
+
+    private static UserDB CreateUser(string username)
+    {
+        return new UserDB
+        {
+            Id = Guid.NewGuid(),
+            Username = username,
+            PasswordHash = [1],
+            PasswordSalt = [2],
+            IsAdmin = false,
+            IsBanned = true,
+            IsWhitelisted = false,
+            CreatedAt = DateTime.UtcNow
+        };
     }
 
     private sealed class TestEnvironment : ILocalEnvironment
