@@ -89,13 +89,8 @@ public static class FileContentUtils
 
     public static string GetFullPathIfSafe(string fileNameWithExtension)
     {
-        if (!IsSafeFileName(fileNameWithExtension))
+        if (!TryGetSafeFullPath(fileNameWithExtension, out string fullPath))
             throw new UnauthorizedAccessException($"Unsafe file name: {fileNameWithExtension}");
-
-        string fullPath = GetFullPath(fileNameWithExtension);
-
-        if (!IsSafeFilePath(fullPath))
-            throw new UnauthorizedAccessException($"Unsafe file path: {fullPath}");
 
         if (!File.Exists(fullPath))
             throw new FileNotFoundException($"File not found: {fullPath}");
@@ -111,7 +106,22 @@ public static class FileContentUtils
         return GetFullPathIfSafe($"{fileName}.{fileExtension}");
     }
 
-    public static string GetFullPath(string fileNameWithExtension)
+    public static bool TryGetSafeFullPath(string fileNameWithExtension, out string fullPath)
+    {
+        fullPath = string.Empty;
+
+        if (!IsSafeFileName(fileNameWithExtension))
+            return false;
+
+        string candidatePath = GetFullPath(fileNameWithExtension);
+        if (!IsSafeFilePath(candidatePath))
+            return false;
+
+        fullPath = candidatePath;
+        return true;
+    }
+
+    private static string GetFullPath(string fileNameWithExtension)
     {
         return Path.Combine(FilesDirectory, fileNameWithExtension);
     }

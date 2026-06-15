@@ -5,6 +5,19 @@ namespace MSAVA_App.Tests;
 public class FileContentUtilsTests
 {
     [Test]
+    public void FileContentUtils_DoesNotExposeUnsafeStringPathBuilder()
+    {
+        var unsafeOverload = typeof(FileContentUtils)
+            .GetMethods()
+            .SingleOrDefault(method =>
+                method.Name == nameof(FileContentUtils.GetFullPath) &&
+                method.GetParameters() is [{ ParameterType: var parameterType }] &&
+                parameterType == typeof(string));
+
+        unsafeOverload.Should().BeNull();
+    }
+
+    [Test]
     public void IsSafeFilePath_AllowsFileInsideFilesDirectory()
     {
         var path = Path.Combine(FileContentUtils.FilesDirectory, "file.txt");
@@ -65,6 +78,29 @@ public class FileContentUtilsTests
         path.Should().Be(Path.Combine(
             FileContentUtils.FilesDirectory,
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f.txt"));
+    }
+
+    [Test]
+    public void TryGetSafeFullPath_ReturnsPathForSafeStoredFileNameWithoutRequiringFileExists()
+    {
+        string fileName = $"{new string('a', 64)}.txt";
+
+        bool success = FileContentUtils.TryGetSafeFullPath(fileName, out string fullPath);
+
+        success.Should().BeTrue();
+        fullPath.Should().Be(Path.Combine(FileContentUtils.FilesDirectory, fileName));
+    }
+
+    [TestCase("../secret.txt")]
+    [TestCase("folder/file.txt")]
+    [TestCase("")]
+    [TestCase(" ")]
+    public void TryGetSafeFullPath_RejectsUnsafeStoredFileName(string fileName)
+    {
+        bool success = FileContentUtils.TryGetSafeFullPath(fileName, out string fullPath);
+
+        success.Should().BeFalse();
+        fullPath.Should().BeEmpty();
     }
 
     [Test]

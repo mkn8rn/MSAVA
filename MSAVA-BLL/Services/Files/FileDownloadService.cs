@@ -168,11 +168,7 @@ public class FileDownloadService : IFileDownloadService
         SessionDTO claims,
         CancellationToken cancellationToken)
     {
-        if (!FileContentUtils.IsSafeFileName(fileNameWithExtension))
-            throw new UnauthorizedAccessException("User does not have permission to access this file.");
-
-        string fullPath = FileContentUtils.GetFullPath(fileNameWithExtension);
-        if (!FileContentUtils.IsSafeFilePath(fullPath))
+        if (!FileContentUtils.TryGetSafeFullPath(fileNameWithExtension, out _))
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
         if (!StoredFileName.TryParse(fileNameWithExtension, out var storedFileName))
