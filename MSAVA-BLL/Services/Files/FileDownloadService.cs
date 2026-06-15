@@ -41,16 +41,26 @@ public class FileDownloadService : IFileDownloadService
 
         SessionDTO session = await CanSessionUserAccessFileAsync(db, cancellationToken);
 
-        FileStream fileStream = _fileManager.GetFileStream(db.FileHash, db.FileExtension.ToString());
+        FileStream? fileStream = _fileManager.GetFileStream(db.FileHash, db.FileExtension.ToString());
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
         string fileNameWithExtension = $"{fileName}.{extension}";
 
-        await IncrementDownloadCountAsync(db.Id, cancellationToken);
-        await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
+        try
+        {
+            await IncrementDownloadCountAsync(db.Id, cancellationToken);
+            await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
 
-        return MappingUtils.MapReturnFileDTO(db, fileStream: fileStream);
+            var result = MappingUtils.MapReturnFileDTO(db, fileStream: fileStream);
+            fileStream = null;
+            return result;
+        }
+        finally
+        {
+            if (fileStream is not null)
+                await fileStream.DisposeAsync();
+        }
     }
 
     public async Task<PhysicalReturnFileDTO> GetPhysicalFileReturnDataByIdAsync(
@@ -113,17 +123,27 @@ public class FileDownloadService : IFileDownloadService
 
         string fileName = Path.GetFileNameWithoutExtension(fileNameWithExtension);
         string extension = Path.GetExtension(fileNameWithExtension).TrimStart('.');
-        FileStream fileStream = _fileManager.GetFileStream(fileNameWithExtension);
+        FileStream? fileStream = _fileManager.GetFileStream(fileNameWithExtension);
 
-        await IncrementDownloadCountAsync(access.RefId, cancellationToken);
-        await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
-
-        return new StreamReturnFileDTO
+        try
         {
-            FileName = fileName,
-            FileExtension = extension,
-            FileStream = fileStream
-        };
+            await IncrementDownloadCountAsync(access.RefId, cancellationToken);
+            await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
+
+            var result = new StreamReturnFileDTO
+            {
+                FileName = fileName,
+                FileExtension = extension,
+                FileStream = fileStream
+            };
+            fileStream = null;
+            return result;
+        }
+        finally
+        {
+            if (fileStream is not null)
+                await fileStream.DisposeAsync();
+        }
     }
 
     private async Task<FilePathAccess> CanSessionUserAccessFileAsync(string fileNameWithExtension, CancellationToken cancellationToken)

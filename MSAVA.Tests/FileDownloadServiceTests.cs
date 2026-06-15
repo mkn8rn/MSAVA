@@ -162,6 +162,48 @@ public class FileDownloadServiceTests
     }
 
     [Test]
+    public async Task GetFileStreamByIdAsync_DisposesOpenedStreamWhenDownloadCountFails()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var fileReference = CreateFileReference(publicDownload: true);
+        string contentPath = FileContentUtils.GetFullPath(fileReference.FileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "missing-file-data-count");
+            context.FileRefs.Add(fileReference);
+            await context.SaveChangesAsync();
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false
+            });
+
+            Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
+
+            await act.Should().ThrowAsync<KeyNotFoundException>()
+                .WithMessage($"File data for reference id {fileReference.Id} not found.");
+            Action deleteContent = () => File.Delete(contentPath);
+            deleteContent.Should().NotThrow();
+            File.Exists(contentPath).Should().BeFalse();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GetFileStreamByPathAsync_DeniesUnauthorizedMetadataBeforeCheckingPhysicalFileExists()
     {
         using var context = CreateContext();
@@ -268,6 +310,66 @@ public class FileDownloadServiceTests
                 .DownloadCount
                 .Should()
                 .Be(5);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByPathAsync_DisposesOpenedStreamWhenDownloadCountFails()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var accessGroupId = Guid.NewGuid();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string fileNameWithExtension = $"{Convert.ToHexString(fileHash).ToLowerInvariant()}.txt";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+        var fileReference = new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = fileHash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = accessGroupId,
+            PublicDownload = false
+        };
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "missing-path-file-data-count");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = fileReference.Id,
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = accessGroupId,
+                PublicDownload = false
+            });
+            context.FileRefs.Add(fileReference);
+            await context.SaveChangesAsync();
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [accessGroupId],
+                IsAdmin = false
+            });
+
+            Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
+
+            await act.Should().ThrowAsync<KeyNotFoundException>()
+                .WithMessage($"File data for reference id {fileReference.Id} not found.");
+            Action deleteContent = () => File.Delete(contentPath);
+            deleteContent.Should().NotThrow();
+            File.Exists(contentPath).Should().BeFalse();
         }
         finally
         {
