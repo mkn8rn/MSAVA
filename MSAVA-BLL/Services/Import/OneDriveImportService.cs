@@ -39,7 +39,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         Uri fileUri = ParseFileUrl(dto.FileUrl);
         await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
-        var http = _httpClientFactory.CreateClient();
+        var http = _httpClientFactory.CreateClient(FileIngestionService.RemoteFileHttpClientName);
         var shareId = "u!" + Base64UrlEncode(fileUri.AbsoluteUri);
         var downloadUrl = $"https://api.onedrive.com/v1.0/shares/{shareId}/root/content";
 

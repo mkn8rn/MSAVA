@@ -44,7 +44,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
 
         string baseDownloadUrl = $"https://drive.google.com/uc?export=download&id={WebUtility.UrlEncode(fileId)}";
 
-        var http = _httpClientFactory.CreateClient();
+        var http = _httpClientFactory.CreateClient(FileIngestionService.RemoteFileHttpClientName);
         using var initialResp = await http.GetAsync(baseDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
         if (!initialResp.IsSuccessStatusCode)

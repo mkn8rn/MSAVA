@@ -102,6 +102,7 @@ public class ProviderImportServiceTests
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             httpClientFactory.WasCalled.Should().BeTrue();
+            httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.Requests.Should().ContainSingle();
             handler.Requests[0].RequestUri!.Host.Should().Be("drive.google.com");
         }
@@ -218,6 +219,7 @@ public class ProviderImportServiceTests
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             httpClientFactory.WasCalled.Should().BeTrue();
+            httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.Requests.Should().ContainSingle();
             handler.Requests[0].RequestUri!.Host.Should().Be("api.onedrive.com");
         }
@@ -1102,10 +1104,12 @@ public class ProviderImportServiceTests
         }
 
         public bool WasCalled { get; private set; }
+        public string? ClientName { get; private set; }
 
         public HttpClient CreateClient(string name)
         {
             WasCalled = true;
+            ClientName = name;
             return new HttpClient(_handler, disposeHandler: false);
         }
     }
