@@ -102,6 +102,48 @@ public class FileIngestionServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromUrlAsync_RejectsHostResolvedToUnsafeAddressBeforeCreatingHttpClient()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        string? resolvedHost = null;
+        CancellationToken resolverCancellationToken = default;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                (host, cancellationToken) =>
+                {
+                    resolvedHost = host;
+                    resolverCancellationToken = cancellationToken;
+                    return Task.FromResult(new[] { IPAddress.Parse("127.0.0.1") });
+                });
+            var dto = CreateUrlDto("https://files.example.test/sample.txt");
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto, cancellationTokenSource.Token);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl host resolves to an address that is not allowed for server-side ingestion.*");
+
+            resolvedHost.Should().Be("files.example.test");
+            resolverCancellationToken.Should().Be(cancellationTokenSource.Token);
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromUrlAsync_ThrowsHttpRequestExceptionWhenRemoteDownloadFails()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -194,7 +236,8 @@ public class FileIngestionServiceTests
     private static FileIngestionService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        Func<string, CancellationToken, Task<IPAddress[]>>? hostAddressResolver = null)
     {
         var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
@@ -205,7 +248,9 @@ public class FileIngestionServiceTests
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance);
 
-        return new FileIngestionService(persistenceService, httpClientFactory);
+        hostAddressResolver ??= (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+
+        return new FileIngestionService(persistenceService, httpClientFactory, hostAddressResolver);
     }
 
     private static BaseDataContext CreateContext()

@@ -12,11 +12,21 @@ public class FileIngestionService : IFileIngestionService
 
     private readonly FilePersistenceService _persistenceService;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly Func<string, CancellationToken, Task<IPAddress[]>> _hostAddressResolver;
 
     public FileIngestionService(FilePersistenceService persistenceService, IHttpClientFactory httpClientFactory)
+        : this(persistenceService, httpClientFactory, ResolveHostAddressesAsync)
+    {
+    }
+
+    internal FileIngestionService(
+        FilePersistenceService persistenceService,
+        IHttpClientFactory httpClientFactory,
+        Func<string, CancellationToken, Task<IPAddress[]>> hostAddressResolver)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _hostAddressResolver = hostAddressResolver ?? throw new ArgumentNullException(nameof(hostAddressResolver));
     }
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
@@ -53,6 +63,7 @@ public class FileIngestionService : IFileIngestionService
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
         Uri fileUri = ParseFileUrl(dto.FileUrl);
+        await EnsureSafeResolvedHostAsync(fileUri, cancellationToken);
 
         var httpClient = _httpClientFactory.CreateClient(RemoteFileHttpClientName);
         using var response = await httpClient.GetAsync(fileUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -119,9 +130,29 @@ public class FileIngestionService : IFileIngestionService
         return uri;
     }
 
+    private async Task EnsureSafeResolvedHostAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        string host = GetNormalizedHost(uri);
+
+        if (IPAddress.TryParse(host, out _))
+            return;
+
+        IPAddress[] addresses = await _hostAddressResolver(host, cancellationToken);
+
+        if (addresses.Length == 0)
+            throw new HttpRequestException($"FileUrl host '{host}' did not resolve to an address.");
+
+        if (addresses.Any(IsPrivateOrReservedAddress))
+        {
+            throw new ArgumentException(
+                "FileUrl host resolves to an address that is not allowed for server-side ingestion.",
+                "FileUrl");
+        }
+    }
+
     private static bool IsUnsafeFileHost(Uri uri)
     {
-        var host = uri.IdnHost.TrimEnd('.').ToLowerInvariant();
+        string host = GetNormalizedHost(uri);
 
         if (host == "localhost" || host.EndsWith(".localhost", StringComparison.Ordinal))
             return true;
@@ -130,6 +161,16 @@ public class FileIngestionService : IFileIngestionService
             return true;
 
         return IPAddress.TryParse(host, out var address) && IsPrivateOrReservedAddress(address);
+    }
+
+    private static Task<IPAddress[]> ResolveHostAddressesAsync(string host, CancellationToken cancellationToken)
+    {
+        return Dns.GetHostAddressesAsync(host, cancellationToken);
+    }
+
+    private static string GetNormalizedHost(Uri uri)
+    {
+        return uri.IdnHost.TrimEnd('.').ToLowerInvariant();
     }
 
     private static bool IsPrivateOrReservedAddress(IPAddress address)
