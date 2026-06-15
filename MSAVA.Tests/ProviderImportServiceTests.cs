@@ -11,6 +11,7 @@ using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
+using MSAVA_INF.Utils;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
@@ -382,6 +383,67 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task OneDriveImportAsync_UsesProviderFallbackNameWhenResponseHasNoFileName()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            CreateResponse(HttpStatusCode.OK, "text/plain", "downloaded text content"));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+        string? contentPath = null;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var owner = CreateUser("onedrive-owner");
+            var accessGroup = CreateAccessGroup(owner, "OneDrive Imports");
+            context.Users.Add(owner);
+            context.AccessGroups.Add(accessGroup);
+            await context.SaveChangesAsync();
+
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(owner.Id)),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = accessGroup.Id,
+                Description = "Description should stay separate",
+                Tags = ["onedrive"],
+                Categories = ["imports"],
+                PublicViewing = true,
+                PublicDownload = false
+            };
+
+            var fileRefId = await service.ImportAsync(dto);
+
+            var fileRef = context.FileRefs.Single(fileReference => fileReference.Id == fileRefId);
+            var fileData = context.FileData.Single(fileData => fileData.FileReferenceId == fileRefId);
+            contentPath = FileContentUtils.GetFullPath(fileRef.FileHash, fileRef.FileExtension.ToString());
+            fileData.Name.Should().Be("OneDrive File");
+            fileData.Description.Should().Be("Description should stay separate");
+            fileData.FileExtension.Should().Be("txt");
+            fileData.Tags.Should().Equal("onedrive");
+            fileData.Categories.Should().Equal("imports");
+            fileData.PublicViewing.Should().BeTrue();
+            fileRef.PublicDownload.Should().BeFalse();
+            fileRef.AccessGroupId.Should().Be(accessGroup.Id);
+            handler.Requests.Should().ContainSingle();
+            handler.Requests[0].RequestUri!.Host.Should().Be("api.onedrive.com");
+        }
+        finally
+        {
+            if (contentPath is not null)
+                DeleteFileIfPresent(contentPath);
+
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task YouTubeImportAsync_RejectsEmptyDownloadSelectionBeforeParsingUrl()
     {
         var metadataDirectory = CreateTempDirectory();
@@ -510,12 +572,13 @@ public class ProviderImportServiceTests
     private static FilePersistenceService CreatePersistenceService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        ILogger<ServiceLogger>? serviceLogger = null)
+        ILogger<ServiceLogger>? serviceLogger = null,
+        SessionDTO? session = null)
     {
         return new FilePersistenceService(
             context,
             new FileManager(metadataStore, NullLogger<FileManager>.Instance),
-            new TestRequestSessionAccessor(),
+            new TestRequestSessionAccessor(session),
             new ServiceLogger(serviceLogger ?? NullLogger<ServiceLogger>.Instance, context),
             NullLogger<FilePersistenceService>.Instance);
     }
@@ -540,6 +603,59 @@ public class ProviderImportServiceTests
     {
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
+    }
+
+    private static void DeleteFileIfPresent(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
+    }
+
+    private static SessionDTO CreateSession(Guid userId)
+    {
+        return new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = userId,
+            Username = "provider-import-test",
+            IsWhitelisted = true,
+            Roles = ["Whitelisted"],
+            AccessGroups = []
+        };
+    }
+
+    private static UserDB CreateUser(string username)
+    {
+        return new UserDB
+        {
+            Id = Guid.NewGuid(),
+            Username = username,
+            PasswordHash = [1],
+            PasswordSalt = [2],
+            IsAdmin = false,
+            IsBanned = false,
+            IsWhitelisted = true,
+            CreatedAt = DateTime.UtcNow
+        };
+    }
+
+    private static AccessGroupDB CreateAccessGroup(UserDB owner, string name)
+    {
+        var accessGroup = new AccessGroupDB
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = owner.Id,
+            Owner = owner,
+            CreatedAt = DateTime.UtcNow,
+            Name = name,
+            Users = [],
+            SubGroups = []
+        };
+
+        owner.AccessGroups.Add(accessGroup);
+        accessGroup.Users.Add(owner);
+
+        return accessGroup;
     }
 
     private sealed class RecordingHttpClientFactory : IHttpClientFactory
@@ -660,9 +776,9 @@ public class ProviderImportServiceTests
         }
     }
 
-    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
+    private sealed class TestRequestSessionAccessor(SessionDTO? session = null) : IRequestSessionAccessor
     {
-        public SessionDTO? GetSession() => null;
+        public SessionDTO? GetSession() => session;
     }
 
     private sealed class TestDataContext : BaseDataContext

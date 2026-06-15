@@ -66,7 +66,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
                 await contentStream.CopyToAsync(fs, cancellationToken);
             }
 
-            string finalFileName = dto.Description ?? "OneDrive File";
+            string finalFileName = "OneDrive File";
             string inferredExtension = GetExtensionFromResponse(resp);
 
             if (resp.Content.Headers.ContentDisposition != null)
