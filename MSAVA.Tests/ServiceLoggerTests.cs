@@ -9,6 +9,26 @@ namespace MSAVA_App.Tests;
 public class ServiceLoggerTests
 {
     [Test]
+    public void Constructor_RejectsMissingLogger()
+    {
+        using var context = CreateContext();
+
+        Action act = () => _ = new ServiceLogger(null!, context);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("logger");
+    }
+
+    [Test]
+    public void Constructor_RejectsMissingContext()
+    {
+        Action act = () => _ = new ServiceLogger(NullLogger<ServiceLogger>.Instance, null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("context");
+    }
+
+    [Test]
     public async Task WriteLogAsync_PersistsUserLogWithAsyncSave()
     {
         using var context = CreateContext();

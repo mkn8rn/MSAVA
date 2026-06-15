@@ -13,8 +13,8 @@ public class ServiceLogger
 
     public ServiceLogger(ILogger<ServiceLogger> logger, BaseDataContext context)
     {
-        _logger = logger;
-        _context = context;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     public void LogInformation(string message)
