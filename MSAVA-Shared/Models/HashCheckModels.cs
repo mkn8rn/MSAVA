@@ -82,7 +82,7 @@ public record HashCheckResult
     /// <summary>
     /// Indicates if upload is required.
     /// </summary>
-    public bool UploadRequired => !FileExists;
+    public bool UploadRequired => !FileExists && string.IsNullOrWhiteSpace(Error);
     
     /// <summary>
     /// Message for the client.
