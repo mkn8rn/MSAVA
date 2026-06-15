@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -142,11 +143,19 @@ public class ApiService
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableDeserializationFailure(ex))
         {
             LogDeserializationFailure(ex, responseKind, relativeUrl);
             return default;
         }
+    }
+
+    private static bool IsRecoverableDeserializationFailure(Exception exception)
+    {
+        return exception is JsonException
+            or NotSupportedException
+            or InvalidOperationException
+            or IOException;
     }
 
     private void LogDeserializationFailure(Exception exception, ApiResponseKind responseKind, string relativeUrl)

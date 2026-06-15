@@ -37,6 +37,33 @@ public class ApiServiceTests
     }
 
     [Test]
+    public async Task SendForAsync_PropagatesCriticalDeserializationFailure()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingJsonContent(new OutOfMemoryException("Critical memory failure."))
+        });
+
+        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+
+        await act.Should().ThrowAsync<OutOfMemoryException>();
+    }
+
+    [Test]
+    public async Task SendMultipartForAsync_PropagatesCriticalDeserializationFailure()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingJsonContent(new OutOfMemoryException("Critical memory failure."))
+        });
+        using var content = new MultipartFormDataContent();
+
+        var act = async () => await api.SendMultipartForAsync<TestPayload>(HttpMethod.Post, "api/test", content);
+
+        await act.Should().ThrowAsync<OutOfMemoryException>();
+    }
+
+    [Test]
     public async Task SendForAsync_ReturnsDefaultForInvalidJson()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
@@ -119,6 +146,36 @@ public class ApiServiceTests
             CancellationToken cancellationToken)
         {
             throw new OperationCanceledException(cancellationToken);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    private sealed class ThrowingJsonContent : HttpContent
+    {
+        private readonly Exception _exception;
+
+        public ThrowingJsonContent(Exception exception)
+        {
+            Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            _exception = exception;
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            throw _exception;
+        }
+
+        protected override Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context,
+            CancellationToken cancellationToken)
+        {
+            throw _exception;
         }
 
         protected override bool TryComputeLength(out long length)
