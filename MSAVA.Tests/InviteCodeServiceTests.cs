@@ -65,6 +65,23 @@ public class InviteCodeServiceTests
         context.InviteCodes.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task CreateNewInviteCode_RejectsNonWhitelistedAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("pending-admin", isAdmin: true, isWhitelisted: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddHours(1));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before managing invite codes.");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
     [TestCase(0)]
     [TestCase(-1)]
     public async Task CreateNewInviteCode_RejectsNonPositiveMaxUses(int maxUses)
@@ -156,6 +173,22 @@ public class InviteCodeServiceTests
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only active admins can manage invite codes.");
+    }
+
+    [Test]
+    public async Task GetAllInviteCodes_RejectsNonWhitelistedAdminUser()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("pending-admin", isAdmin: true, isWhitelisted: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, user);
+
+        Func<Task> act = () => service.GetAllInviteCodesAsync();
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before managing invite codes.");
     }
 
     [Test]
@@ -295,7 +328,11 @@ public class InviteCodeServiceTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(string username, bool isAdmin = true, bool isBanned = false)
+    private static UserDB CreateUser(
+        string username,
+        bool isAdmin = true,
+        bool isBanned = false,
+        bool isWhitelisted = true)
     {
         return new UserDB
         {
@@ -305,7 +342,7 @@ public class InviteCodeServiceTests
             PasswordSalt = [2],
             IsAdmin = isAdmin,
             IsBanned = isBanned,
-            IsWhitelisted = true,
+            IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
     }

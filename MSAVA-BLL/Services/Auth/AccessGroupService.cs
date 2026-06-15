@@ -91,10 +91,15 @@ public class AccessGroupService
 
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
-        return SessionGuard.RequireActive(
+        SessionDTO session = SessionGuard.RequireActive(
             await _userService.GetSessionClaimsAsync(cancellationToken),
             "Session user is required to manage access groups.",
             "Banned users cannot manage access groups.");
+
+        if (!session.IsWhitelisted)
+            throw new UnauthorizedAccessException("Users must be whitelisted before managing access groups.");
+
+        return session;
     }
 
     private static string NormalizeAccessGroupName(string name)

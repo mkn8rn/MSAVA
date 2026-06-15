@@ -83,6 +83,25 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task CreateAccessGroup_RejectsNonWhitelistedSessionUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner", isWhitelisted: false);
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger, isWhitelisted: false);
+
+        Func<Task> act = () => service.CreateAccessGroupAsync("Editors");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before managing access groups.");
+        context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_AddsUserWhenSessionUserOwnsGroup()
     {
         using var context = CreateContext();
@@ -174,6 +193,29 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task AddUserToAccessGroupAsync_RejectsNonWhitelistedOwnerSessionUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner", isWhitelisted: false);
+        var target = CreateUser("target");
+        var accessGroup = CreateAccessGroup(owner, "Private");
+
+        context.Users.AddRange(owner, target);
+        context.AccessGroups.Add(accessGroup);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger, isWhitelisted: false);
+
+        Func<Task> act = () => service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before managing access groups.");
+        target.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_DoesNotDuplicateExistingMembership()
     {
         using var context = CreateContext();
@@ -209,15 +251,20 @@ public class AccessGroupServiceTests
         Guid sessionUserId,
         bool isAdmin,
         ServiceLogger logger,
-        bool isBanned = false)
+        bool isBanned = false,
+        bool isWhitelisted = true)
     {
         return new AccessGroupService(
             context,
-            new TestUserSessionService(sessionUserId, isAdmin, isBanned),
+            new TestUserSessionService(sessionUserId, isAdmin, isBanned, isWhitelisted),
             logger);
     }
 
-    private static UserDB CreateUser(string username, bool isAdmin = false, bool isBanned = false)
+    private static UserDB CreateUser(
+        string username,
+        bool isAdmin = false,
+        bool isBanned = false,
+        bool isWhitelisted = true)
     {
         return new UserDB
         {
@@ -227,7 +274,7 @@ public class AccessGroupServiceTests
             PasswordSalt = [2],
             IsAdmin = isAdmin,
             IsBanned = isBanned,
-            IsWhitelisted = true,
+            IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -256,12 +303,14 @@ public class AccessGroupServiceTests
         private readonly Guid _sessionUserId;
         private readonly bool _isAdmin;
         private readonly bool _isBanned;
+        private readonly bool _isWhitelisted;
 
-        public TestUserSessionService(Guid sessionUserId, bool isAdmin, bool isBanned)
+        public TestUserSessionService(Guid sessionUserId, bool isAdmin, bool isBanned, bool isWhitelisted)
         {
             _sessionUserId = sessionUserId;
             _isAdmin = isAdmin;
             _isBanned = isBanned;
+            _isWhitelisted = isWhitelisted;
         }
 
         public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -285,7 +334,7 @@ public class AccessGroupServiceTests
                 Username = "test-session",
                 IsAdmin = _isAdmin,
                 IsBanned = _isBanned,
-                IsWhitelisted = true,
+                IsWhitelisted = _isWhitelisted,
                 Roles = _isAdmin ? ["Admin"] : [],
                 Claims = [],
                 AccessGroups = [],

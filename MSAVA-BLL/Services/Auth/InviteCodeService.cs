@@ -142,6 +142,9 @@ public class InviteCodeService
             "Only active admins can manage invite codes.",
             "Only active admins can manage invite codes.");
 
+        if (!session.IsWhitelisted)
+            throw new UnauthorizedAccessException("Users must be whitelisted before managing invite codes.");
+
         if (!session.IsAdmin)
             throw new UnauthorizedAccessException("Only active admins can manage invite codes.");
 
