@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
@@ -90,6 +91,7 @@ public class FileDownloadServiceTests
             Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
             File.WriteAllText(contentPath, "download-session-reuse");
             context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference));
             context.SaveChanges();
 
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
@@ -116,6 +118,50 @@ public class FileDownloadServiceTests
     }
 
     [Test]
+    public async Task GetFileStreamByIdAsync_IncrementsDownloadCountAfterOpeningContent()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var fileReference = CreateFileReference(publicDownload: true);
+        var fileData = CreateFileData(fileReference, downloadCount: 2);
+        string contentPath = FileContentUtils.GetFullPath(fileReference.FileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "id-download-count");
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(fileData);
+            await context.SaveChangesAsync();
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false
+            });
+
+            var result = await service.GetFileStreamByIdAsync(fileReference.Id);
+            await result.FileStream.DisposeAsync();
+
+            context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
+                .DownloadCount
+                .Should()
+                .Be(3);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GetFileStreamByPathAsync_DeniesUnauthorizedMetadataBeforeCheckingPhysicalFileExists()
     {
         using var context = CreateContext();
@@ -129,14 +175,25 @@ public class FileDownloadServiceTests
         try
         {
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            metadataStore.AddMetadata(new SavedFileMetaRecord
+            var fileReference = new SavedFileReferenceDB
             {
-                RefId = Guid.NewGuid(),
+                Id = Guid.NewGuid(),
                 FileHash = fileHash,
-                FileExtension = "txt",
+                FileExtension = FileExtensionType._TXT,
                 AccessGroupId = Guid.NewGuid(),
                 PublicDownload = false
+            };
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = fileReference.Id,
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = fileReference.AccessGroupId,
+                PublicDownload = false
             });
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference));
+            await context.SaveChangesAsync();
             var service = CreateService(context, metadataStore, new SessionDTO
             {
                 LoggedIn = true,
@@ -150,6 +207,67 @@ public class FileDownloadServiceTests
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("User does not have permission to access this file.");
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByPathAsync_IncrementsDownloadCountForAuthorizedMetadata()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var accessGroupId = Guid.NewGuid();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string fileNameWithExtension = $"{Convert.ToHexString(fileHash).ToLowerInvariant()}.txt";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+        var fileReference = new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = fileHash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = accessGroupId,
+            PublicDownload = false
+        };
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "path-download-count");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = fileReference.Id,
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = accessGroupId,
+                PublicDownload = false
+            });
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference, downloadCount: 4));
+            await context.SaveChangesAsync();
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [accessGroupId],
+                IsAdmin = false
+            });
+
+            var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);
+            await result.FileStream.DisposeAsync();
+
+            context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
+                .DownloadCount
+                .Should()
+                .Be(5);
         }
         finally
         {
@@ -204,14 +322,25 @@ public class FileDownloadServiceTests
             File.WriteAllText(contentPath, "admin-path-download");
 
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
-            metadataStore.AddMetadata(new SavedFileMetaRecord
+            var fileReference = new SavedFileReferenceDB
             {
-                RefId = Guid.NewGuid(),
+                Id = Guid.NewGuid(),
                 FileHash = fileHash,
-                FileExtension = "txt",
+                FileExtension = FileExtensionType._TXT,
                 AccessGroupId = Guid.NewGuid(),
                 PublicDownload = false
+            };
+            metadataStore.AddMetadata(new SavedFileMetaRecord
+            {
+                RefId = fileReference.Id,
+                FileHash = fileHash,
+                FileExtension = "txt",
+                AccessGroupId = fileReference.AccessGroupId,
+                PublicDownload = false
             });
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference));
+            await context.SaveChangesAsync();
             var service = CreateService(context, metadataStore, new SessionDTO
             {
                 LoggedIn = true,
@@ -268,6 +397,35 @@ public class FileDownloadServiceTests
             FileExtension = FileExtensionType._TXT,
             PublicDownload = publicDownload,
             AccessGroupId = Guid.NewGuid()
+        };
+    }
+
+    private static SavedFileDataDB CreateFileData(
+        SavedFileReferenceDB fileReference,
+        uint downloadCount = 0)
+    {
+        string fileExtension = FileExtensionUtils.GetFileExtension(fileReference);
+
+        return new SavedFileDataDB
+        {
+            Id = Guid.NewGuid(),
+            FileReference = fileReference,
+            FileReferenceId = fileReference.Id,
+            SizeInBytes = 1,
+            Checksum = Convert.ToHexString(fileReference.FileHash),
+            Name = "download-test",
+            Description = "download test file",
+            MimeType = "text/plain",
+            FileExtension = fileExtension,
+            Tags = [],
+            Categories = [],
+            Metadata = JsonDocument.Parse("{}"),
+            PublicViewing = false,
+            DownloadCount = downloadCount,
+            SavedAt = DateTime.UtcNow,
+            OriginalCreator = Guid.NewGuid(),
+            LastModifiedAt = DateTime.UtcNow,
+            LastModifiedById = Guid.NewGuid()
         };
     }
 

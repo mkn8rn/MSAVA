@@ -47,6 +47,7 @@ public class FileDownloadService : IFileDownloadService
         string extension = FileExtensionUtils.GetFileExtension(db);
         string fileNameWithExtension = $"{fileName}.{extension}";
 
+        await IncrementDownloadCountAsync(db.Id, cancellationToken);
         await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
 
         return MappingUtils.MapReturnFileDTO(db, fileStream: fileStream);
@@ -69,6 +70,7 @@ public class FileDownloadService : IFileDownloadService
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileName, extension);
         string fileNameWithExtension = $"{fileName}.{extension}";
 
+        await IncrementDownloadCountAsync(db.Id, cancellationToken);
         await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
 
         return new PhysicalReturnFileDTO
@@ -91,6 +93,7 @@ public class FileDownloadService : IFileDownloadService
         string contentType = MetadataExtractor.GetContentType(extension);
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
 
+        await IncrementDownloadCountAsync(access.RefId, cancellationToken);
         await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
 
         return new PhysicalReturnFileDTO
@@ -112,6 +115,7 @@ public class FileDownloadService : IFileDownloadService
         string extension = Path.GetExtension(fileNameWithExtension).TrimStart('.');
         FileStream fileStream = _fileManager.GetFileStream(fileNameWithExtension);
 
+        await IncrementDownloadCountAsync(access.RefId, cancellationToken);
         await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
 
         return new StreamReturnFileDTO
@@ -153,6 +157,19 @@ public class FileDownloadService : IFileDownloadService
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
         return claims;
+    }
+
+    private async Task IncrementDownloadCountAsync(Guid fileReferenceId, CancellationToken cancellationToken)
+    {
+        var fileData = await _context.FileData
+            .SingleOrDefaultAsync(fileData => fileData.FileReferenceId == fileReferenceId, cancellationToken)
+            ?? throw new KeyNotFoundException($"File data for reference id {fileReferenceId} not found.");
+
+        if (fileData.DownloadCount == uint.MaxValue)
+            throw new OverflowException($"Download count for file reference id {fileReferenceId} has reached the maximum value.");
+
+        fileData.DownloadCount++;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
