@@ -41,6 +41,9 @@ public class FilesCheckController : ControllerBase
         [FromBody][Required] HashCheckRequest? request,
         CancellationToken cancellationToken = default)
     {
+        if (!HashCheckRequestPolicy.TryValidate(request, out var failureResult))
+            return BadRequest(failureResult);
+
         var result = await _deduplicationService.CheckAndGetReferenceAsync(request, cancellationToken);
 
         if (result.Error != null)

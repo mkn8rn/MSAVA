@@ -41,8 +41,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         HashCheckRequest? request,
         CancellationToken cancellationToken = default)
     {
-        if (request is null)
-            return HashCheckResult.Failed("", "Hash check request is required.");
+        if (!HashCheckRequestPolicy.TryValidate(request, out var failureResult))
+            return failureResult;
 
         if (!TryNormalizeHash(request.ContentHashHex, out string hashHex, out var hashValidationError))
         {

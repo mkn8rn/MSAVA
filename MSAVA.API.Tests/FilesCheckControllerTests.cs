@@ -13,15 +13,36 @@ public class FilesCheckControllerTests
     {
         var service = new RecordingDeduplicationService
         {
-            SingleResult = HashCheckResult.Failed("", "Hash check request is required.")
+            SingleResult = HashCheckResult.Failed("", HashCheckRequestPolicy.RequiredMessage)
         };
         var controller = new FilesCheckController(service);
 
         var response = await controller.CheckHash(null);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().BeEquivalentTo(service.SingleResult);
+        badRequest.Value.Should().BeEquivalentTo(HashCheckResult.Failed("", HashCheckRequestPolicy.RequiredMessage));
         service.SingleRequest.Should().BeNull();
+        service.SingleCallCount.Should().Be(0);
+    }
+
+    [Test]
+    public async Task CheckHash_ReturnsOkForValidRequestAndPassesCancellationToken()
+    {
+        var request = CreateRequest(1);
+        var service = new RecordingDeduplicationService
+        {
+            SingleResult = HashCheckResult.NotFound(request.ContentHashHex)
+        };
+        var controller = new FilesCheckController(service);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.CheckHash(request, cancellationTokenSource.Token);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(service.SingleResult);
+        service.SingleRequest.Should().BeSameAs(request);
+        service.SingleCancellationToken.Should().Be(cancellationTokenSource.Token);
+        service.SingleCallCount.Should().Be(1);
     }
 
     [Test]
@@ -120,6 +141,8 @@ public class FilesCheckControllerTests
     {
         public HashCheckRequest? SingleRequest { get; private set; }
         public List<HashCheckRequest>? BatchRequest { get; private set; }
+        public int SingleCallCount { get; private set; }
+        public CancellationToken SingleCancellationToken { get; private set; }
         public HashCheckResult SingleResult { get; set; } = HashCheckResult.NotFound(new string('0', 64));
         public List<HashCheckResult> BatchResults { get; set; } = [];
 
@@ -127,7 +150,9 @@ public class FilesCheckControllerTests
             HashCheckRequest? request,
             CancellationToken cancellationToken = default)
         {
+            SingleCallCount++;
             SingleRequest = request;
+            SingleCancellationToken = cancellationToken;
             return Task.FromResult(SingleResult);
         }
 
