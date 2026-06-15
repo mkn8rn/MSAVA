@@ -181,11 +181,11 @@ public static class FileContentUtils
             "xls" => read >= 8 && header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0,
             "ppt" => read >= 8 && header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0,
             "rtf" => read >= 5 && header[0] == 0x7B && header[1] == 0x5C && header[2] == 0x72 && header[3] == 0x74 && header[4] == 0x66,
-            "html" => read >= 6 && (header[0] == 0x3C && header[1] == 0x68 && header[2] == 0x74 && header[3] == 0x6D && header[4] == 0x6C ||
-                                    header[0] == 0x3C && header[1] == 0x48 && header[2] == 0x54 && header[3] == 0x4D && header[4] == 0x4C),
+            "html" or "htm" => StartsWithAsciiIgnoreCase(header, read, "<html") ||
+                                StartsWithAsciiIgnoreCase(header, read, "<!doctype html"),
             "xml" => read >= 5 && header[0] == 0x3C && header[1] == 0x3F && header[2] == 0x78 && header[3] == 0x6D && header[4] == 0x6C,
             "json" => read >= 1 && (header[0] == 0x7B || header[0] == 0x5B),
-            "csv" or "txt" or "log" or "md" or "yaml" or "ini" => true,
+            "csv" or "tsv" or "txt" or "log" or "md" or "markdown" or "yaml" or "yml" or "ini" => true,
             "odt" or "ods" or "odp" => read >= 4 && header[0] == 0x50 && header[1] == 0x4B && header[2] == 0x03 && header[3] == 0x04,
 
             // Raster images
@@ -250,7 +250,7 @@ public static class FileContentUtils
             "ts" or "mts" or "m2ts" => read >= 1 && header[0] == 0x47,
             "f4v" => read >= 4 && header[0] == 0x46 && header[1] == 0x34 && header[2] == 0x56,
 
-            _ => true
+            _ => false
         };
     }
 

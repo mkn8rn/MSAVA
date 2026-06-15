@@ -147,6 +147,32 @@ public class FileContentUtilsTests
     }
 
     [Test]
+    public void ValidateFileContent_RejectsUnknownExtension()
+    {
+        using var stream = new MemoryStream([0x01, 0x02, 0x03, 0x04]);
+
+        FileContentUtils.ValidateFileContent(stream, "unknown").Should().BeFalse();
+    }
+
+    [TestCase("tsv")]
+    [TestCase("markdown")]
+    [TestCase("yml")]
+    public void ValidateFileContent_AcceptsSupportedTextAliasesWithoutMagicBytes(string extension)
+    {
+        using var stream = new MemoryStream("plain text value"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, extension).Should().BeTrue();
+    }
+
+    [Test]
+    public void ValidateFileContent_AcceptsHtmlDoctype()
+    {
+        using var stream = new MemoryStream("<!DOCTYPE html>"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, "htm").Should().BeTrue();
+    }
+
+    [Test]
     public void ValidateFileContent_AcceptsSvgRootWithoutXmlDeclaration()
     {
         using var stream = new MemoryStream("<svg viewBox=\"0 0 1 1\"></svg>"u8.ToArray());
