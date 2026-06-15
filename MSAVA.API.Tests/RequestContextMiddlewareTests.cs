@@ -52,6 +52,27 @@ public class RequestContextMiddlewareTests
         session.AccessGroups.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task InvokeAsync_StoresAnonymousSessionForAuthenticatedUserWithoutValidSubject()
+    {
+        var context = new DefaultHttpContext
+        {
+            User = CreatePrincipal(
+                new Claim(JwtRegisteredClaimNames.UniqueName, "session-user"),
+                new Claim(ClaimTypes.Role, "Admin"))
+        };
+        var middleware = new RequestContextMiddleware(_ => Task.CompletedTask);
+
+        await middleware.InvokeAsync(context);
+
+        var session = context.Items[HttpContextRequestSessionAccessor.SessionItemKey].Should().BeOfType<SessionDTO>().Subject;
+        session.LoggedIn.Should().BeFalse();
+        session.UserId.Should().Be(Guid.Empty);
+        session.Username.Should().BeEmpty();
+        session.Roles.Should().BeEmpty();
+        session.AccessGroups.Should().BeEmpty();
+    }
+
     private static ClaimsPrincipal CreatePrincipal(params Claim[] claims)
     {
         return new ClaimsPrincipal(new ClaimsIdentity(

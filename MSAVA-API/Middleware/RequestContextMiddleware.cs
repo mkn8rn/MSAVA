@@ -31,21 +31,11 @@ public class RequestContextMiddleware
         var isLoggedIn = user?.Identity?.IsAuthenticated ?? false;
 
         if (!isLoggedIn || user is null)
-        {
-            return new SessionDTO
-            {
-                LoggedIn = false,
-                UserId = Guid.Empty,
-                Username = string.Empty,
-                Roles = [],
-                Claims = [],
-                AccessGroups = [],
-                IssuedAt = DateTime.MinValue,
-                ExpiresAt = DateTime.MinValue
-            };
-        }
+            return CreateAnonymousSession();
 
-        var userId = AuthorizationUser.GetAuthenticatedUserId(user) ?? Guid.Empty;
+        var userId = AuthorizationUser.GetAuthenticatedUserId(user);
+        if (userId is null)
+            return CreateAnonymousSession();
 
         // Parse username
         var username = user.FindFirstValue(ClaimTypes.Name) 
@@ -67,7 +57,7 @@ public class RequestContextMiddleware
         return new SessionDTO
         {
             LoggedIn = true,
-            UserId = userId,
+            UserId = userId.Value,
             Username = username,
             IsAdmin = user.IsInRole("Admin"),
             IsBanned = user.IsInRole("Banned"),
@@ -77,6 +67,21 @@ public class RequestContextMiddleware
             AccessGroups = accessGroups,
             IssuedAt = DateTime.MinValue, // Rarely needed
             ExpiresAt = DateTime.MinValue  // Rarely needed
+        };
+    }
+
+    private static SessionDTO CreateAnonymousSession()
+    {
+        return new SessionDTO
+        {
+            LoggedIn = false,
+            UserId = Guid.Empty,
+            Username = string.Empty,
+            Roles = [],
+            Claims = [],
+            AccessGroups = [],
+            IssuedAt = DateTime.MinValue,
+            ExpiresAt = DateTime.MinValue
         };
     }
 
