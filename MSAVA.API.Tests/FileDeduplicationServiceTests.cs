@@ -598,6 +598,68 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_UsesOldestOwnedAccessGroupWhenRequestOmitsAccessGroup()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-default-owned-group-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var newerOwnedGroup = CreateAccessGroup(sessionUser, "newer");
+            newerOwnedGroup.CreatedAt = DateTime.UtcNow.AddMinutes(-5);
+            var olderOwnedGroup = CreateAccessGroup(sessionUser, "older");
+            olderOwnedGroup.CreatedAt = DateTime.UtcNow.AddMinutes(-10);
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(existingGroup, newerOwnedGroup, olderOwnedGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                FileName = "default-owned-group-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeTrue();
+            result.NewReferenceCreated.Should().BeTrue();
+            result.ReferenceId.Should().NotBeNull();
+            result.Error.Should().BeNull();
+
+            context.FileRefs
+                .Single(reference => reference.Id == result.ReferenceId)
+                .AccessGroupId
+                .Should()
+                .Be(olderOwnedGroup.Id);
+            metadataStore.GetByAccessGroup(olderOwnedGroup.Id)
+                .Should()
+                .ContainSingle(record => record.RefId == result.ReferenceId);
+            metadataStore.GetByAccessGroup(newerOwnedGroup.Id).Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsFailureForEmptyRequestedAccessGroup()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-empty-group-{Guid.NewGuid()}"));

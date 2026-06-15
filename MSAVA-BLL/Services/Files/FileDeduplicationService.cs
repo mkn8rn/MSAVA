@@ -391,8 +391,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     private async Task<Guid?> GetDefaultAccessGroupAsync(Guid userId, CancellationToken cancellationToken)
     {
         // Get user's first owned access group, or any they're a member of
-        var accessGroup = await _context.AccessGroups
-            .Where(ag => ag.OwnerId == userId)
+        var accessGroup = await OrderAccessGroupsForDefault(_context.AccessGroups
+                .Where(ag => ag.OwnerId == userId))
             .Select(ag => ag.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -400,8 +400,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return accessGroup;
 
         // Fall back to any group user is member of
-        accessGroup = await _context.AccessGroups
-            .Where(ag => ag.Users.Any(u => u.Id == userId))
+        accessGroup = await OrderAccessGroupsForDefault(_context.AccessGroups
+                .Where(ag => ag.Users.Any(u => u.Id == userId)))
             .Select(ag => ag.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -409,6 +409,14 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return null;
 
         return accessGroup;
+    }
+
+    private static IOrderedQueryable<AccessGroupDB> OrderAccessGroupsForDefault(
+        IQueryable<AccessGroupDB> accessGroups)
+    {
+        return accessGroups
+            .OrderBy(accessGroup => accessGroup.CreatedAt)
+            .ThenBy(accessGroup => accessGroup.Id);
     }
 
     private bool TryGetActiveSession(out SessionDTO session, out string error)
