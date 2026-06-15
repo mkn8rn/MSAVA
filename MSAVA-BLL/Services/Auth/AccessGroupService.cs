@@ -27,7 +27,7 @@ public class AccessGroupService
 
     public async Task<Guid> CreateAccessGroupAsync(string name, CancellationToken cancellationToken = default)
     {
-        string accessGroupName = NormalizeAccessGroupName(name);
+        string accessGroupName = AccessGroupInputPolicy.NormalizeName(name);
         SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == session.UserId, cancellationToken)
@@ -102,11 +102,4 @@ public class AccessGroupService
         return session;
     }
 
-    private static string NormalizeAccessGroupName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Access group name must be provided.", nameof(name));
-
-        return name.Trim();
-    }
 }

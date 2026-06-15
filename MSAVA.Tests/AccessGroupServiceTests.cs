@@ -64,6 +64,23 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task CreateAccessGroup_RejectsOversizeNameBeforeSessionLookup()
+    {
+        using var context = CreateContext();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = new AccessGroupService(
+            context,
+            new ThrowingUserSessionService(),
+            logger);
+
+        Func<Task> act = () => service.CreateAccessGroupAsync(new string('a', AccessGroupInputPolicy.MaximumNameLength + 1));
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"Access group name must be {AccessGroupInputPolicy.MaximumNameLength} characters or fewer.*");
+        context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task CreateAccessGroup_RejectsBannedSessionUser()
     {
         using var context = CreateContext();
@@ -342,6 +359,23 @@ public class AccessGroupServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
         }
+    }
+
+    private sealed class ThrowingUserSessionService : IUserSessionService
+    {
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
+
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
+
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
+
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
+
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
+
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
+
+        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("Session lookup should not be reached.");
     }
 
     private sealed class TestDataContext : BaseDataContext
