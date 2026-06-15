@@ -176,20 +176,11 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         extension = string.Empty;
         error = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(fileExtension))
-        {
-            error = "FileExtension must be provided.";
-            return false;
-        }
-
-        extension = fileExtension.Trim().TrimStart('.').ToLowerInvariant();
-        if (extension.Length == 0)
-        {
-            error = "FileExtension must be provided.";
-            return false;
-        }
-
-        return true;
+        return MappingUtils.TryParseSupportedFileExtension(
+            fileExtension,
+            out _,
+            out extension,
+            out error);
     }
 
     private async Task<CurrentUserFileAccess> GetCurrentUserFileAccessAsync(
@@ -224,7 +215,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         bool isAdmin,
         CancellationToken cancellationToken)
     {
-        var extensionType = MappingUtils.ParseFileExtension(extension);
+        var extensionType = MappingUtils.ParseSupportedFileExtension(extension);
 
         var matchingReferences = _context.FileRefs
             .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType);
@@ -242,7 +233,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         string extension,
         CancellationToken cancellationToken)
     {
-        var extensionType = MappingUtils.ParseFileExtension(extension);
+        var extensionType = MappingUtils.ParseSupportedFileExtension(extension);
 
         return await _context.FileRefs
             .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType)

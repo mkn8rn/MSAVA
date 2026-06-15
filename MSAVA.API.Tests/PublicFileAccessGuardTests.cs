@@ -120,6 +120,25 @@ public class PublicFileAccessGuardTests
     }
 
     [Test]
+    public async Task CanServePublicFile_DeniesUnsupportedExtensionEvenWhenUnknownSqlReferenceIsPublic()
+    {
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var reference = CreateReference(hash, publicDownload: true);
+        reference.FileExtension = FileExtensionType.Unknown;
+        context.FileRefs.Add(reference);
+        await context.SaveChangesAsync();
+        var httpContext = CreateHttpContext(context);
+        string physicalPath = Path.Combine(
+            FileContentUtils.FilesDirectory,
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.exe");
+
+        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
+    [Test]
     public void CanServePublicFile_DeniesMissingSqlReference()
     {
         using var context = CreateDataContext();

@@ -333,6 +333,42 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_RejectsUnsupportedExtensionBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"unsupported-extension-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var unknownContentPath = FileContentUtils.GetFullPath(hash, "unknown");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(unknownContentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+            dto.FileExtension = "exe";
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileExtension 'exe' is not supported.*");
+
+            File.Exists(unknownContentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "unknown").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(unknownContentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_ExtractsMetadataFromTempFileForNonSeekableInput()
     {
         var content = Encoding.UTF8.GetBytes("metadata from non seekable stream");
@@ -420,6 +456,47 @@ public class FilePersistenceServiceTests
         {
             DeleteFileIfPresent(tempFilePath);
             DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromTempFileAsync_RejectsUnsupportedExtensionAndDeletesTempFile()
+    {
+        var content = Encoding.UTF8.GetBytes($"unsupported-temp-extension-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var unknownContentPath = FileContentUtils.GetFullPath(hash, "unknown");
+        var tempFilePath = Path.GetTempFileName();
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(unknownContentPath);
+
+        try
+        {
+            await File.WriteAllBytesAsync(tempFilePath, content);
+
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateFetchDto(tempFilePath, accessGroup.Id);
+            dto.FileExtension = "exe";
+
+            Func<Task> act = () => service.CreateFileFromTempFileAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileExtension 'exe' is not supported.*");
+
+            File.Exists(tempFilePath).Should().BeFalse();
+            File.Exists(unknownContentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "unknown").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(tempFilePath);
+            DeleteFileIfPresent(unknownContentPath);
             DeleteDirectoryIfPresent(metadataDirectory);
         }
     }

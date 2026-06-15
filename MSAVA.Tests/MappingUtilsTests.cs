@@ -55,6 +55,56 @@ public class MappingUtilsTests
     }
 
     [Test]
+    public void MapSavedFileReferenceDB_FromStream_RejectsUnsupportedExtension()
+    {
+        var fileHash = SHA256.HashData(Encoding.UTF8.GetBytes("unsupported-stream-reference"));
+        using var stream = new MemoryStream([]);
+        var dto = new SaveFileFromStreamDTO
+        {
+            FileName = "reference",
+            FileExtension = "exe",
+            Stream = stream,
+            AccessGroupId = Guid.NewGuid(),
+            PublicDownload = true
+        };
+
+        Action act = () => MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("FileExtension 'exe' is not supported.*");
+    }
+
+    [Test]
+    public void TryParseSupportedFileExtension_RejectsPathLikeExtension()
+    {
+        bool parsed = MappingUtils.TryParseSupportedFileExtension(
+            "folder/txt",
+            out var result,
+            out string normalizedExtension,
+            out string error);
+
+        parsed.Should().BeFalse();
+        result.Should().Be(FileExtensionType.Unknown);
+        normalizedExtension.Should().Be("folder/txt");
+        error.Should().Be("FileExtension contains invalid characters.");
+    }
+
+    [Test]
+    public void TryParseSupportedFileExtension_NormalizesPrefixAndCasing()
+    {
+        bool parsed = MappingUtils.TryParseSupportedFileExtension(
+            " _TXT ",
+            out var result,
+            out string normalizedExtension,
+            out string error);
+
+        parsed.Should().BeTrue();
+        result.Should().Be(FileExtensionType._TXT);
+        normalizedExtension.Should().Be("txt");
+        error.Should().BeEmpty();
+    }
+
+    [Test]
     public void MapReturnFileDTO_AcceptsEmptyByteArray()
     {
         var fileReference = CreateFileReference(SHA256.HashData([]));

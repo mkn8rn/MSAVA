@@ -174,7 +174,15 @@ public class FileDownloadService : IFileDownloadService
         if (!StoredFileName.TryParse(fileNameWithExtension, out var storedFileName))
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
-        FileExtensionType extensionType = MappingUtils.ParseFileExtension(storedFileName.Extension);
+        if (!MappingUtils.TryParseSupportedFileExtension(
+                storedFileName.Extension,
+                out var extensionType,
+                out _,
+                out _))
+        {
+            throw new UnauthorizedAccessException("User does not have permission to access this file.");
+        }
+
         var references = _context.FileRefs
             .AsNoTracking()
             .Where(fileReference =>

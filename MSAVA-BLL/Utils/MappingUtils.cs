@@ -10,20 +10,86 @@ public static class MappingUtils
 {
     public static FileExtensionType ParseFileExtension(string extension)
     {
-        if (string.IsNullOrWhiteSpace(extension))
-            return FileExtensionType.Unknown;
+        return TryParseSupportedFileExtension(extension, out var result, out _, out _)
+            ? result
+            : FileExtensionType.Unknown;
+    }
 
-        var normalized = extension.AsSpan().Trim().TrimStart('.');
-        Span<char> enumName = stackalloc char[normalized.Length + 1];
-        enumName[0] = '_';
-        
-        for (int i = 0; i < normalized.Length; i++)
-            enumName[i + 1] = char.ToUpperInvariant(normalized[i]);
-
-        if (Enum.TryParse<FileExtensionType>(enumName.ToString(), out var result))
+    public static FileExtensionType ParseSupportedFileExtension(string extension)
+    {
+        if (TryParseSupportedFileExtension(extension, out var result, out _, out string error))
             return result;
 
-        return FileExtensionType.Unknown;
+        throw new ArgumentException(error, nameof(extension));
+    }
+
+    public static bool TryParseSupportedFileExtension(
+        string? extension,
+        out FileExtensionType result,
+        out string normalizedExtension,
+        out string error)
+    {
+        result = FileExtensionType.Unknown;
+        normalizedExtension = string.Empty;
+        error = string.Empty;
+
+        if (!TryNormalizeFileExtension(extension, out normalizedExtension, out error))
+            return false;
+
+        Span<char> enumName = stackalloc char[normalizedExtension.Length + 1];
+        enumName[0] = '_';
+
+        for (int i = 0; i < normalizedExtension.Length; i++)
+            enumName[i + 1] = char.ToUpperInvariant(normalizedExtension[i]);
+
+        if (Enum.TryParse<FileExtensionType>(enumName.ToString(), out result) &&
+            result != FileExtensionType.Unknown)
+        {
+            return true;
+        }
+
+        error = $"FileExtension '{normalizedExtension}' is not supported.";
+        return false;
+    }
+
+    private static bool TryNormalizeFileExtension(
+        string? extension,
+        out string normalizedExtension,
+        out string error)
+    {
+        normalizedExtension = string.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            error = "FileExtension must be provided.";
+            return false;
+        }
+
+        var normalized = extension.AsSpan().Trim();
+
+        while (normalized.Length > 0 && (normalized[0] == '.' || normalized[0] == '_'))
+        {
+            normalized = normalized[1..];
+        }
+
+        if (normalized.Length == 0 || normalized.IsWhiteSpace())
+        {
+            error = "FileExtension must be provided.";
+            return false;
+        }
+
+        normalizedExtension = normalized.ToString().ToLowerInvariant();
+
+        if (normalizedExtension.Contains('/') ||
+            normalizedExtension.Contains('\\') ||
+            normalizedExtension.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            error = "FileExtension contains invalid characters.";
+            return false;
+        }
+
+        return true;
     }
 
     public static UserDTO MapUserDTOWithRelationships(UserDB db)
@@ -93,7 +159,7 @@ public static class MappingUtils
         SaveFileFromStreamDTO dto,
         byte[] fileHash)
     {
-        var extension = ParseFileExtension(dto.FileExtension);
+        var extension = ParseSupportedFileExtension(dto.FileExtension);
         return new SavedFileReferenceDB
         {
             Id = Guid.NewGuid(),
@@ -108,7 +174,7 @@ public static class MappingUtils
         SaveFileFromFetchDTO dto,
         byte[] fileHash)
     {
-        var extension = ParseFileExtension(dto.FileExtension);
+        var extension = ParseSupportedFileExtension(dto.FileExtension);
         return new SavedFileReferenceDB
         {
             Id = Guid.NewGuid(),

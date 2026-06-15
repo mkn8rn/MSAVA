@@ -32,7 +32,15 @@ public static class PublicFileAccessGuard
 
         try
         {
-            var extensionType = MappingUtils.ParseFileExtension(storedFileName.Extension);
+            if (!MappingUtils.TryParseSupportedFileExtension(
+                    storedFileName.Extension,
+                    out var extensionType,
+                    out _,
+                    out _))
+            {
+                return false;
+            }
+
             return dbContext.FileRefs
                 .AsNoTracking()
                 .Any(fileReference =>

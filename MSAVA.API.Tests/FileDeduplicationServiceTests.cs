@@ -82,6 +82,45 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForUnsupportedFileExtension()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-unsupported-extension-{Guid.NewGuid()}"));
+        var hashHex = Convert.ToHexString(contentHash);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = hashHex,
+                FileExtension = "exe",
+                AccessGroupId = Guid.NewGuid(),
+                FileName = "unsupported-extension-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("FileExtension 'exe' is not supported.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().Be(hashHex);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+            metadataStore.GetByFileHash(contentHash, "unknown").Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceBatchAsync_ReturnsFailureForNullRequestList()
     {
         var metadataDirectory = CreateTempDirectory();

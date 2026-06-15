@@ -149,6 +149,7 @@ public class FilePersistenceService
             throw new ArgumentException("FileName must be provided.", nameof(dto));
         if (string.IsNullOrWhiteSpace(dto.FileExtension))
             throw new ArgumentException("FileExtension must be provided.", nameof(dto));
+        MappingUtils.ParseSupportedFileExtension(dto.FileExtension);
         if (dto.Stream is null)
             throw new ArgumentException("File content must be provided as a stream.", nameof(dto));
         if (dto.AccessGroupId == Guid.Empty)
@@ -161,6 +162,7 @@ public class FilePersistenceService
             throw new ArgumentException("FileName must be provided.", nameof(dto));
         if (string.IsNullOrWhiteSpace(dto.FileExtension))
             throw new ArgumentException("FileExtension must be provided.", nameof(dto));
+        MappingUtils.ParseSupportedFileExtension(dto.FileExtension);
         if (string.IsNullOrWhiteSpace(dto.TempFilePath))
             throw new ArgumentException("TempFilePath must be provided.", nameof(dto));
         if (dto.AccessGroupId == Guid.Empty)
