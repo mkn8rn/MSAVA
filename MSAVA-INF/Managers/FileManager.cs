@@ -98,7 +98,7 @@ public class FileManager
         return GetFileStream(fullPath, options);
     }
 
-    public FileStream GetFileStream(string fullPath, FileStreamOptions options)
+    private FileStream GetFileStream(string fullPath, FileStreamOptions options)
     {
         return new FileStream(fullPath, options);
     }

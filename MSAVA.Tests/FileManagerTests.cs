@@ -11,6 +11,24 @@ namespace MSAVA_App.Tests;
 public class FileManagerTests
 {
     [Test]
+    public void FileManager_DoesNotExposeUnsafeFullPathStreamOverload()
+    {
+        var unsafeOverload = typeof(FileManager)
+            .GetMethods()
+            .SingleOrDefault(method =>
+                method.Name == nameof(FileManager.GetFileStream) &&
+                method.GetParameters() is
+                [
+                    { ParameterType: var firstParameter },
+                    { ParameterType: var secondParameter }
+                ] &&
+                firstParameter == typeof(string) &&
+                secondParameter == typeof(FileStreamOptions));
+
+        unsafeOverload.Should().BeNull();
+    }
+
+    [Test]
     public async Task SaveTempFileAsync_AddsMetadataWithoutOverwritingExistingContent()
     {
         byte[] content = Encoding.UTF8.GetBytes($"existing-content-{Guid.NewGuid()}");
