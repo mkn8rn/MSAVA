@@ -369,6 +369,41 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_RejectsOversizeStreamBeforeRegisteringFile()
+    {
+        var content = Encoding.UTF8.GetBytes("12345");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id, maximumFileSizeBytes: 4);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_ExtractsMetadataFromTempFileForNonSeekableInput()
     {
         var content = Encoding.UTF8.GetBytes("metadata from non seekable stream");
@@ -409,6 +444,46 @@ public class FilePersistenceServiceTests
         }
         finally
         {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromTempFileAsync_RejectsOversizeTempFileBeforeHashing()
+    {
+        var content = Encoding.UTF8.GetBytes("12345");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var tempFilePath = Path.GetTempFileName();
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            await File.WriteAllBytesAsync(tempFilePath, content);
+
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id, maximumFileSizeBytes: 4);
+            var dto = CreateFetchDto(tempFilePath, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromTempFileAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            File.Exists(tempFilePath).Should().BeFalse();
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(tempFilePath);
             DeleteFileIfPresent(contentPath);
             DeleteDirectoryIfPresent(metadataDirectory);
         }
@@ -618,7 +693,8 @@ public class FilePersistenceServiceTests
         BaseDataContext context,
         MetadataStore metadataStore,
         Guid? sessionUserId = null,
-        bool isBanned = false)
+        bool isBanned = false,
+        long maximumFileSizeBytes = FileSizePolicy.MaximumFileSizeBytes)
     {
         var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
@@ -647,7 +723,8 @@ public class FilePersistenceServiceTests
             fileManager,
             new TestRequestSessionAccessor(session),
             serviceLogger,
-            NullLogger<FilePersistenceService>.Instance);
+            NullLogger<FilePersistenceService>.Instance,
+            maximumFileSizeBytes);
     }
 
     private static (UserDB User, AccessGroupDB AccessGroup) SeedUserWithAccessGroup(BaseDataContext context)

@@ -68,6 +68,7 @@ public class FileIngestionService : IFileIngestionService
         var httpClient = _httpClientFactory.CreateClient(RemoteFileHttpClientName);
         using var response = await httpClient.GetAsync(fileUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         await EnsureSuccessfulRemoteResponseAsync(response, cancellationToken);
+        EnsureRemoteContentIsWithinMaximum(response);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
         var streamDto = new SaveFileFromStreamDTO
@@ -138,6 +139,7 @@ public class FileIngestionService : IFileIngestionService
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
 
+        FileSizePolicy.EnsureWithinMaximum(dto.FormFile.Length, _persistenceService.MaximumFileSizeBytes);
         await using var stream = dto.FormFile.OpenReadStream();
 
         var streamDto = new SaveFileFromStreamDTO
@@ -154,5 +156,16 @@ public class FileIngestionService : IFileIngestionService
         };
 
         return await _persistenceService.CreateFileFromStreamAsync(streamDto, cancellationToken);
+    }
+
+    private void EnsureRemoteContentIsWithinMaximum(HttpResponseMessage response)
+    {
+        if (response.Content is null)
+            throw new HttpRequestException("File URL response did not include content.");
+
+        long? declaredContentLength = response.Content.Headers.ContentLength;
+
+        if (declaredContentLength is not null)
+            FileSizePolicy.EnsureWithinMaximum(declaredContentLength.Value, _persistenceService.MaximumFileSizeBytes);
     }
 }

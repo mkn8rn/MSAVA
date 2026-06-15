@@ -21,6 +21,7 @@ public class FilePersistenceService
     private readonly IRequestSessionAccessor _requestSessionAccessor;
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FilePersistenceService> _logger;
+    private readonly long _maximumFileSizeBytes;
 
     public FilePersistenceService(
         BaseDataContext context,
@@ -28,13 +29,33 @@ public class FilePersistenceService
         IRequestSessionAccessor requestSessionAccessor,
         ServiceLogger serviceLogger,
         ILogger<FilePersistenceService> logger)
+        : this(
+            context,
+            fileManager,
+            requestSessionAccessor,
+            serviceLogger,
+            logger,
+            FileSizePolicy.MaximumFileSizeBytes)
+    {
+    }
+
+    internal FilePersistenceService(
+        BaseDataContext context,
+        FileManager fileManager,
+        IRequestSessionAccessor requestSessionAccessor,
+        ServiceLogger serviceLogger,
+        ILogger<FilePersistenceService> logger,
+        long maximumFileSizeBytes)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
         _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _maximumFileSizeBytes = FileSizePolicy.RequireValidMaximum(maximumFileSizeBytes);
     }
+
+    internal long MaximumFileSizeBytes => _maximumFileSizeBytes;
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
     {
@@ -46,7 +67,11 @@ public class FilePersistenceService
 
         try
         {
-            var (fileHash, fileLength) = await CopyStreamToTempFileAndHashAsync(dto.Stream, tempFilePath, cancellationToken);
+            var (fileHash, fileLength) = await CopyStreamToTempFileAndHashAsync(
+                dto.Stream,
+                tempFilePath,
+                _maximumFileSizeBytes,
+                cancellationToken);
             var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
             var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
             string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
@@ -78,6 +103,7 @@ public class FilePersistenceService
             Guid sessionUserId = await AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
             long fileLength = new FileInfo(tempFilePath).Length;
+            FileSizePolicy.EnsureWithinMaximum(fileLength, _maximumFileSizeBytes);
             byte[] fileHash = await ComputeFileHashAsync(tempFilePath, cancellationToken);
             var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
             var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
@@ -172,6 +198,7 @@ public class FilePersistenceService
     private static async Task<(byte[] FileHash, long FileLength)> CopyStreamToTempFileAndHashAsync(
         Stream source,
         string tempFilePath,
+        long maximumFileSizeBytes,
         CancellationToken cancellationToken)
     {
         long fileLength = 0;
@@ -185,6 +212,7 @@ public class FilePersistenceService
 
             while ((bytesRead = await source.ReadAsync(buffer, cancellationToken)) > 0)
             {
+                FileSizePolicy.EnsureChunkWithinMaximum(fileLength, bytesRead, maximumFileSizeBytes);
                 await cryptoStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
                 fileLength += bytesRead;
             }

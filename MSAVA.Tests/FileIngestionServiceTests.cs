@@ -259,6 +259,92 @@ public class FileIngestionServiceTests
         }
     }
 
+    [Test]
+    public async Task CreateFileFromUrlAsync_RejectsOversizeDeclaredContentLengthBeforeReadingBody()
+    {
+        var responseContent = new DeclaredLengthContent(5);
+        var handler = new RecordingHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = responseContent
+            });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                session: CreateSession(user.Id),
+                maximumFileSizeBytes: 4);
+            var dto = CreateUrlDto("https://example.com/files/large.txt", accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            responseContent.SerializeWasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_RejectsOversizeDeclaredLengthBeforeOpeningFile()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                session: CreateSession(user.Id),
+                maximumFileSizeBytes: 4);
+            var formFile = new RecordingFormFile(5);
+            var dto = new SaveFileFromFormFileDTO
+            {
+                FileName = "large",
+                FileExtension = "txt",
+                FormFile = formFile,
+                AccessGroupId = accessGroup.Id,
+                Tags = [],
+                Categories = [],
+                Description = string.Empty,
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            Func<Task> act = () => service.CreateFileFromFormFileAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
+
+            formFile.OpenReadStreamWasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static SaveFileFromUrlDTO CreateUrlDto(string fileUrl)
     {
         return CreateUrlDto(fileUrl, Guid.NewGuid());
@@ -285,7 +371,8 @@ public class FileIngestionServiceTests
         MetadataStore metadataStore,
         IHttpClientFactory httpClientFactory,
         SessionDTO? session = null,
-        HostAddressResolver? hostAddressResolver = null)
+        HostAddressResolver? hostAddressResolver = null,
+        long maximumFileSizeBytes = FileSizePolicy.MaximumFileSizeBytes)
     {
         var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
@@ -294,7 +381,8 @@ public class FileIngestionServiceTests
             fileManager,
             new TestRequestSessionAccessor(session),
             serviceLogger,
-            NullLogger<FilePersistenceService>.Instance);
+            NullLogger<FilePersistenceService>.Instance,
+            maximumFileSizeBytes);
 
         hostAddressResolver ??= (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
 
@@ -408,6 +496,62 @@ public class FileIngestionServiceTests
         {
             RequestUri = request.RequestUri;
             return Task.FromResult(_createResponse(request));
+        }
+    }
+
+    private sealed class DeclaredLengthContent : HttpContent
+    {
+        private readonly long _contentLength;
+
+        public DeclaredLengthContent(long contentLength)
+        {
+            _contentLength = contentLength;
+        }
+
+        public bool SerializeWasCalled { get; private set; }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            SerializeWasCalled = true;
+            return Task.CompletedTask;
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = _contentLength;
+            return true;
+        }
+    }
+
+    private sealed class RecordingFormFile : IFormFile
+    {
+        public RecordingFormFile(long length)
+        {
+            Length = length;
+        }
+
+        public bool OpenReadStreamWasCalled { get; private set; }
+        public string ContentType { get; set; } = "text/plain";
+        public string ContentDisposition { get; set; } = string.Empty;
+        public IHeaderDictionary Headers { get; set; } = null!;
+        public long Length { get; }
+        public string Name { get; } = "FormFile";
+        public string FileName { get; } = "large.txt";
+
+        public void CopyTo(Stream target)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task CopyToAsync(Stream target, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Stream OpenReadStream()
+        {
+            OpenReadStreamWasCalled = true;
+            return Stream.Null;
         }
     }
 

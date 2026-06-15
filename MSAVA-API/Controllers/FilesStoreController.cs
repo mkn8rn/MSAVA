@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_Shared.Models;
+using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
 using System.ComponentModel.DataAnnotations;
 
@@ -21,6 +22,7 @@ public class FilesStoreController : ControllerBase
 
     [HttpPost("stream")]
     [Consumes("application/octet-stream")]
+    [RequestSizeLimit(FileSizePolicy.MaximumFileSizeBytes)]
     public async Task<ActionResult<Guid>> CreateFileFromStream(
         [FromQuery][Required] string fileName,
         [FromQuery][Required] string fileExtension,
@@ -60,6 +62,7 @@ public class FilesStoreController : ControllerBase
 
     [HttpPost("formfile")]
     [Consumes("multipart/form-data")]
+    [RequestSizeLimit(FileSizePolicy.MaximumFileSizeBytes)]
     public async Task<ActionResult<Guid>> CreateFileFromFormFile(
         [FromForm][Required] SaveFileFromFormFileDTO dto,
         CancellationToken cancellationToken = default)
