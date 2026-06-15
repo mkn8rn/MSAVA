@@ -27,7 +27,6 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.9" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="9.0.9" />
-    <PackageVersion Include="System.Drawing.Common" Version="9.0.9" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.9" />
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
@@ -41,7 +40,6 @@
     <PackageVersion Include="Serilog.Settings.Configuration" Version="9.0.0" />
     <PackageVersion Include="Serilog.Sinks.Async" Version="2.1.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="ServiceStack" Version="8.9.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
   </ItemGroup>
 </Project>
