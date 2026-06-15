@@ -149,6 +149,45 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceBatchAsync_ReturnsFailureForOversizedRequestList()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var requests = Enumerable.Range(0, HashCheckBatchPolicy.MaximumRequestCount + 1)
+            .Select(index => new HashCheckRequest
+            {
+                ContentHashHex = index.ToString("x64"),
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                FileName = $"oversized-batch-{index}",
+                PublicViewing = false,
+                PublicDownload = false
+            })
+            .ToList();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+
+            var results = await service.CheckAndGetReferenceBatchAsync(requests);
+
+            results.Should().ContainSingle();
+            results[0].Error.Should().Be(HashCheckBatchPolicy.MaximumRequestCountMessage);
+            results[0].FileExists.Should().BeFalse();
+            results[0].ReferenceId.Should().BeNull();
+            results[0].NewReferenceCreated.Should().BeFalse();
+            results[0].ContentHashHex.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsFailureForBannedSessionBeforeReferenceLookup()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-banned-session-{Guid.NewGuid()}"));

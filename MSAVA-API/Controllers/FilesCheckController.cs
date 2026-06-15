@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Services.Files;
 using System.ComponentModel.DataAnnotations;
 
 namespace MSAVA_API.Controllers;
@@ -62,10 +63,10 @@ public class FilesCheckController : ControllerBase
         [FromBody][Required] List<HashCheckRequest>? requests,
         CancellationToken cancellationToken = default)
     {
-        var results = await _deduplicationService.CheckAndGetReferenceBatchAsync(requests, cancellationToken);
+        if (!HashCheckBatchPolicy.TryValidate(requests, out var failureResults))
+            return BadRequest(failureResults);
 
-        if (results.Any(result => result.Error != null))
-            return BadRequest(results);
+        var results = await _deduplicationService.CheckAndGetReferenceBatchAsync(requests, cancellationToken);
 
         return Ok(results);
     }

@@ -137,15 +137,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         List<HashCheckRequest>? requests,
         CancellationToken cancellationToken = default)
     {
-        if (requests is null)
-        {
-            return [HashCheckResult.Failed("", "Hash check batch request is required.")];
-        }
-
-        if (requests.Count > 100)
-        {
-            return [HashCheckResult.Failed("", "Maximum 100 hashes per batch request.")];
-        }
+        if (!HashCheckBatchPolicy.TryValidate(requests, out var failureResults))
+            return failureResults;
 
         var results = new List<HashCheckResult>(requests.Count);
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Controllers;
+using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_Shared.Models;
 
@@ -24,44 +25,38 @@ public class FilesCheckControllerTests
     }
 
     [Test]
-    public async Task CheckHashBatch_DelegatesNullBatchToServiceAndReturnsBadRequest()
+    public async Task CheckHashBatch_ReturnsBadRequestForNullBatchWithoutCallingService()
     {
-        var service = new RecordingDeduplicationService
-        {
-            BatchResults =
-            [
-                HashCheckResult.Failed("", "Hash check batch request is required.")
-            ]
-        };
+        var service = new RecordingDeduplicationService();
         var controller = new FilesCheckController(service);
 
         var response = await controller.CheckHashBatch(null);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().BeEquivalentTo(service.BatchResults);
+        badRequest.Value.Should().BeEquivalentTo(new[]
+        {
+            HashCheckResult.Failed("", HashCheckBatchPolicy.RequiredMessage)
+        });
         service.BatchRequest.Should().BeNull();
     }
 
     [Test]
-    public async Task CheckHashBatch_DelegatesOversizedBatchToServiceAndReturnsBadRequest()
+    public async Task CheckHashBatch_ReturnsBadRequestForOversizedBatchWithoutCallingService()
     {
-        var requests = Enumerable.Range(0, 101)
+        var requests = Enumerable.Range(0, HashCheckBatchPolicy.MaximumRequestCount + 1)
             .Select(index => CreateRequest(index))
             .ToList();
-        var service = new RecordingDeduplicationService
-        {
-            BatchResults =
-            [
-                HashCheckResult.Failed("", "Maximum 100 hashes per batch request.")
-            ]
-        };
+        var service = new RecordingDeduplicationService();
         var controller = new FilesCheckController(service);
 
         var response = await controller.CheckHashBatch(requests);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().BeEquivalentTo(service.BatchResults);
-        service.BatchRequest.Should().BeSameAs(requests);
+        badRequest.Value.Should().BeEquivalentTo(new[]
+        {
+            HashCheckResult.Failed("", HashCheckBatchPolicy.MaximumRequestCountMessage)
+        });
+        service.BatchRequest.Should().BeNull();
     }
 
     [Test]
@@ -83,6 +78,29 @@ public class FilesCheckControllerTests
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeEquivalentTo(results);
         service.BatchRequest.Should().ContainSingle().Which.Should().Be(request);
+    }
+
+    [Test]
+    public async Task CheckHashBatch_ReturnsOkWhenValidBatchContainsItemErrors()
+    {
+        var successRequest = CreateRequest(1);
+        var failedRequest = CreateRequest(2);
+        var results = new List<HashCheckResult>
+        {
+            HashCheckResult.NotFound(successRequest.ContentHashHex),
+            HashCheckResult.Failed(failedRequest.ContentHashHex, "FileExtension 'exe' is not supported.")
+        };
+        var service = new RecordingDeduplicationService
+        {
+            BatchResults = results
+        };
+        var controller = new FilesCheckController(service);
+
+        var response = await controller.CheckHashBatch([successRequest, failedRequest]);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeEquivalentTo(results);
+        service.BatchRequest.Should().Equal(successRequest, failedRequest);
     }
 
     private static HashCheckRequest CreateRequest(int index)
