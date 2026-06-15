@@ -115,7 +115,7 @@ public partial record FileManagementModel : INotifyPropertyChanged
         get => _uploadResultCopyText; set { if (_uploadResultCopyText == value) return; _uploadResultCopyText = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UploadResultCopyText))); }
     }
 
-    // Form fields for SaveFileFromFormFileDTO
+    // Form fields for multipart upload
     private string _newFileName = string.Empty;
     public string NewFileName
     {

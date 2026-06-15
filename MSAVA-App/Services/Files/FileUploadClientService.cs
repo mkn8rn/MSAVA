@@ -45,12 +45,12 @@ public class FileUploadClientService
         var content = new MultipartFormDataContent();
 
         // Required simple fields
-        content.Add(new StringContent(fileName), nameof(SaveFileFromFormFileDTO.FileName));
-        content.Add(new StringContent(fileExtension), nameof(SaveFileFromFormFileDTO.FileExtension));
-        content.Add(new StringContent(accessGroupId.ToString()), nameof(SaveFileFromFormFileDTO.AccessGroupId));
-        content.Add(new StringContent((description ?? string.Empty)), nameof(SaveFileFromFormFileDTO.Description));
-        content.Add(new StringContent(publicViewing.ToString()), nameof(SaveFileFromFormFileDTO.PublicViewing));
-        content.Add(new StringContent(publicDownload.ToString()), nameof(SaveFileFromFormFileDTO.PublicDownload));
+        content.Add(new StringContent(fileName), FileUploadFormFields.FileName);
+        content.Add(new StringContent(fileExtension), FileUploadFormFields.FileExtension);
+        content.Add(new StringContent(accessGroupId.ToString()), FileUploadFormFields.AccessGroupId);
+        content.Add(new StringContent((description ?? string.Empty)), FileUploadFormFields.Description);
+        content.Add(new StringContent(publicViewing.ToString()), FileUploadFormFields.PublicViewing);
+        content.Add(new StringContent(publicDownload.ToString()), FileUploadFormFields.PublicDownload);
 
         // Collections: send as repeated form keys: Tags=value
         if (tags != null)
@@ -59,7 +59,7 @@ public class FileUploadClientService
             {
                 if (!string.IsNullOrWhiteSpace(t))
                 {
-                    content.Add(new StringContent(t), nameof(SaveFileFromFormFileDTO.Tags));
+                    content.Add(new StringContent(t), FileUploadFormFields.Tags);
                 }
             }
         }
@@ -69,7 +69,7 @@ public class FileUploadClientService
             {
                 if (!string.IsNullOrWhiteSpace(c))
                 {
-                    content.Add(new StringContent(c), nameof(SaveFileFromFormFileDTO.Categories));
+                    content.Add(new StringContent(c), FileUploadFormFields.Categories);
                 }
             }
         }
@@ -77,7 +77,7 @@ public class FileUploadClientService
         // File content as StreamContent named "FormFile"
         var fileContent = new StreamContent(fileStream);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        content.Add(fileContent, nameof(SaveFileFromFormFileDTO.FormFile), fileName + "." + fileExtension.TrimStart('.'));
+        content.Add(fileContent, FileUploadFormFields.FormFile, fileName + "." + fileExtension.TrimStart('.'));
 
         using var msg = _api.CreateMultipartRequest(HttpMethod.Post, ApiService.Routes.FilesStoreFormFile, content);
         using var resp = await _api.SendAsync(msg, ct);
