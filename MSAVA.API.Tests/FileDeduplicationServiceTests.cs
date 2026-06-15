@@ -160,6 +160,63 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForDatabaseNonWhitelistedUser()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-non-whitelisted-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session", isWhitelisted: false);
+            var sessionGroup = CreateAccessGroup(sessionUser, "session");
+            context.Users.Add(sessionUser);
+            context.AccessGroups.Add(sessionGroup);
+            await context.SaveChangesAsync();
+
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = sessionUser.Id,
+                Username = sessionUser.Username,
+                IsAdmin = false,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Whitelisted"],
+                Claims = [],
+                AccessGroups = [sessionGroup.Id],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-1),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = sessionGroup.Id,
+                FileName = "non-whitelisted-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("Users must be whitelisted before checking file hashes.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+            metadataStore.GetByFileHash(contentHash, "txt").Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsExistingPrivateReferenceForAdminWithoutAccessGroup()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-admin-existing-{Guid.NewGuid()}"));
@@ -477,7 +534,10 @@ public class FileDeduplicationServiceTests
         return new TestDataContext(options);
     }
 
-    private static UserDB CreateUser(string username, bool isAdmin = false)
+    private static UserDB CreateUser(
+        string username,
+        bool isAdmin = false,
+        bool isWhitelisted = true)
     {
         return new UserDB
         {
@@ -487,7 +547,7 @@ public class FileDeduplicationServiceTests
             PasswordSalt = [2],
             IsAdmin = isAdmin,
             IsBanned = false,
-            IsWhitelisted = true,
+            IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
     }

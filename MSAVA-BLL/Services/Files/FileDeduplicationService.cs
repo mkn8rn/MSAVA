@@ -188,12 +188,15 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         var user = await _context.Users
             .AsNoTracking()
             .Where(user => user.Id == userId)
-            .Select(user => new { user.IsAdmin, user.IsBanned })
+            .Select(user => new { user.IsAdmin, user.IsBanned, user.IsWhitelisted })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {userId} not found.");
 
         if (user.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot check file hashes.");
+
+        if (!user.IsWhitelisted)
+            throw new UnauthorizedAccessException("Users must be whitelisted before checking file hashes.");
 
         var accessGroupIds = await _context.AccessGroups
             .Where(ag => ag.OwnerId == userId || ag.Users.Any(u => u.Id == userId))

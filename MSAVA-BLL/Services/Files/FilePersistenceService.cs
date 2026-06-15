@@ -224,12 +224,15 @@ public class FilePersistenceService
         var sessionUser = await _context.Users
             .AsNoTracking()
             .Where(user => user.Id == sessionUserId)
-            .Select(user => new { user.IsBanned })
+            .Select(user => new { user.IsBanned, user.IsWhitelisted })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {sessionUserId} not found.");
 
         if (sessionUser.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot create files.");
+
+        if (!sessionUser.IsWhitelisted)
+            throw new UnauthorizedAccessException("Users must be whitelisted before creating files.");
 
         bool canCreate = await _context.AccessGroups
             .AsNoTracking()
