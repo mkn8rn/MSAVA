@@ -101,6 +101,22 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task CreateNewInviteCode_RejectsNonPositiveMaxUsesBeforeLoadingSession()
+    {
+        using var context = CreateContext();
+        var service = new InviteCodeService(
+            context,
+            new ThrowingUserSessionService(),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 0, DateTime.UtcNow.AddHours(1));
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
+            .WithMessage("Invite code max uses must be greater than zero.*");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task GetRemainingUses_RejectsNonAdminUser()
     {
         using var context = CreateContext();
@@ -282,6 +298,22 @@ public class InviteCodeServiceTests
         await context.SaveChangesAsync();
 
         var service = CreateService(context, owner);
+
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddMinutes(-1));
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
+            .WithMessage("Invite code expiration must be in the future.*");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateNewInviteCode_RejectsExpiredInviteCodeBeforeLoadingSession()
+    {
+        using var context = CreateContext();
+        var service = new InviteCodeService(
+            context,
+            new ThrowingUserSessionService(),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
 
         Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddMinutes(-1));
 

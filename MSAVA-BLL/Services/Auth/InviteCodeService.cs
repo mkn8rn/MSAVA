@@ -30,13 +30,13 @@ public class InviteCodeService
         DateTime expiresAt,
         CancellationToken cancellationToken = default)
     {
-        SessionDTO session = await GetAuthorizedAdminSessionAsync(cancellationToken);
-
         if (maxUses <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
 
         if (expiresAt <= DateTime.UtcNow)
             throw new ArgumentOutOfRangeException(nameof(expiresAt), expiresAt, "Invite code expiration must be in the future.");
+
+        SessionDTO session = await GetAuthorizedAdminSessionAsync(cancellationToken);
 
         var inviteCode = new InviteCodeDB
         {
