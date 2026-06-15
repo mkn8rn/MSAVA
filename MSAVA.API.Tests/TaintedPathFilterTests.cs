@@ -11,9 +11,12 @@ namespace MSAVA_API.Tests;
 public class TaintedPathFilterTests
 {
     [Test]
-    public void OnActionExecuting_AllowsSafeFileName()
+    public void OnActionExecuting_AllowsStoredFileName()
     {
-        var context = CreateContext(nameof(SafeFileAction), "fileNameWithExtension", "safe-file.pdf");
+        var context = CreateContext(
+            nameof(SafeFileAction),
+            "fileNameWithExtension",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf");
         var filter = new TaintedPathFilter();
 
         filter.OnActionExecuting(context);
@@ -24,9 +27,12 @@ public class TaintedPathFilterTests
     [TestCase("../secret.pdf")]
     [TestCase("folder/secret.pdf")]
     [TestCase("folder\\secret.pdf")]
+    [TestCase("safe-file.pdf")]
+    [TestCase("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [TestCase("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaag.pdf")]
     [TestCase("")]
     [TestCase(" ")]
-    public void OnActionExecuting_RejectsUnsafeFileName(string fileNameWithExtension)
+    public void OnActionExecuting_RejectsNonStoredFileName(string fileNameWithExtension)
     {
         var context = CreateContext(nameof(SafeFileAction), "fileNameWithExtension", fileNameWithExtension);
         var filter = new TaintedPathFilter();

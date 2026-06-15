@@ -27,7 +27,7 @@ namespace MSAVA_API.Filters
 
                 if (!context.ActionArguments.TryGetValue(param.Name, out var value) ||
                     value is not string fileNameWithExtension ||
-                    !FileContentUtils.IsSafeFileName(fileNameWithExtension))
+                    !FileContentUtils.TryGetSafeFullPath(fileNameWithExtension, out _))
                 {
                     context.Result = new BadRequestObjectResult("Invalid parameter.");
                     return;
