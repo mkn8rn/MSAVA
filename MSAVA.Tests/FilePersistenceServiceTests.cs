@@ -178,6 +178,45 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_RejectsDatabaseBannedUserBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"database-banned-user-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var sessionUser = CreateUser("session", isBanned: true);
+            var accessGroup = CreateAccessGroup(sessionUser, "session-files");
+            context.Users.Add(sessionUser);
+            context.AccessGroups.Add(accessGroup);
+            context.SaveChanges();
+            var service = CreateService(context, metadataStore, sessionUser.Id, isBanned: false);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("Banned users cannot create files.");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_RejectsAccessGroupOutsideCurrentUserMembership()
     {
         var content = Encoding.UTF8.GetBytes($"unauthorized-group-{Guid.NewGuid()}");
@@ -507,7 +546,7 @@ public class FilePersistenceServiceTests
         return (user, accessGroup);
     }
 
-    private static UserDB CreateUser(string username)
+    private static UserDB CreateUser(string username, bool isBanned = false)
     {
         return new UserDB
         {
@@ -516,7 +555,7 @@ public class FilePersistenceServiceTests
             PasswordHash = [1],
             PasswordSalt = [2],
             IsAdmin = false,
-            IsBanned = false,
+            IsBanned = isBanned,
             IsWhitelisted = true,
             CreatedAt = DateTime.UtcNow
         };

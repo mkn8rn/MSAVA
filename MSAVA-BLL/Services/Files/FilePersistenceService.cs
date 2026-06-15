@@ -214,6 +214,16 @@ public class FilePersistenceService
         if (accessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(accessGroupId));
 
+        var sessionUser = await _context.Users
+            .AsNoTracking()
+            .Where(user => user.Id == sessionUserId)
+            .Select(user => new { user.IsBanned })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new KeyNotFoundException($"User with id {sessionUserId} not found.");
+
+        if (sessionUser.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot create files.");
+
         bool canCreate = await _context.AccessGroups
             .AsNoTracking()
             .AnyAsync(
