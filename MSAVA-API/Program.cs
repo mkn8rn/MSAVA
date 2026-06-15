@@ -108,10 +108,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services
     .AddHttpClient(FileIngestionService.RemoteFileHttpClientName)
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-    {
-        AllowAutoRedirect = false
-    });
+    .ConfigurePrimaryHttpMessageHandler(RemoteFileHttpMessageHandlerFactory.Create);
 
 // Register services
 builder.Services.AddScoped<IRequestSessionAccessor, HttpContextRequestSessionAccessor>();

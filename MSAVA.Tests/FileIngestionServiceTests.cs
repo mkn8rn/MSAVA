@@ -237,7 +237,7 @@ public class FileIngestionServiceTests
         BaseDataContext context,
         MetadataStore metadataStore,
         IHttpClientFactory httpClientFactory,
-        Func<string, CancellationToken, Task<IPAddress[]>>? hostAddressResolver = null)
+        HostAddressResolver? hostAddressResolver = null)
     {
         var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
         var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
