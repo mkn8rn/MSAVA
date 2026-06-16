@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
@@ -18,10 +18,9 @@ public class PublicFileAccessGuardTests
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
         context.FileRefs.Add(CreateReference(hash, publicDownload: true));
         await context.SaveChangesAsync();
-        var httpContext = CreateHttpContext(context);
         string physicalPath = CreatePhysicalPath(hash);
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeTrue();
     }
@@ -33,10 +32,9 @@ public class PublicFileAccessGuardTests
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
         context.FileRefs.Add(CreateReference(hash, publicDownload: false));
         await context.SaveChangesAsync();
-        var httpContext = CreateHttpContext(context);
         string physicalPath = CreatePhysicalPath(hash);
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
@@ -48,12 +46,11 @@ public class PublicFileAccessGuardTests
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
         context.FileRefs.Add(CreateReference(hash, publicDownload: true));
         await context.SaveChangesAsync();
-        var httpContext = CreateHttpContext(context);
         string physicalPath = Path.Combine(
             $"{FileContentUtils.FilesDirectory}-outside",
             $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
@@ -82,10 +79,9 @@ public class PublicFileAccessGuardTests
                 CreatedAt = DateTime.UnixEpoch
             });
 
-            var httpContext = CreateHttpContext(context, metadataStore);
             string physicalPath = CreatePhysicalPath(hash);
 
-            bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+            bool result = CanServePublicFile(context, physicalPath);
 
             result.Should().BeFalse();
         }
@@ -99,10 +95,9 @@ public class PublicFileAccessGuardTests
     public void CanServePublicFile_DeniesMalformedFileNameWithoutThrowing()
     {
         using var context = CreateDataContext();
-        var httpContext = CreateHttpContext(context);
         string physicalPath = Path.Combine(Path.GetTempPath(), "not-a-hex-hash.txt");
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
@@ -112,10 +107,9 @@ public class PublicFileAccessGuardTests
     {
         using var context = CreateDataContext();
         byte[] shortHash = Guid.NewGuid().ToByteArray();
-        var httpContext = CreateHttpContext(context);
         string physicalPath = CreatePhysicalPath(shortHash);
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
@@ -129,12 +123,11 @@ public class PublicFileAccessGuardTests
         reference.FileExtension = FileExtensionType.Unknown;
         context.FileRefs.Add(reference);
         await context.SaveChangesAsync();
-        var httpContext = CreateHttpContext(context);
         string physicalPath = Path.Combine(
             FileContentUtils.FilesDirectory,
             $"{Convert.ToHexString(hash).ToLowerInvariant()}.exe");
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
@@ -144,28 +137,26 @@ public class PublicFileAccessGuardTests
     {
         using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        var httpContext = CreateHttpContext(context);
         string physicalPath = CreatePhysicalPath(hash);
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
 
     [Test]
-    public void CanServePublicFile_DeniesWhenDataContextIsNotRegistered()
+    public void CanServePublicFile_RejectsMissingDataContext()
     {
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        var services = new ServiceCollection().BuildServiceProvider();
-        var httpContext = new DefaultHttpContext
-        {
-            RequestServices = services
-        };
         string physicalPath = CreatePhysicalPath(hash);
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        Action act = () => PublicFileAccessGuard.CanServePublicFile(
+            null!,
+            NullLogger.Instance,
+            physicalPath);
 
-        result.Should().BeFalse();
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("dbContext");
     }
 
     [Test]
@@ -173,29 +164,84 @@ public class PublicFileAccessGuardTests
     {
         var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        var httpContext = CreateHttpContext(context);
         string physicalPath = CreatePhysicalPath(hash);
         context.Dispose();
 
-        bool result = PublicFileAccessGuard.CanServePublicFile(httpContext, physicalPath);
+        bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
     }
 
-    private static DefaultHttpContext CreateHttpContext(
-        BaseDataContext context,
-        MetadataStore? metadataStore = null)
+    [Test]
+    public async Task PublicFileAccessMiddleware_DeniesExistingPrivatePublicFileWithoutCallingNext()
     {
-        var services = new ServiceCollection()
-            .AddSingleton(context);
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        context.FileRefs.Add(CreateReference(hash, publicDownload: false));
+        await context.SaveChangesAsync();
+        string physicalPath = CreatePhysicalPath(hash);
+        CreateFile(physicalPath);
+        var httpContext = CreatePublicFileRequest(physicalPath);
+        bool nextCalled = false;
+        var middleware = new PublicFileAccessMiddleware(
+            _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            FileContentUtils.FilesDirectory,
+            "/api/files/public");
 
-        if (metadataStore is not null)
-            services.AddSingleton(metadataStore);
-
-        return new DefaultHttpContext
+        try
         {
-            RequestServices = services.BuildServiceProvider()
-        };
+            await middleware.InvokeAsync(
+                httpContext,
+                context,
+                NullLogger<PublicFileAccessMiddleware>.Instance);
+
+            httpContext.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+            nextCalled.Should().BeFalse();
+        }
+        finally
+        {
+            DeleteFileIfPresent(physicalPath);
+        }
+    }
+
+    [Test]
+    public async Task PublicFileAccessMiddleware_AllowsExistingPublicFileToReachStaticFileMiddleware()
+    {
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        await context.SaveChangesAsync();
+        string physicalPath = CreatePhysicalPath(hash);
+        CreateFile(physicalPath);
+        var httpContext = CreatePublicFileRequest(physicalPath);
+        bool nextCalled = false;
+        var middleware = new PublicFileAccessMiddleware(
+            _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            FileContentUtils.FilesDirectory,
+            "/api/files/public");
+
+        try
+        {
+            await middleware.InvokeAsync(
+                httpContext,
+                context,
+                NullLogger<PublicFileAccessMiddleware>.Instance);
+
+            httpContext.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+            nextCalled.Should().BeTrue();
+        }
+        finally
+        {
+            DeleteFileIfPresent(physicalPath);
+        }
     }
 
     private static SavedFileReferenceDB CreateReference(byte[] hash, bool publicDownload)
@@ -224,6 +270,38 @@ public class PublicFileAccessGuardTests
         return Path.Combine(
             FileContentUtils.FilesDirectory,
             $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+    }
+
+    private static bool CanServePublicFile(BaseDataContext context, string physicalPath)
+    {
+        return PublicFileAccessGuard.CanServePublicFile(
+            context,
+            NullLogger.Instance,
+            physicalPath);
+    }
+
+    private static DefaultHttpContext CreatePublicFileRequest(string physicalPath)
+    {
+        return new DefaultHttpContext
+        {
+            Request =
+            {
+                Method = HttpMethods.Get,
+                Path = "/api/files/public/" + Path.GetFileName(physicalPath)
+            }
+        };
+    }
+
+    private static void CreateFile(string physicalPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(physicalPath)!);
+        File.WriteAllText(physicalPath, "public file test content");
+    }
+
+    private static void DeleteFileIfPresent(string physicalPath)
+    {
+        if (File.Exists(physicalPath))
+            File.Delete(physicalPath);
     }
 
     private static string CreateTempDirectory()

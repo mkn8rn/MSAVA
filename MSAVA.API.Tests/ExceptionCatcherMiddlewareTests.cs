@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,10 +24,10 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_ReturnsOriginalErrorResponseWhenDatabaseLoggingFails()
     {
         using var dbContext = CreateContext(throwOnSave: true);
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new KeyNotFoundException("File reference missing."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -47,10 +46,10 @@ public class ExceptionCatcherMiddlewareTests
         using var dbContext = CreateContext(new InvalidOperationException(
             "Wrapped cancellation while saving error log.",
             new OperationCanceledException("Request was canceled.")));
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new KeyNotFoundException("File reference missing."));
 
-        var act = async () => await middleware.InvokeAsync(context);
+        var act = async () => await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Wrapped cancellation while saving error log.");
@@ -68,12 +67,12 @@ public class ExceptionCatcherMiddlewareTests
     {
         using var dbContext = CreateContext(throwOnSave: false);
         var userId = Guid.NewGuid();
-        var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
+        var context = CreateHttpContext(userId);
         var middleware = new ExceptionCatcherMiddleware(
             _ => throw new ArgumentException("Bad query."),
             new FixedTimeProvider(FixedNow));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -96,10 +95,10 @@ public class ExceptionCatcherMiddlewareTests
     {
         using var dbContext = CreateContext(throwOnSave: false);
         var userId = Guid.NewGuid();
-        var context = CreateHttpContext(dbContext, isDevelopment: false, userId, JwtRegisteredClaimNames.Sub);
+        var context = CreateHttpContext(userId, JwtRegisteredClaimNames.Sub);
         var middleware = new ExceptionCatcherMiddleware(_ => throw new ArgumentException("Bad query."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -114,10 +113,10 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_ReturnsUnauthorizedForAnonymousUnauthorizedAccess()
     {
         using var dbContext = CreateContext(throwOnSave: false);
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new UnauthorizedAccessException("Session user is required."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -135,10 +134,10 @@ public class ExceptionCatcherMiddlewareTests
     {
         using var dbContext = CreateContext(throwOnSave: false);
         var userId = Guid.NewGuid();
-        var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
+        var context = CreateHttpContext(userId);
         var middleware = new ExceptionCatcherMiddleware(_ => throw new UnauthorizedAccessException("Only admins can access this resource."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -156,10 +155,10 @@ public class ExceptionCatcherMiddlewareTests
     {
         using var dbContext = CreateContext(throwOnSave: false);
         var userId = Guid.NewGuid();
-        var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
+        var context = CreateHttpContext(userId);
         var middleware = new ExceptionCatcherMiddleware(_ => throw new FileTooLargeException(5, 4));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -177,10 +176,10 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_MasksServerErrorMessageInProduction()
     {
         using var dbContext = CreateContext(throwOnSave: false);
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new ApplicationException("Database password leaked in stack context."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -197,10 +196,10 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_TreatsAccessViolationAsMaskedServerError()
     {
         using var dbContext = CreateContext(throwOnSave: false);
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new AccessViolationException("Native memory boundary failed."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -217,10 +216,10 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_TreatsRuntimeProgrammingFaultAsMaskedServerError()
     {
         using var dbContext = CreateContext(throwOnSave: false);
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new InvalidCastException("Internal cast failed."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -237,10 +236,10 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_ReturnsServerErrorDetailsInDevelopment()
     {
         using var dbContext = CreateContext(throwOnSave: false);
-        var context = CreateHttpContext(dbContext, isDevelopment: true);
+        var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new ApplicationException("Development diagnostic detail."));
 
-        await middleware.InvokeAsync(context);
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: true);
 
         var body = await ReadResponseBodyAsync(context);
         var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
@@ -257,11 +256,11 @@ public class ExceptionCatcherMiddlewareTests
         using var dbContext = CreateContext(throwOnSave: false);
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         context.RequestAborted = cancellation.Token;
         var middleware = new ExceptionCatcherMiddleware(_ => throw new OperationCanceledException(cancellation.Token));
 
-        var act = async () => await middleware.InvokeAsync(context);
+        var act = async () => await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
         dbContext.ErrorLogs.Should().BeEmpty();
@@ -276,11 +275,11 @@ public class ExceptionCatcherMiddlewareTests
     public async Task InvokeAsync_PropagatesExceptionWhenResponseAlreadyStarted()
     {
         using var dbContext = CreateContext(throwOnSave: false);
-        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var context = CreateHttpContext();
         context.Features.Set<IHttpResponseFeature>(new StartedResponseFeature(context.Response.Body));
         var middleware = new ExceptionCatcherMiddleware(_ => throw new InvalidOperationException("Response is already partially written."));
 
-        var act = async () => await middleware.InvokeAsync(context);
+        var act = async () => await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Response is already partially written.");
@@ -308,22 +307,24 @@ public class ExceptionCatcherMiddlewareTests
         return new TestDataContext(options, saveException);
     }
 
-    private static DefaultHttpContext CreateHttpContext(
+    private static Task InvokeMiddlewareAsync(
+        ExceptionCatcherMiddleware middleware,
+        HttpContext context,
         BaseDataContext dbContext,
-        bool isDevelopment,
+        bool isDevelopment)
+    {
+        return middleware.InvokeAsync(
+            context,
+            new TestHostEnvironment(isDevelopment ? Environments.Development : Environments.Production),
+            NullLogger<ExceptionCatcherMiddleware>.Instance,
+            dbContext);
+    }
+
+    private static DefaultHttpContext CreateHttpContext(
         Guid? userId = null,
         string userIdClaimType = ClaimTypes.NameIdentifier)
     {
-        var services = new ServiceCollection()
-            .AddSingleton<IHostEnvironment>(new TestHostEnvironment(isDevelopment ? Environments.Development : Environments.Production))
-            .AddSingleton<ILogger<ExceptionCatcherMiddleware>>(NullLogger<ExceptionCatcherMiddleware>.Instance)
-            .AddSingleton(dbContext)
-            .BuildServiceProvider();
-
-        var context = new DefaultHttpContext
-        {
-            RequestServices = services
-        };
+        var context = new DefaultHttpContext();
         context.Response.Body = new MemoryStream();
 
         if (userId is not null)

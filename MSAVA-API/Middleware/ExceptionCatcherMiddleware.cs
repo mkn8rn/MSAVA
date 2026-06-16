@@ -30,11 +30,12 @@ namespace MSAVA_API.Middleware
             _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public async Task InvokeAsync(
+            HttpContext context,
+            IHostEnvironment env,
+            ILogger<ExceptionCatcherMiddleware> logger,
+            BaseDataContext dbContext)
         {
-            var env = context.RequestServices.GetRequiredService<IHostEnvironment>();
-            var logger = context.RequestServices.GetRequiredService<ILogger<ExceptionCatcherMiddleware>>();
-            var dbContext = context.RequestServices.GetRequiredService<BaseDataContext>();
             try
             {
                 await _next(context);

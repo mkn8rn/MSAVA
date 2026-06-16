@@ -227,6 +227,34 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void ProductionSource_DoesNotResolveServicesFromHttpContextRequestServices()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string[] requestServiceLookupMarkers =
+        [
+            "RequestServices.GetRequiredService",
+            "RequestServices.GetService"
+        ];
+
+        var requestServiceLookups = EnumerateProductionSourceFiles(repositoryRoot)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => requestServiceLookupMarkers.Any(marker =>
+                sourceLine.Line.Contains(marker, StringComparison.Ordinal)))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        requestServiceLookups.Should().BeEmpty(
+            "production request handlers should receive dependencies through constructors or InvokeAsync parameters instead of resolving them from HttpContext.RequestServices");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");
@@ -312,5 +340,35 @@ public class ProjectConfigurationTests
                 return !excludedSegments.Any(excludedSegment =>
                     segments.Contains(excludedSegment, StringComparer.OrdinalIgnoreCase));
             });
+    }
+
+    private static IEnumerable<string> EnumerateProductionSourceFiles(string repositoryRoot)
+    {
+        string[] productionDirectories =
+        [
+            "MSAVA-API",
+            "MSAVA-App",
+            "MSAVA-BLL",
+            "MSAVA-DAL",
+            "MSAVA-INF",
+            "MSAVA-Shared"
+        ];
+
+        return productionDirectories.SelectMany(directory =>
+        {
+            string absoluteDirectory = Path.Combine(repositoryRoot, directory);
+
+            return Directory.Exists(absoluteDirectory)
+                ? Directory.EnumerateFiles(absoluteDirectory, "*.cs", SearchOption.AllDirectories)
+                    .Where(file =>
+                    {
+                        string relativePath = Path.GetRelativePath(repositoryRoot, file);
+                        string[] segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                        return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase) &&
+                            !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
+                    })
+                : [];
+        });
     }
 }

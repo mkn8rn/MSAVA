@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using MSAVA_BLL.Utils;
@@ -9,25 +8,22 @@ namespace MSAVA_API.Authorization;
 
 public static class PublicFileAccessGuard
 {
-    public static bool CanServePublicFile(HttpContext context, string? physicalPath)
+    public static bool CanServePublicFile(
+        BaseDataContext dbContext,
+        ILogger logger,
+        string? physicalPath)
     {
-        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(logger);
 
         if (!FileContentUtils.IsSafeFilePath(physicalPath))
         {
-            LogDeniedRequest(context, physicalPath, "physical path is outside the data directory");
+            LogDeniedRequest(logger, physicalPath, "physical path is outside the data directory");
             return false;
         }
 
         if (!StoredFileName.TryParse(physicalPath, out var storedFileName))
             return false;
-
-        var dbContext = context.RequestServices.GetService<BaseDataContext>();
-        if (dbContext is null)
-        {
-            LogDeniedRequest(context, physicalPath, "base data context is not registered");
-            return false;
-        }
 
         try
         {
@@ -49,24 +45,17 @@ public static class PublicFileAccessGuard
         }
         catch (Exception ex) when (RecoverableLookupFailurePolicy.IsRecoverable(ex))
         {
-            LogDeniedRequest(context, physicalPath, "public file database lookup failed", ex);
+            LogDeniedRequest(logger, physicalPath, "public file database lookup failed", ex);
             return false;
         }
     }
 
     private static void LogDeniedRequest(
-        HttpContext context,
+        ILogger logger,
         string? physicalPath,
         string reason,
         Exception? exception = null)
     {
-        var logger = context.RequestServices
-            .GetService<ILoggerFactory>()
-            ?.CreateLogger(typeof(PublicFileAccessGuard).FullName!);
-
-        if (logger is null)
-            return;
-
         if (exception is null)
         {
             logger.LogWarning(

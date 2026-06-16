@@ -186,20 +186,14 @@ app.UseSerilogRequestLogging(options =>
 app.UseRouting();
 
 string publicFilesDirectory = Path.Combine(AppContext.BaseDirectory, "Data");
+const string publicFilesRequestPath = "/api/files/public";
 Directory.CreateDirectory(publicFilesDirectory);
 
+app.UseMiddleware<PublicFileAccessMiddleware>(publicFilesDirectory, publicFilesRequestPath);
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(publicFilesDirectory),
-    RequestPath = "/api/files/public",
-    OnPrepareResponse = ctx =>
-    {
-        if (!PublicFileAccessGuard.CanServePublicFile(ctx.Context, ctx.File.PhysicalPath))
-        {
-            ctx.Context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            ctx.Context.Abort();
-        }
-    }
+    RequestPath = publicFilesRequestPath
 });
 
 app.UseMiddleware<ExceptionCatcherMiddleware>();
