@@ -27,7 +27,7 @@ namespace MSAVA_API.Middleware
 
         public ExceptionCatcherMiddleware(RequestDelegate next, TimeProvider? timeProvider = null)
         {
-            _next = next;
+            _next = next ?? throw new ArgumentNullException(nameof(next));
             _timeProvider = timeProvider ?? TimeProvider.System;
         }
 

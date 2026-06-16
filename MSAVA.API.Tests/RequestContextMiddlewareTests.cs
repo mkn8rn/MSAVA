@@ -9,6 +9,15 @@ namespace MSAVA_API.Tests;
 public class RequestContextMiddlewareTests
 {
     [Test]
+    public void Constructor_RejectsMissingNextDelegate()
+    {
+        Action act = () => _ = new RequestContextMiddleware(null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("next");
+    }
+
+    [Test]
     public async Task InvokeAsync_PopulatesSessionUserIdFromJwtSubject()
     {
         var userId = Guid.NewGuid();

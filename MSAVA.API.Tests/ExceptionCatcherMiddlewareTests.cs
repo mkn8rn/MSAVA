@@ -21,6 +21,15 @@ public class ExceptionCatcherMiddlewareTests
     private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
 
     [Test]
+    public void Constructor_RejectsMissingNextDelegate()
+    {
+        Action act = () => _ = new ExceptionCatcherMiddleware(null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("next");
+    }
+
+    [Test]
     public async Task InvokeAsync_ReturnsOriginalErrorResponseWhenDatabaseLoggingFails()
     {
         using var dbContext = CreateContext(throwOnSave: true);
