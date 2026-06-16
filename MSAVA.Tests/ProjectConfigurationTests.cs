@@ -2,6 +2,7 @@ using System.Xml.Linq;
 using System.Text.Json;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 using MSAVA_App.Models;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Services.Files;
@@ -483,6 +484,19 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public async Task GitIndex_DoesNotTrackGeneratedRuntimeOrSecretArtifacts()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+
+        var unsafeTrackedFiles = (await GetTrackedFilesAsync(repositoryRoot))
+            .Where(IsGeneratedRuntimeOrSecretArtifact)
+            .ToList();
+
+        unsafeTrackedFiles.Should().BeEmpty(
+            "build outputs, runtime data, local databases, real dotenv files, internal reports, and user-specific IDE files should stay out of source control");
+    }
+
+    [Test]
     public void FileUploadFormFields_MatchServerFormDtoPropertyNames()
     {
         var serverDto = typeof(SaveFileFromFormFileDTO);
@@ -535,6 +549,82 @@ public class ProjectConfigurationTests
 
         foreach (var property in apiClient.EnumerateObject())
             yield return property.Name;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetTrackedFilesAsync(string repositoryRoot)
+    {
+        var startInfo = new ProcessStartInfo("git", "ls-files -z")
+        {
+            WorkingDirectory = repositoryRoot,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true
+        };
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start git to inspect tracked files.");
+
+        Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> errorTask = process.StandardError.ReadToEndAsync();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("Timed out while inspecting tracked files with git ls-files.");
+        }
+
+        string output = await outputTask;
+        string error = await errorTask;
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"git ls-files failed with exit code {process.ExitCode}: {error}");
+
+        return output
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(NormalizeGitPath)
+            .ToList();
+    }
+
+    private static string NormalizeGitPath(string path) =>
+        path.Replace('\\', '/');
+
+    private static bool IsGeneratedRuntimeOrSecretArtifact(string trackedPath)
+    {
+        string fileName = Path.GetFileName(trackedPath);
+
+        if (trackedPath.Split('/').Any(segment =>
+                segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("TestResults", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (trackedPath.StartsWith("MSAVA-API/Logs/", StringComparison.OrdinalIgnoreCase) ||
+            trackedPath.StartsWith("MSAVA-INF/Data/", StringComparison.OrdinalIgnoreCase) ||
+            trackedPath.StartsWith("docs/internal/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (fileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".suo", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".user", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (fileName.StartsWith(".env", StringComparison.OrdinalIgnoreCase) &&
+            !fileName.Equals(".env.example", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static IEnumerable<string> FindServiceLoggerWritesWithoutCancellation(
