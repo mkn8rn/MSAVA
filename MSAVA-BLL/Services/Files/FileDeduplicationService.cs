@@ -372,7 +372,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         {
             _metadataStore.Delete(metaRecord.RefId);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
         {
             _logger.LogError(ex, "Failed to roll back deduplicated metadata record {FileRefId}", metaRecord.RefId);
         }

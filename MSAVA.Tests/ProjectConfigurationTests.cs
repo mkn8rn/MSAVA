@@ -162,6 +162,38 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void SourceCode_DoesNotUseUnfilteredBroadExceptionCatchOutsideExceptionMiddleware()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string broadCatchMarker = "catch (" + nameof(Exception);
+        string exceptionMiddlewarePath = Path.Combine(
+            "MSAVA-API",
+            "Middleware",
+            "ExceptionCatcherMiddleware.cs");
+
+        var unfilteredBroadCatches = EnumerateSourceFiles(repositoryRoot)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine =>
+                sourceLine.Line.Contains(broadCatchMarker, StringComparison.Ordinal) &&
+                !sourceLine.Line.Contains(" when ", StringComparison.Ordinal) &&
+                !Path.GetRelativePath(repositoryRoot, sourceLine.File).Equals(
+                    exceptionMiddlewarePath,
+                    StringComparison.OrdinalIgnoreCase))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        unfilteredBroadCatches.Should().BeEmpty(
+            "broad exception catches outside the central middleware should use filters that preserve critical failures");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");

@@ -281,7 +281,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             if (!process.HasExited)
                 process.Kill();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
         {
             _logger.LogWarning(ex, "Failed to kill FFmpeg process after timeout");
         }

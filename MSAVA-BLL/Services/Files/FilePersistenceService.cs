@@ -305,7 +305,7 @@ public class FilePersistenceService
         {
             _fileManager.RollbackSavedFileRegistration(metaRecord, contentFileCreated);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
         {
             _logger.LogError(ex, "Failed to roll back file registration {FileRefId}", metaRecord.RefId);
         }
