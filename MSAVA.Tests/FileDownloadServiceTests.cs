@@ -150,6 +150,48 @@ public class FileDownloadServiceTests
     }
 
     [Test]
+    public async Task GetPhysicalFileReturnDataByIdAsync_ReturnsNotFoundWhenFileDataIsMissing()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var fileReference = CreateFileReference(publicDownload: true);
+        string contentPath = FileContentUtils.GetFullPath(fileReference.FileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "physical-missing-file-data");
+            context.FileRefs.Add(fileReference);
+            await context.SaveChangesAsync();
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false,
+                IsWhitelisted = true
+            });
+
+            Func<Task> act = () => service.GetPhysicalFileReturnDataByIdAsync(fileReference.Id);
+
+            await act.Should().ThrowAsync<KeyNotFoundException>()
+                .WithMessage($"File with id {fileReference.Id} not found.");
+            File.Exists(contentPath).Should().BeTrue();
+            context.AccessLogs.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GetFileStreamByIdAsync_IncrementsDownloadCountAfterOpeningContent()
     {
         using var context = CreateContext();
@@ -195,7 +237,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public async Task GetFileStreamByIdAsync_DisposesOpenedStreamWhenDownloadCountFails()
+    public async Task GetFileStreamByIdAsync_ReturnsNotFoundWhenFileDataIsMissing()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -225,10 +267,9 @@ public class FileDownloadServiceTests
             Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
 
             await act.Should().ThrowAsync<KeyNotFoundException>()
-                .WithMessage($"File data for reference id {fileReference.Id} not found.");
-            Action deleteContent = () => File.Delete(contentPath);
-            deleteContent.Should().NotThrow();
-            File.Exists(contentPath).Should().BeFalse();
+                .WithMessage($"File with id {fileReference.Id} not found.");
+            File.Exists(contentPath).Should().BeTrue();
+            context.AccessLogs.Should().BeEmpty();
         }
         finally
         {
@@ -476,7 +517,7 @@ public class FileDownloadServiceTests
     }
 
     [Test]
-    public async Task GetFileStreamByPathAsync_DisposesOpenedStreamWhenDownloadCountFails()
+    public async Task GetFileStreamByPathAsync_ReturnsNotFoundWhenSqlReferenceHasNoFileData()
     {
         using var context = CreateContext();
         var metadataDirectory = CreateTempDirectory();
@@ -524,11 +565,10 @@ public class FileDownloadServiceTests
 
             Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
 
-            await act.Should().ThrowAsync<KeyNotFoundException>()
-                .WithMessage($"File data for reference id {fileReference.Id} not found.");
-            Action deleteContent = () => File.Delete(contentPath);
-            deleteContent.Should().NotThrow();
-            File.Exists(contentPath).Should().BeFalse();
+            await act.Should().ThrowAsync<FileNotFoundException>()
+                .WithMessage($"No file reference found for file: {fileNameWithExtension}");
+            File.Exists(contentPath).Should().BeTrue();
+            context.AccessLogs.Should().BeEmpty();
         }
         finally
         {

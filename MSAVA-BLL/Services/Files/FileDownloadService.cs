@@ -34,12 +34,11 @@ public class FileDownloadService : IFileDownloadService
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var db = await _context.FileRefs
-            .AsNoTracking()
-            .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
-            ?? throw new KeyNotFoundException($"File with id {id} not found.");
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
+        var db = await GetFileReferenceWithDataByIdAsync(id, cancellationToken);
 
-        SessionDTO session = await CanSessionUserAccessFileAsync(db, cancellationToken);
+        if (!CanSessionAccessFile(db, session))
+            throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
         FileStream? fileStream = _fileManager.GetFileStream(db.FileHash, db.FileExtension.ToString());
 
@@ -67,12 +66,11 @@ public class FileDownloadService : IFileDownloadService
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var db = await _context.FileRefs
-            .AsNoTracking()
-            .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
-            ?? throw new KeyNotFoundException($"File with id {id} not found.");
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
+        var db = await GetFileReferenceWithDataByIdAsync(id, cancellationToken);
 
-        SessionDTO session = await CanSessionUserAccessFileAsync(db, cancellationToken);
+        if (!CanSessionAccessFile(db, session))
+            throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
@@ -153,16 +151,6 @@ public class FileDownloadService : IFileDownloadService
         return new FilePathAccess(fileReference.Id, session);
     }
 
-    private async Task<SessionDTO> CanSessionUserAccessFileAsync(SavedFileReferenceDB fileReference, CancellationToken cancellationToken)
-    {
-        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
-
-        if (!CanSessionAccessFile(fileReference, session))
-            throw new UnauthorizedAccessException("User does not have permission to access this file.");
-
-        return session;
-    }
-
     private async Task<SavedFileReferenceDB> GetFileReferenceByPathAsync(
         string fileNameWithExtension,
         SessionDTO session,
@@ -183,8 +171,7 @@ public class FileDownloadService : IFileDownloadService
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
         }
 
-        var references = _context.FileRefs
-            .AsNoTracking()
+        var references = FileReferencesWithData()
             .Where(fileReference =>
                 fileReference.FileHash == storedFileName.FileHash &&
                 fileReference.FileExtension == extensionType);
@@ -206,6 +193,23 @@ public class FileDownloadService : IFileDownloadService
             throw new FileNotFoundException($"No file reference found for file: {fileNameWithExtension}");
 
         throw new UnauthorizedAccessException("User does not have permission to access this file.");
+    }
+
+    private async Task<SavedFileReferenceDB> GetFileReferenceWithDataByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        return await FileReferencesWithData()
+            .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
+            ?? throw new KeyNotFoundException($"File with id {id} not found.");
+    }
+
+    private IQueryable<SavedFileReferenceDB> FileReferencesWithData()
+    {
+        return _context.FileRefs
+            .AsNoTracking()
+            .Where(fileReference =>
+                _context.FileData.Any(fileData => fileData.FileReferenceId == fileReference.Id));
     }
 
     private static bool CanSessionAccessFile(SavedFileReferenceDB fileReference, SessionDTO session)
