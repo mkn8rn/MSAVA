@@ -615,7 +615,7 @@ public class AuthenticationServiceTests
 
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class TestEnvironment : ILocalEnvironment

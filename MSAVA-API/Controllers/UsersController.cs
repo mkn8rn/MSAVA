@@ -24,7 +24,7 @@ public class UsersController : ControllerBase
 
     [HttpGet("claims")]
     public async Task<ActionResult<SessionDTO>> GetUserClaims(CancellationToken cancellationToken = default) =>
-        Ok(await _userService.GetSessionClaimsAsync(cancellationToken));
+        Ok(await _userService.GetCurrentSessionAsync(cancellationToken));
 
     [HttpGet("all")]
     [Authorize(Policy = AuthorizationPolicies.CurrentAdmin)]

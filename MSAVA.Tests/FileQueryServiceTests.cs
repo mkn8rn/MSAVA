@@ -373,6 +373,6 @@ public class FileQueryServiceTests
         public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session.UserId);
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session);
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session);
     }
 }

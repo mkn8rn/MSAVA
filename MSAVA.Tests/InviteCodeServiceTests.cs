@@ -440,7 +440,7 @@ public class InviteCodeServiceTests
 
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUser);
 
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new SessionDTO
             {
@@ -473,7 +473,7 @@ public class InviteCodeServiceTests
 
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class ClaimsOnlyUserSessionService : IUserSessionService
@@ -497,7 +497,7 @@ public class InviteCodeServiceTests
 
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new SessionDTO
             {

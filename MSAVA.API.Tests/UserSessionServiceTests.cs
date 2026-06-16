@@ -10,7 +10,7 @@ namespace MSAVA_API.Tests;
 public class UserSessionServiceTests
 {
     [Test]
-    public async Task GetSessionClaims_UsesCurrentDatabaseUserStateInsteadOfStaleTokenState()
+    public async Task GetCurrentSession_UsesCurrentDatabaseUserStateInsteadOfStaleTokenState()
     {
         using var context = CreateContext();
         var currentGroup = CreateAccessGroup("current");
@@ -41,7 +41,7 @@ public class UserSessionServiceTests
                 ExpiresAt = expiresAt
             });
 
-        var session = await service.GetSessionClaimsAsync();
+        var session = await service.GetCurrentSessionAsync();
 
         session.UserId.Should().Be(user.Id);
         session.Username.Should().Be(user.Username);
@@ -57,7 +57,7 @@ public class UserSessionServiceTests
     }
 
     [Test]
-    public async Task GetSessionClaims_ThrowsWhenTokenUserNoLongerExists()
+    public async Task GetCurrentSession_ThrowsWhenTokenUserNoLongerExists()
     {
         using var context = CreateContext();
         var deletedUserId = Guid.NewGuid();
@@ -75,14 +75,14 @@ public class UserSessionServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
 
-        Func<Task> act = () => service.GetSessionClaimsAsync();
+        Func<Task> act = () => service.GetCurrentSessionAsync();
 
         await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"User with id {deletedUserId} not found.");
     }
 
     [Test]
-    public async Task GetSessionClaims_ReturnsAnonymousSessionWithoutDatabaseLookup()
+    public async Task GetCurrentSession_ReturnsAnonymousSessionWithoutDatabaseLookup()
     {
         using var context = CreateContext();
         var anonymousSession = new SessionDTO
@@ -98,7 +98,7 @@ public class UserSessionServiceTests
         };
         var service = CreateService(context, anonymousSession);
 
-        var session = await service.GetSessionClaimsAsync();
+        var session = await service.GetCurrentSessionAsync();
 
         session.Should().BeSameAs(anonymousSession);
     }

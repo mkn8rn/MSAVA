@@ -39,12 +39,12 @@ public class UserSessionService : IUserSessionService
             cancellationToken)).UserId;
     }
 
-    public async Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
+    public async Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
     {
-        return (await GetCurrentSessionAsync(cancellationToken)).Session;
+        return (await LoadCurrentSessionAsync(cancellationToken)).Session;
     }
 
-    private async Task<CurrentSession> GetCurrentSessionAsync(CancellationToken cancellationToken)
+    private async Task<CurrentSession> LoadCurrentSessionAsync(CancellationToken cancellationToken)
     {
         SessionDTO tokenSession = GetTokenSessionDto();
         if (!tokenSession.LoggedIn || tokenSession.UserId == Guid.Empty)
@@ -161,7 +161,7 @@ public class UserSessionService : IUserSessionService
         CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActiveWhitelisted(
-            (await GetCurrentSessionAsync(cancellationToken)).Session,
+            (await LoadCurrentSessionAsync(cancellationToken)).Session,
             missingSessionMessage,
             bannedSessionMessage,
             nonWhitelistedSessionMessage);
@@ -173,7 +173,7 @@ public class UserSessionService : IUserSessionService
         string nonWhitelistedSessionMessage,
         CancellationToken cancellationToken)
     {
-        CurrentSession currentSession = await GetCurrentSessionAsync(cancellationToken);
+        CurrentSession currentSession = await LoadCurrentSessionAsync(cancellationToken);
         SessionDTO activeSession = SessionGuard.RequireActiveWhitelisted(
             currentSession.Session,
             missingSessionMessage,

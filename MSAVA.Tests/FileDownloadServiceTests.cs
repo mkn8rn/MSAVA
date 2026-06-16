@@ -744,7 +744,7 @@ public class FileDownloadServiceTests
 
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
         {
             SessionClaimsCalls++;
             return Task.FromResult(_session);

@@ -104,7 +104,7 @@ public class AccessGroupService
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActiveWhitelisted(
-            await _userService.GetSessionClaimsAsync(cancellationToken),
+            await _userService.GetCurrentSessionAsync(cancellationToken),
             "Session user is required to manage access groups.",
             "Banned users cannot manage access groups.",
             "Users must be whitelisted before managing access groups.");

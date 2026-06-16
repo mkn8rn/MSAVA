@@ -236,7 +236,7 @@ public class FileDownloadService : IFileDownloadService
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActiveWhitelisted(
-            await _userService.GetSessionClaimsAsync(cancellationToken),
+            await _userService.GetCurrentSessionAsync(cancellationToken),
             "Session user is required to download files.",
             "Banned users cannot download files.",
             "Users must be whitelisted before downloading files.");

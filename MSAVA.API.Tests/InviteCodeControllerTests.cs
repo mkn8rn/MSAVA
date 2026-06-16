@@ -319,7 +319,7 @@ public class InviteCodeControllerTests
 
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessionUser);
 
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default)
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new SessionDTO
             {

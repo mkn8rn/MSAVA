@@ -100,6 +100,6 @@ public class UsersControllerTests
         public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionUser);
         public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims.UserId);
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims);
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims);
     }
 }

@@ -95,7 +95,7 @@ public class FileQueryService : IFileQueryService
     private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActiveWhitelisted(
-            await _userService.GetSessionClaimsAsync(cancellationToken),
+            await _userService.GetCurrentSessionAsync(cancellationToken),
             "Session user is required to query files.",
             "Banned users cannot query files.",
             "Users must be whitelisted before querying files.");

@@ -11,5 +11,5 @@ public interface IUserSessionService
     Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default);
     Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default);
     Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default);
-    Task<SessionDTO> GetSessionClaimsAsync(CancellationToken cancellationToken = default);
+    Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default);
 }
