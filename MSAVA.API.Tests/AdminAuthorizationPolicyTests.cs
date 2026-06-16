@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using MSAVA_API.Authorization;
 using MSAVA_API.Controllers;
 using MSAVA_API.Handlers;
@@ -50,12 +51,15 @@ public class AdminAuthorizationPolicyTests
     }
 
     [Test]
-    public void AuthenticationController_ExplicitlyAllowsAnonymousAccess()
+    public void AuthenticationController_AllowsAnonymousOnlyOnLoginAndRegisterActions()
     {
         typeof(AuthenticationController)
             .GetCustomAttributes<AllowAnonymousAttribute>()
             .Should()
-            .ContainSingle();
+            .BeEmpty();
+
+        AssertAllowsAnonymous(typeof(AuthenticationController), nameof(AuthenticationController.Login));
+        AssertAllowsAnonymous(typeof(AuthenticationController), nameof(AuthenticationController.Register));
     }
 
     [Test]
@@ -77,8 +81,7 @@ public class AdminAuthorizationPolicyTests
     {
         var controllersWithoutAuthorizationIntent = GetControllerTypes()
             .Where(type =>
-                !type.GetCustomAttributes<AuthorizeAttribute>().Any() &&
-                !type.GetCustomAttributes<AllowAnonymousAttribute>().Any())
+                !ControllerDeclaresAuthorizationIntent(type))
             .Select(type => type.Name)
             .ToList();
 
@@ -137,6 +140,35 @@ public class AdminAuthorizationPolicyTests
         method.GetCustomAttributes<AuthorizeAttribute>()
             .Should()
             .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentAdmin);
+    }
+
+    private static void AssertAllowsAnonymous(Type controllerType, string methodName)
+    {
+        var method = controllerType.GetMethod(methodName)
+            ?? throw new InvalidOperationException($"Method {controllerType.Name}.{methodName} was not found.");
+
+        method.GetCustomAttributes<AllowAnonymousAttribute>()
+            .Should()
+            .ContainSingle();
+    }
+
+    private static bool ControllerDeclaresAuthorizationIntent(Type controllerType)
+    {
+        if (controllerType.GetCustomAttributes<AuthorizeAttribute>().Any() ||
+            controllerType.GetCustomAttributes<AllowAnonymousAttribute>().Any())
+        {
+            return true;
+        }
+
+        var actionMethods = controllerType
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => method.GetCustomAttributes<HttpMethodAttribute>().Any())
+            .ToList();
+
+        return actionMethods.Count > 0 &&
+            actionMethods.All(method =>
+                method.GetCustomAttributes<AuthorizeAttribute>().Any() ||
+                method.GetCustomAttributes<AllowAnonymousAttribute>().Any());
     }
 
     private static IReadOnlyList<Type> GetControllerTypes()

@@ -8,7 +8,6 @@ namespace MSAVA_API.Controllers;
 
 [Route("api/auth")]
 [ApiController]
-[AllowAnonymous]
 public class AuthenticationController : ControllerBase
 {
     private readonly IAuthenticationService _authService;
@@ -19,6 +18,7 @@ public class AuthenticationController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     public async Task<ActionResult<LoginResponseDTO>> Login(
         [FromBody][Required] LoginRequestDTO request,
         CancellationToken cancellationToken = default)
@@ -28,6 +28,7 @@ public class AuthenticationController : ControllerBase
     }
 
     [HttpPost("register")]
+    [AllowAnonymous]
     public async Task<ActionResult<Guid>> Register(
         [FromBody][Required] RegisterRequestDTO request,
         CancellationToken cancellationToken = default)
