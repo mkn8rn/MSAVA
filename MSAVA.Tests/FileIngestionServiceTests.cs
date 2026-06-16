@@ -417,7 +417,7 @@ public class FileIngestionServiceTests
         var persistenceService = new FilePersistenceService(
             context,
             fileManager,
-            new TestRequestSessionAccessor(session),
+            new TestUserSessionService(session),
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance,
             maximumFileSizeBytes);
@@ -658,9 +658,30 @@ public class FileIngestionServiceTests
         }
     }
 
-    private sealed class TestRequestSessionAccessor(SessionDTO? session = null) : IRequestSessionAccessor
+    private sealed class TestUserSessionService(SessionDTO? session = null) : IUserSessionService
     {
-        public SessionDTO? GetSession() => session;
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(session ?? new SessionDTO
+            {
+                LoggedIn = false,
+                UserId = Guid.Empty,
+                Username = string.Empty,
+                AccessGroups = []
+            });
+        }
     }
 
     private sealed class TestDataContext : BaseDataContext

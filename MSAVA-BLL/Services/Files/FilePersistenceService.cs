@@ -18,7 +18,7 @@ public class FilePersistenceService
 {
     private readonly BaseDataContext _context;
     private readonly FileManager _fileManager;
-    private readonly IRequestSessionAccessor _requestSessionAccessor;
+    private readonly IUserSessionService _userService;
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FilePersistenceService> _logger;
     private readonly long _maximumFileSizeBytes;
@@ -27,14 +27,14 @@ public class FilePersistenceService
     public FilePersistenceService(
         BaseDataContext context,
         FileManager fileManager,
-        IRequestSessionAccessor requestSessionAccessor,
+        IUserSessionService userService,
         ServiceLogger serviceLogger,
         ILogger<FilePersistenceService> logger,
         TimeProvider? timeProvider = null)
         : this(
             context,
             fileManager,
-            requestSessionAccessor,
+            userService,
             serviceLogger,
             logger,
             FileSizePolicy.MaximumFileSizeBytes,
@@ -45,7 +45,7 @@ public class FilePersistenceService
     internal FilePersistenceService(
         BaseDataContext context,
         FileManager fileManager,
-        IRequestSessionAccessor requestSessionAccessor,
+        IUserSessionService userService,
         ServiceLogger serviceLogger,
         ILogger<FilePersistenceService> logger,
         long maximumFileSizeBytes,
@@ -53,7 +53,7 @@ public class FilePersistenceService
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
-        _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
+        _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _maximumFileSizeBytes = FileSizePolicy.RequireValidMaximum(maximumFileSizeBytes);
@@ -133,7 +133,7 @@ public class FilePersistenceService
         Guid accessGroupId,
         CancellationToken cancellationToken = default)
     {
-        Guid sessionUserId = GetRequiredSessionUserId();
+        Guid sessionUserId = await GetRequiredSessionUserIdAsync(cancellationToken);
         await EnsureSessionUserCanCreateInAccessGroupAsync(sessionUserId, accessGroupId, cancellationToken);
         return sessionUserId;
     }
@@ -288,10 +288,10 @@ public class FilePersistenceService
             throw new UnauthorizedAccessException("User cannot create a file in the requested access group.");
     }
 
-    private Guid GetRequiredSessionUserId()
+    private async Task<Guid> GetRequiredSessionUserIdAsync(CancellationToken cancellationToken)
     {
         return SessionGuard.RequireActive(
-            _requestSessionAccessor.GetSession(),
+            await _userService.GetCurrentSessionAsync(cancellationToken),
             "User session not found.",
             "Banned users cannot create files.").UserId;
     }

@@ -1,6 +1,8 @@
 using System.Xml.Linq;
 using System.Text.Json;
+using System.Reflection;
 using MSAVA_App.Models;
+using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Services.Files;
 using MSAVA_Shared.Models;
 
@@ -122,6 +124,30 @@ public class ProjectConfigurationTests
 
         filesWithDataContextReflection.Should().BeEmpty(
             "code-behind should use typed view-model contracts instead of reflection over DataContext wrappers");
+    }
+
+    [Test]
+    public void FilePersistenceService_DoesNotReadRawRequestSession()
+    {
+        var persistenceServiceType = typeof(FilePersistenceService);
+
+        var requestSessionConstructorParameters = persistenceServiceType
+            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .SelectMany(constructor => constructor.GetParameters())
+            .Where(parameter => parameter.ParameterType == typeof(IRequestSessionAccessor))
+            .Select(parameter => parameter.Name)
+            .ToList();
+
+        var requestSessionFields = persistenceServiceType
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Where(field => field.FieldType == typeof(IRequestSessionAccessor))
+            .Select(field => field.Name)
+            .ToList();
+
+        requestSessionConstructorParameters.Should().BeEmpty(
+            "file persistence should use IUserSessionService so create authorization uses the refreshed current session boundary");
+        requestSessionFields.Should().BeEmpty(
+            "file persistence should not cache raw request-session access beside the current-session service");
     }
 
     [Test]

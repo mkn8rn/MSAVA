@@ -899,7 +899,7 @@ public class FilePersistenceServiceTests
         return new FilePersistenceService(
             context,
             fileManager,
-            new TestRequestSessionAccessor(session),
+            new TestUserSessionService(session),
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance,
             maximumFileSizeBytes,
@@ -992,16 +992,37 @@ public class FilePersistenceServiceTests
             Directory.Delete(path, recursive: true);
     }
 
-    private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
+    private sealed class TestUserSessionService : IUserSessionService
     {
         private readonly SessionDTO? _session;
 
-        public TestRequestSessionAccessor(SessionDTO? session)
+        public TestUserSessionService(SessionDTO? session)
         {
             _session = session;
         }
 
-        public SessionDTO? GetSession() => _session;
+        public Task<UserDTO> GetUserByIdAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_session ?? new SessionDTO
+            {
+                LoggedIn = false,
+                UserId = Guid.Empty,
+                Username = string.Empty,
+                AccessGroups = []
+            });
+        }
     }
 
     private sealed class TestDataContext : BaseDataContext
