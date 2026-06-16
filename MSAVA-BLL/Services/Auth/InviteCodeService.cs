@@ -33,13 +33,10 @@ public class InviteCodeService
         DateTime expiresAt,
         CancellationToken cancellationToken = default)
     {
-        if (maxUses <= 0)
-            throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
+        InviteCodeInputPolicy.EnsureMaxUsesAllowed(maxUses);
 
         DateTime utcNow = GetUtcNow();
-
-        if (expiresAt <= utcNow)
-            throw new ArgumentOutOfRangeException(nameof(expiresAt), expiresAt, "Invite code expiration must be in the future.");
+        InviteCodeInputPolicy.EnsureExpirationAllowed(expiresAt, utcNow);
 
         SessionDTO session = await GetAuthorizedAdminSessionAsync(cancellationToken);
 

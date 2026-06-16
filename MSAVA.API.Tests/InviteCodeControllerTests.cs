@@ -103,7 +103,7 @@ public class InviteCodeControllerTests
         var response = await controller.CreateInviteCode(maxUses, expiresInHours: 1);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().Be("Invite code max uses must be greater than zero.");
+        badRequest.Value.Should().Be(InviteCodeInputPolicy.InvalidMaxUsesMessage);
         context.InviteCodes.Should().BeEmpty();
     }
 
@@ -122,7 +122,7 @@ public class InviteCodeControllerTests
         var response = await controller.CreateInviteCode(maxUses: 1, expiresInHours);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().Be("Invite code expiration must be between 1 and 8760 hours.");
+        badRequest.Value.Should().Be(InviteCodeInputPolicy.InvalidLifetimeMessage);
         context.InviteCodes.Should().BeEmpty();
     }
 

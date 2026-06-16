@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Services.Auth;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Controllers;
@@ -12,9 +13,6 @@ namespace MSAVA_API.Controllers;
 [Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class InviteCodeController : ControllerBase
 {
-    private const int MaximumInviteCodeLifetimeHours = 24 * 365;
-    private const string InvalidMaxUsesMessage = "Invite code max uses must be greater than zero.";
-
     private readonly IInviteCodeService _inviteCodeService;
     private readonly TimeProvider _timeProvider;
 
@@ -42,10 +40,10 @@ public class InviteCodeController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         if (maxUses <= 0)
-            return BadRequest(InvalidMaxUsesMessage);
+            return BadRequest(InviteCodeInputPolicy.InvalidMaxUsesMessage);
 
-        if (expiresInHours <= 0 || expiresInHours > MaximumInviteCodeLifetimeHours)
-            return BadRequest($"Invite code expiration must be between 1 and {MaximumInviteCodeLifetimeHours} hours.");
+        if (expiresInHours <= 0 || expiresInHours > InviteCodeInputPolicy.MaximumLifetimeHours)
+            return BadRequest(InviteCodeInputPolicy.InvalidLifetimeMessage);
 
         var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(expiresInHours);
         var id = await _inviteCodeService.CreateNewInviteCodeAsync(maxUses, expiresAt, cancellationToken);

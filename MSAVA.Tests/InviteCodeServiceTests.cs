@@ -347,6 +347,41 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task CreateNewInviteCode_RejectsExpirationPastMaximumLifetimeBeforeLoadingSession()
+    {
+        using var context = CreateContext();
+        var service = new InviteCodeService(
+            context,
+            new ThrowingUserSessionService(),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            new FixedTimeProvider(FixedNow));
+        var expiresAt = FixedNow.UtcDateTime.AddHours(InviteCodeInputPolicy.MaximumLifetimeHours + 1);
+
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, expiresAt);
+
+        await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
+            .WithMessage($"{InviteCodeInputPolicy.InvalidLifetimeMessage}*");
+        context.InviteCodes.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateNewInviteCode_AllowsExpirationAtMaximumLifetime()
+    {
+        using var context = CreateContext();
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+        var service = CreateService(context, owner, new FixedTimeProvider(FixedNow));
+        var expiresAt = FixedNow.UtcDateTime.AddHours(InviteCodeInputPolicy.MaximumLifetimeHours);
+
+        var inviteCodeId = await service.CreateNewInviteCodeAsync(maxUses: 1, expiresAt);
+
+        context.InviteCodes.Should().ContainSingle(inviteCode =>
+            inviteCode.Id == inviteCodeId &&
+            inviteCode.ExpiresAt == expiresAt);
+    }
+
+    [Test]
     public async Task CreateNewInviteCode_UsesSessionClaimsWithoutLoadingSessionUserEntity()
     {
         using var context = CreateContext();
