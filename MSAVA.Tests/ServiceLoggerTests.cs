@@ -82,6 +82,69 @@ public class ServiceLoggerTests
         context.SaveChangesAsyncCalls.Should().Be(1);
     }
 
+    [Test]
+    public async Task WriteLogAsync_DetachesPendingLogAndContinuesWhenPersistenceFailureIsRecoverable()
+    {
+        using var context = CreateThrowingContext(new InvalidOperationException("Simulated log persistence failure."));
+        var captureLogger = new CapturingLogger();
+        var logger = new ServiceLogger(captureLogger, context);
+        var userId = Guid.NewGuid();
+
+        await logger.WriteLogAsync(
+            UserLogAction.AccountRegistered,
+            "Registered user",
+            userId,
+            adminId: null);
+
+        context.ChangeTracker.Entries<UserLogDB>().Should().BeEmpty();
+        context.UserLogs.Should().BeEmpty();
+        context.SaveChangesAsyncCalls.Should().Be(1);
+        captureLogger.Messages.Should().Contain(message =>
+            message.Contains("Failed to persist UserLogDB to database", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task WriteLogAsync_DetachesPendingLogAndPropagatesCriticalPersistenceFailure()
+    {
+        using var context = CreateThrowingContext(new OutOfMemoryException("Critical log persistence failure."));
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var userId = Guid.NewGuid();
+
+        var act = async () => await logger.WriteLogAsync(
+            UserLogAction.AccountRegistered,
+            "Registered user",
+            userId,
+            adminId: null);
+
+        await act.Should().ThrowAsync<OutOfMemoryException>()
+            .WithMessage("Critical log persistence failure.");
+        context.ChangeTracker.Entries<UserLogDB>().Should().BeEmpty();
+        context.UserLogs.Should().BeEmpty();
+        context.SaveChangesAsyncCalls.Should().Be(1);
+    }
+
+    [Test]
+    public async Task WriteLogAsync_DetachesPendingLogAndPropagatesWrappedCancellation()
+    {
+        using var context = CreateThrowingContext(new InvalidOperationException(
+            "Save failed after cancellation.",
+            new OperationCanceledException("Request was canceled.")));
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var userId = Guid.NewGuid();
+
+        var act = async () => await logger.WriteLogAsync(
+            UserLogAction.AccountRegistered,
+            "Registered user",
+            userId,
+            adminId: null);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Save failed after cancellation.");
+        context.ChangeTracker.Entries<UserLogDB>().Should().BeEmpty();
+        context.UserLogs.Should().BeEmpty();
+        context.SaveChangesAsyncCalls.Should().Be(1);
+    }
+
     private static TestDataContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()
@@ -89,6 +152,15 @@ public class ServiceLoggerTests
             .Options;
 
         return new TestDataContext(options);
+    }
+
+    private static ThrowingDataContext CreateThrowingContext(Exception saveException)
+    {
+        var options = new DbContextOptionsBuilder<BaseDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new ThrowingDataContext(options, saveException);
     }
 
     private sealed class TestDataContext : BaseDataContext
@@ -110,6 +182,33 @@ public class ServiceLoggerTests
         {
             SaveChangesAsyncCalls++;
             return base.SaveChangesAsync(cancellationToken);
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
+    }
+
+    private sealed class ThrowingDataContext : BaseDataContext
+    {
+        private readonly Exception _saveException;
+
+        public ThrowingDataContext(
+            DbContextOptions<BaseDataContext> options,
+            Exception saveException)
+            : base(options)
+        {
+            _saveException = saveException;
+        }
+
+        public int SaveChangesAsyncCalls { get; private set; }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            SaveChangesAsyncCalls++;
+            return Task.FromException<int>(_saveException);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

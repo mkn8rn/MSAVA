@@ -2,6 +2,7 @@ using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 using System.Text;
 
 namespace MSAVA_BLL.Loggers;
@@ -204,16 +205,51 @@ public class ServiceLogger
 
             await _context.SaveChangesAsync(cancellationToken);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             DetachLog(log);
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsCriticalPersistenceFailure(ex))
+        {
+            DetachLog(log);
+            throw;
+        }
+        catch (Exception ex) when (IsRecoverablePersistenceFailure(ex))
         {
             DetachLog(log);
             _logger.LogError(ex, "Failed to persist {LogType} to database", log.GetType().Name);
         }
+    }
+
+    private static bool IsRecoverablePersistenceFailure(Exception exception)
+    {
+        if (ContainsCriticalException(exception))
+            return false;
+
+        return exception is DbException
+            or DbUpdateException
+            or IOException
+            or InvalidOperationException
+            or UnauthorizedAccessException;
+    }
+
+    private static bool IsCriticalPersistenceFailure(Exception exception)
+    {
+        return ContainsCriticalException(exception);
+    }
+
+    private static bool ContainsCriticalException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException
+                or OutOfMemoryException
+                or AccessViolationException)
+                return true;
+        }
+
+        return false;
     }
 
     private void DetachLog(object log)
