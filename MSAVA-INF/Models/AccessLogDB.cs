@@ -9,7 +9,7 @@ namespace MSAVA_INF.Models
     public class AccessLogDB : IIdentifiableDB
     {
         public Guid Id { get; set; }
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public required DateTime Timestamp { get; set; }
         public required Guid UserId { get; set; }
         public UserDB? User { get; set; }
         public required Guid FileRefId { get; set; }

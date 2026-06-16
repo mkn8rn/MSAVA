@@ -11,7 +11,7 @@ namespace MSAVA_INF.Models
         public const int MaximumUsernameLength = 128;
 
         public Guid Id { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public required DateTime CreatedAt { get; set; }
         public required string Username { get; set; }
         public required byte[] PasswordHash { get; set; }
         public required byte[] PasswordSalt { get; set; }

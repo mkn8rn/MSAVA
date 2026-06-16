@@ -26,11 +26,11 @@ namespace MSAVA_INF.Models
         public bool PublicViewing { get; set; } = false;
         public uint DownloadCount { get; set; } = 0;
 
-        public DateTime SavedAt { get; set; } = DateTime.UtcNow;
+        public required DateTime SavedAt { get; set; }
         public required Guid OriginalCreator { get; set; }
         public UserDB? Creator { get; set; }
 
-        public DateTime LastModifiedAt { get; set; } = DateTime.UtcNow;
+        public required DateTime LastModifiedAt { get; set; }
         public required Guid LastModifiedById { get; set; }
         public UserDB? LastModifiedBy { get; set; }
     }

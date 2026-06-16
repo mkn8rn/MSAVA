@@ -22,7 +22,7 @@ public class SavedFileMetaRecord
 
     public bool PublicDownload { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public required DateTime CreatedAt { get; set; }
 
     /// <summary>
     /// Helper property for hash conversion (not stored in DB).

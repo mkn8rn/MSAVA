@@ -78,7 +78,8 @@ public class PublicFileAccessGuardTests
                 FileHash = hash,
                 FileExtension = "txt",
                 AccessGroupId = privateReference.AccessGroupId,
-                PublicDownload = true
+                PublicDownload = true,
+                CreatedAt = DateTime.UnixEpoch
             });
 
             var httpContext = CreateHttpContext(context, metadataStore);

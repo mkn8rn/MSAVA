@@ -782,7 +782,8 @@ public class FileDeduplicationServiceTests
             newData.LastModifiedAt.Should().Be(FixedNow.UtcDateTime);
             metadataStore.GetByAccessGroup(targetGroup.Id)
                 .Should()
-                .ContainSingle(record => record.RefId == result.ReferenceId);
+                .ContainSingle(record => record.RefId == result.ReferenceId)
+                .Which.CreatedAt.Should().Be(FixedNow.UtcDateTime);
         }
         finally
         {

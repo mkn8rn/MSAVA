@@ -306,7 +306,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             FileHashHex = Convert.ToHexString(fileHash),
             FileExtension = extension,
             AccessGroupId = accessGroupId,
-            PublicDownload = request.PublicDownload
+            PublicDownload = request.PublicDownload,
+            CreatedAt = utcNow
         };
 
         _context.FileRefs.Add(newReference);

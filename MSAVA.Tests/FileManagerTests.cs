@@ -55,7 +55,8 @@ public class FileManagerTests
                 FileHash = hash,
                 FileExtension = "txt",
                 AccessGroupId = Guid.NewGuid(),
-                PublicDownload = false
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
             };
 
             bool contentFileCreated = await fileManager.SaveTempFileAsync(metadata, tempFilePath);

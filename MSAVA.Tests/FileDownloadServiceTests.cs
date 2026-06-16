@@ -265,7 +265,8 @@ public class FileDownloadServiceTests
                 FileHash = fileHash,
                 FileExtension = "txt",
                 AccessGroupId = fileReference.AccessGroupId,
-                PublicDownload = false
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
             });
             context.FileRefs.Add(fileReference);
             context.FileData.Add(CreateFileData(fileReference));
@@ -324,7 +325,8 @@ public class FileDownloadServiceTests
                 FileHash = fileHash,
                 FileExtension = "txt",
                 AccessGroupId = accessGroupId,
-                PublicDownload = false
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
             });
             context.FileRefs.Add(fileReference);
             context.FileData.Add(CreateFileData(fileReference, downloadCount: 4));
@@ -387,7 +389,8 @@ public class FileDownloadServiceTests
                 FileHash = fileHash,
                 FileExtension = "txt",
                 AccessGroupId = metadataAccessGroupId,
-                PublicDownload = false
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
             });
             context.FileRefs.Add(fileReference);
             context.FileData.Add(CreateFileData(fileReference, downloadCount: 7));
@@ -504,7 +507,8 @@ public class FileDownloadServiceTests
                 FileHash = fileHash,
                 FileExtension = "txt",
                 AccessGroupId = accessGroupId,
-                PublicDownload = false
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
             });
             context.FileRefs.Add(fileReference);
             await context.SaveChangesAsync();
@@ -594,7 +598,8 @@ public class FileDownloadServiceTests
                 FileHash = fileHash,
                 FileExtension = "txt",
                 AccessGroupId = fileReference.AccessGroupId,
-                PublicDownload = false
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
             });
             context.FileRefs.Add(fileReference);
             context.FileData.Add(CreateFileData(fileReference));

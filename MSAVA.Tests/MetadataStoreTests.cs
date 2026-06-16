@@ -100,7 +100,8 @@ public class MetadataStoreTests
             FileHash = fileHash,
             FileExtension = fileExtension,
             AccessGroupId = accessGroupId ?? Guid.NewGuid(),
-            PublicDownload = publicDownload
+            PublicDownload = publicDownload,
+            CreatedAt = FixedUtcNow
         };
     }
 
