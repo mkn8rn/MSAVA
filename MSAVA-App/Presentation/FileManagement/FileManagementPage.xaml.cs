@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
@@ -7,6 +8,7 @@ using System.IO;
 using MSAVA_App.Services.Pickers;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Media.Animation;
+using MSAVA_App.Services;
 
 namespace MSAVA_App.Presentation.FileManagement;
 
@@ -131,7 +133,10 @@ public sealed partial class FileManagementPage : Page
             {
                 _progressStoryboard.Stop();
             }
-            catch { }
+            catch (Exception ex) when (!AppCriticalExceptionPolicy.ContainsCriticalException(ex))
+            {
+                Debug.WriteLine($"Failed to stop upload result progress animation: {ex}");
+            }
             _progressStoryboard = null;
         }
 

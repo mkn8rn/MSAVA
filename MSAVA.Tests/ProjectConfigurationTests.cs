@@ -125,6 +125,21 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void SourceCode_DoesNotUseEmptyCatchBlocks()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string emptyCatchBlock = "catch " + "{ }";
+
+        var filesWithEmptyCatchBlocks = EnumerateSourceFiles(repositoryRoot)
+            .Where(file => File.ReadAllText(file).Contains(emptyCatchBlock, StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(repositoryRoot, file))
+            .ToList();
+
+        filesWithEmptyCatchBlocks.Should().BeEmpty(
+            "exceptions should either propagate, be filtered, or leave diagnostic evidence when intentionally ignored");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");
@@ -194,5 +209,21 @@ public class ProjectConfigurationTests
         }
 
         throw new DirectoryNotFoundException("Could not find the MSAVA repository root.");
+    }
+
+    private static IEnumerable<string> EnumerateSourceFiles(string repositoryRoot)
+    {
+        string[] excludedSegments = [".git", "bin", "obj", "docs"];
+
+        return Directory
+            .EnumerateFiles(repositoryRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(file =>
+            {
+                string relativePath = Path.GetRelativePath(repositoryRoot, file);
+                string[] segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                return !excludedSegments.Any(excludedSegment =>
+                    segments.Contains(excludedSegment, StringComparer.OrdinalIgnoreCase));
+            });
     }
 }

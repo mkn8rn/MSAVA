@@ -10,8 +10,7 @@ using MSAVA_App.Presentation.FileManagement;
 
 namespace MSAVA_App.Presentation;
 
-// Registering new pages/routes (largely added because I have no experience with Uno and wanted to simplify things for myself lmao)
-// (this will likely be revised later as I get more familiar with Uno's navigation paradigms)
+// Register pages, view models, nested routes, and route guard metadata.
 // Steps to add a new page/route:
 // 1) Create your XAML Page and its ViewModel (e.g., MyPage.xaml + MyModel).
 // 2) In Register(...), add a mapping to views.Register:
