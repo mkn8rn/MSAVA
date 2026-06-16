@@ -381,6 +381,30 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void ProductionSource_HasSingleCriticalExceptionPolicyDefinition()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+
+        var definitions = EnumerateProductionSourceFiles(repositoryRoot)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine =>
+                sourceLine.Line.Contains("class CriticalExceptionPolicy", StringComparison.Ordinal))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        definitions.Should().BeEquivalentTo(
+            ["MSAVA-BLL\\Utils\\CriticalExceptionPolicy.cs:3"],
+            "critical exception classification should have one implementation so API and BLL filters cannot drift");
+    }
+
+    [Test]
     public void ProductionSource_DoesNotResolveServicesFromHttpContextRequestServices()
     {
         string repositoryRoot = FindRepositoryRoot();

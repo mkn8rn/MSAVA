@@ -1,6 +1,6 @@
 namespace MSAVA_BLL.Utils;
 
-internal static class CriticalExceptionPolicy
+public static class CriticalExceptionPolicy
 {
     public static bool ContainsCriticalException(Exception exception)
     {
