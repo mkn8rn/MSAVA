@@ -68,6 +68,39 @@ public class SeedingServiceTests
     }
 
     [Test]
+    public async Task SeedAsync_RepairsExistingConfiguredAdminIgnoringCaseWithoutChangingPassword()
+    {
+        using var context = CreateContext();
+        byte[] originalSalt = PasswordUtils.GenerateSalt();
+        byte[] originalHash = PasswordUtils.HashPassword("existing-password", originalSalt);
+        var existingAdmin = new UserDB
+        {
+            Id = Guid.NewGuid(),
+            Username = "Admin",
+            PasswordHash = originalHash,
+            PasswordSalt = originalSalt,
+            IsAdmin = false,
+            IsBanned = true,
+            IsWhitelisted = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        context.Users.Add(existingAdmin);
+        await context.SaveChangesAsync();
+        var service = CreateService(context, adminUsername: "admin");
+
+        await service.SeedAsync();
+
+        var admin = context.Users.Should().ContainSingle().Which;
+        admin.Id.Should().Be(existingAdmin.Id);
+        admin.Username.Should().Be("Admin");
+        admin.IsAdmin.Should().BeTrue();
+        admin.IsBanned.Should().BeFalse();
+        admin.IsWhitelisted.Should().BeTrue();
+        admin.PasswordHash.Should().Equal(originalHash);
+        admin.PasswordSalt.Should().Equal(originalSalt);
+    }
+
+    [Test]
     public async Task SeedAsync_RejectsDuplicateConfiguredAdminUsers()
     {
         using var context = CreateContext();
@@ -76,6 +109,22 @@ public class SeedingServiceTests
             CreateUser(TestEnvironment.AdminUsernameValue));
         await context.SaveChangesAsync();
         var service = CreateService(context);
+
+        Func<Task> act = () => service.SeedAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        context.Users.Should().HaveCount(2);
+    }
+
+    [Test]
+    public async Task SeedAsync_RejectsDuplicateConfiguredAdminUsersIgnoringCase()
+    {
+        using var context = CreateContext();
+        context.Users.AddRange(
+            CreateUser("admin"),
+            CreateUser("ADMIN"));
+        await context.SaveChangesAsync();
+        var service = CreateService(context, adminUsername: "admin");
 
         Func<Task> act = () => service.SeedAsync();
 

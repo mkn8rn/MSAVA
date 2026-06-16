@@ -66,7 +66,7 @@ public class AuthenticationService : IAuthenticationService
 
     private async Task<UserDB?> GetUniqueUserForLoginAsync(string username, CancellationToken cancellationToken)
     {
-        string usernameComparisonKey = CreateUsernameComparisonKey(username);
+        string usernameComparisonKey = AuthInputPolicy.CreateUsernameComparisonKey(username);
 
         List<UserDB> matchingUsers = await _context.Users
             .AsNoTracking()
@@ -199,16 +199,11 @@ public class AuthenticationService : IAuthenticationService
 
     private async Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken)
     {
-        string usernameComparisonKey = CreateUsernameComparisonKey(username);
+        string usernameComparisonKey = AuthInputPolicy.CreateUsernameComparisonKey(username);
 
         return await _context.Users
             .AsNoTracking()
             .AnyAsync(user => user.Username.ToUpper() == usernameComparisonKey, cancellationToken);
-    }
-
-    private static string CreateUsernameComparisonKey(string username)
-    {
-        return username.ToUpperInvariant();
     }
 
     private bool ShouldUseSerializableRegistrationTransaction()

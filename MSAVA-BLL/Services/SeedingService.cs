@@ -36,11 +36,12 @@ namespace MSAVA_BLL.Services
         private async Task<Guid> SeedAdminUserAsync(CancellationToken cancellationToken)
         {
             string adminUsername = AuthInputPolicy.NormalizeUsername(_env.Values.AdminUsername);
+            string adminUsernameComparisonKey = AuthInputPolicy.CreateUsernameComparisonKey(adminUsername);
             string adminPassword = _env.Values.AdminPassword;
             AuthInputPolicy.EnsurePasswordAllowed(adminPassword);
 
             UserDB? adminUser = await _context.Users.SingleOrDefaultAsync(
-                u => u.Username == adminUsername,
+                u => u.Username.ToUpper() == adminUsernameComparisonKey,
                 cancellationToken);
 
             if (adminUser == null)
