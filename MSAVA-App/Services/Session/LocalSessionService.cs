@@ -125,11 +125,13 @@ public class LocalSessionService
 
     private static bool IsRecoverableLoginFailure(Exception exception)
     {
-        if (CriticalExceptionPolicy.ContainsNonCancellationCriticalException(exception))
+        if (exception is TaskCanceledException)
+            return true;
+
+        if (CriticalExceptionPolicy.ContainsCriticalException(exception))
             return false;
 
         return exception is HttpRequestException
-            or TaskCanceledException
             or JsonException
             or NotSupportedException
             or InvalidOperationException

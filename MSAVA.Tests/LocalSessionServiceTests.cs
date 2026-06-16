@@ -91,6 +91,24 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_PropagatesWrappedCancellationWithoutChangingSessionState()
+    {
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new InvalidOperationException(
+                "wrapped cancellation",
+                new OperationCanceledException("cancelled"))));
+        var service = CreateService(handler);
+
+        var act = async () => await service.LoginAsync("alice", "password");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("wrapped cancellation");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
     public async Task LoginAsync_ClearsPreviousSessionAndApiTokenWhenLoginFails()
     {
         var userId = Guid.NewGuid();
