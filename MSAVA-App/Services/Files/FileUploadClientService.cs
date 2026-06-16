@@ -15,6 +15,8 @@ namespace MSAVA_App.Services.Files;
 
 public class FileUploadClientService
 {
+    public const string InvalidSuccessResponseMessage = "Upload response did not contain a valid file id.";
+
     private readonly ApiService _api;
     private readonly ILogger<FileUploadClientService> _logger;
 
@@ -109,8 +111,7 @@ public class FileUploadClientService
         catch (Exception ex) when (IsRecoverableResponseBodyFailure(ex))
         {
             _logger.LogError(ex, "Failed to parse GUID from upload response");
-            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
-            return new UploadOutcome(true, statusCode, raw, null);
+            return new UploadOutcome(false, statusCode, null, InvalidSuccessResponseMessage);
         }
     }
 

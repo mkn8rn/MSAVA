@@ -30,7 +30,7 @@ public class FileUploadClientServiceTests
     }
 
     [Test]
-    public async Task CreateFileFromFormFileAsync_ReturnsRawBodyWhenSuccessfulResponseIsNotGuid()
+    public async Task CreateFileFromFormFileAsync_ReturnsFailureWhenSuccessfulResponseIsNotGuid()
     {
         var service = CreateService(new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -39,10 +39,10 @@ public class FileUploadClientServiceTests
 
         var outcome = await CreateUploadAsync(service);
 
-        outcome.Success.Should().BeTrue();
+        outcome.Success.Should().BeFalse();
         outcome.StatusCode.Should().Be((int)HttpStatusCode.OK);
-        outcome.Id.Should().Be("raw-upload-id");
-        outcome.Error.Should().BeNull();
+        outcome.Id.Should().BeNull();
+        outcome.Error.Should().Be(FileUploadClientService.InvalidSuccessResponseMessage);
     }
 
     [Test]
