@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using MSAVA_App.Models;
+using MSAVA_App.Services;
 
 namespace MSAVA_App.Services.Api;
 public class ApiService
@@ -156,6 +157,9 @@ public class ApiService
 
     private static bool IsRecoverableDeserializationFailure(Exception exception)
     {
+        if (AppCriticalExceptionPolicy.ContainsCriticalException(exception))
+            return false;
+
         return exception is JsonException
             or NotSupportedException
             or InvalidOperationException

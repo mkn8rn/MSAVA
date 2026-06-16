@@ -72,6 +72,22 @@ public class FileUploadClientServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromFormFileAsync_PropagatesWrappedCriticalFailureWhileParsingSuccessfulResponse()
+    {
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingContent(new InvalidOperationException(
+                "wrapped native failure",
+                new AccessViolationException("native failure")))
+        });
+
+        var act = async () => await CreateUploadAsync(service);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("wrapped native failure");
+    }
+
+    [Test]
     public async Task CreateFileFromFormFileAsync_PropagatesCancellationWhileReadingErrorResponse()
     {
         var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)

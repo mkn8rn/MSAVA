@@ -61,6 +61,22 @@ public class ApiServiceTests
     }
 
     [Test]
+    public async Task SendForAsync_PropagatesWrappedCancellationDuringJsonDeserialization()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingJsonContent(new InvalidOperationException(
+                "wrapped cancellation",
+                new OperationCanceledException("cancelled")))
+        });
+
+        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("wrapped cancellation");
+    }
+
+    [Test]
     public async Task SendMultipartForAsync_PropagatesCancellationDuringJsonDeserialization()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
@@ -85,6 +101,22 @@ public class ApiServiceTests
         var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
 
         await act.Should().ThrowAsync<OutOfMemoryException>();
+    }
+
+    [Test]
+    public async Task SendForAsync_PropagatesWrappedCriticalDeserializationFailure()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingJsonContent(new InvalidOperationException(
+                "wrapped native failure",
+                new AccessViolationException("native failure")))
+        });
+
+        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("wrapped native failure");
     }
 
     [Test]

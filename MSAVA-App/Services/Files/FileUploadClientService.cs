@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using MSAVA_App.Services;
 using MSAVA_App.Services.Api;
 using MSAVA_Shared.Models;
 
@@ -140,7 +141,7 @@ public class FileUploadClientService
 
     private static bool IsRecoverableResponseBodyFailure(Exception exception)
     {
-        if (ContainsCriticalException(exception))
+        if (AppCriticalExceptionPolicy.ContainsCriticalException(exception))
             return false;
 
         return exception is HttpRequestException
@@ -148,18 +149,5 @@ public class FileUploadClientService
             or NotSupportedException
             or InvalidOperationException
             or IOException;
-    }
-
-    private static bool ContainsCriticalException(Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-            if (current is OperationCanceledException
-                or OutOfMemoryException
-                or AccessViolationException)
-                return true;
-        }
-
-        return false;
     }
 }

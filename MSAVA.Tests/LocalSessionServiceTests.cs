@@ -58,6 +58,24 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_PropagatesWrappedCriticalFailureWithoutChangingSessionState()
+    {
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new InvalidOperationException(
+                "wrapped native failure",
+                new AccessViolationException("native failure"))));
+        var service = CreateService(handler);
+
+        var act = async () => await service.LoginAsync("alice", "password");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("wrapped native failure");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
     public async Task LoginAsync_ReturnsNullForHttpTimeoutWhenCallerDidNotCancel()
     {
         var handler = new RecordingHttpMessageHandler((_, _) =>
