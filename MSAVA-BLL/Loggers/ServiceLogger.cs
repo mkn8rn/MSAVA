@@ -1,5 +1,6 @@
 using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
+using MSAVA_BLL.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using System.Data.Common;
@@ -224,7 +225,7 @@ public class ServiceLogger
 
     private static bool IsRecoverablePersistenceFailure(Exception exception)
     {
-        if (ContainsCriticalException(exception))
+        if (CriticalExceptionPolicy.ContainsCriticalException(exception))
             return false;
 
         return exception is DbException
@@ -236,20 +237,7 @@ public class ServiceLogger
 
     private static bool IsCriticalPersistenceFailure(Exception exception)
     {
-        return ContainsCriticalException(exception);
-    }
-
-    private static bool ContainsCriticalException(Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-            if (current is OperationCanceledException
-                or OutOfMemoryException
-                or AccessViolationException)
-                return true;
-        }
-
-        return false;
+        return CriticalExceptionPolicy.ContainsCriticalException(exception);
     }
 
     private void DetachLog(object log)

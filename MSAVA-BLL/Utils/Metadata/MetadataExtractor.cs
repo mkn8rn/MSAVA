@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MSAVA_BLL.Utils;
 
 namespace MSAVA_BLL.Utils.Metadata;
 
@@ -50,8 +51,7 @@ public static class MetadataExtractor
 
     private static bool IsRecoverableExtractionFailure(Exception exception)
     {
-        return exception is not OperationCanceledException
-            and not OutOfMemoryException;
+        return !CriticalExceptionPolicy.ContainsCriticalException(exception);
     }
 
     /// <summary>

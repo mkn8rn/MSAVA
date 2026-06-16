@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using MSAVA_BLL.Utils;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using TagLib;
@@ -130,7 +131,7 @@ public static class SignatureEmbedder
 
     private static bool IsRecoverableEmbeddingFailure(Exception exception)
     {
-        if (ContainsCriticalException(exception))
+        if (CriticalExceptionPolicy.ContainsCriticalException(exception))
             return false;
 
         return exception is IOException
@@ -141,19 +142,6 @@ public static class SignatureEmbedder
             or NotSupportedException
             || exception.GetType().Namespace?.StartsWith("TagLib", StringComparison.Ordinal) == true
             || exception.GetType().Namespace?.StartsWith("SixLabors.ImageSharp", StringComparison.Ordinal) == true;
-    }
-
-    private static bool ContainsCriticalException(Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-            if (current is OperationCanceledException
-                or OutOfMemoryException
-                or AccessViolationException)
-                return true;
-        }
-
-        return false;
     }
 
     #region Image Embedders
@@ -338,6 +326,9 @@ public static class SignatureEmbedder
 
     private static bool IsExistingCustomPropertiesReadFailure(Exception exception)
     {
+        if (CriticalExceptionPolicy.ContainsCriticalException(exception))
+            return false;
+
         return exception is XmlException or IOException or InvalidDataException;
     }
 

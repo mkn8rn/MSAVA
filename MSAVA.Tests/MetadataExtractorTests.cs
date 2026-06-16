@@ -28,6 +28,19 @@ public class MetadataExtractorTests
     }
 
     [Test]
+    public void ExtractMetadata_PropagatesWrappedOperationCanceledException()
+    {
+        using var stream = new ThrowingReadStream(new InvalidOperationException(
+            "wrapped cancellation",
+            new OperationCanceledException("cancelled")));
+
+        Action act = () => MetadataExtractor.ExtractMetadata(stream, "txt", 42);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("wrapped cancellation");
+    }
+
+    [Test]
     public void ExtractMetadata_PropagatesOutOfMemoryException()
     {
         using var stream = new ThrowingReadStream(new OutOfMemoryException("memory pressure"));
@@ -35,6 +48,17 @@ public class MetadataExtractorTests
         Action act = () => MetadataExtractor.ExtractMetadata(stream, "txt", 42);
 
         act.Should().Throw<OutOfMemoryException>();
+    }
+
+    [Test]
+    public void ExtractMetadata_PropagatesAccessViolationException()
+    {
+        using var stream = new ThrowingReadStream(new AccessViolationException("native failure"));
+
+        Action act = () => MetadataExtractor.ExtractMetadata(stream, "txt", 42);
+
+        act.Should().Throw<AccessViolationException>()
+            .WithMessage("native failure");
     }
 
     private sealed class ThrowingReadStream(Exception exception) : Stream
