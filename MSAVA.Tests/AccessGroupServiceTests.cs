@@ -12,6 +12,8 @@ namespace MSAVA_App.Tests;
 
 public class AccessGroupServiceTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 11, 30, 0, TimeSpan.Zero);
+
     [Test]
     public void AccessGroupService_DoesNotExposePublicUserGroupLookupByArbitraryUserId()
     {
@@ -30,8 +32,9 @@ public class AccessGroupServiceTests
         context.Users.Add(owner);
         await context.SaveChangesAsync();
 
-        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
-        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+        var fixedTimeProvider = new FixedTimeProvider(FixedNow);
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context, fixedTimeProvider);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger, timeProvider: fixedTimeProvider);
 
         var accessGroupId = await service.CreateAccessGroupAsync("  Editors  ");
 
@@ -40,6 +43,7 @@ public class AccessGroupServiceTests
             .Single(group => group.Id == accessGroupId);
         accessGroup.Name.Should().Be("Editors");
         accessGroup.OwnerId.Should().Be(owner.Id);
+        accessGroup.CreatedAt.Should().Be(FixedNow.UtcDateTime);
         accessGroup.Users.Should().ContainSingle(user => user.Id == owner.Id);
     }
 
@@ -313,12 +317,14 @@ public class AccessGroupServiceTests
         bool isAdmin,
         ServiceLogger logger,
         bool isBanned = false,
-        bool isWhitelisted = true)
+        bool isWhitelisted = true,
+        TimeProvider? timeProvider = null)
     {
         return new AccessGroupService(
             context,
             new TestUserSessionService(sessionUserId, isAdmin, isBanned, isWhitelisted),
-            logger);
+            logger,
+            timeProvider);
     }
 
     private static UserDB CreateUser(
@@ -433,5 +439,10 @@ public class AccessGroupServiceTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

@@ -14,15 +14,18 @@ public class AccessGroupService
     private readonly BaseDataContext _context;
     private readonly IUserSessionService _userService;
     private readonly ServiceLogger _serviceLogger;
+    private readonly TimeProvider _timeProvider;
 
     public AccessGroupService(
         BaseDataContext context,
         IUserSessionService userService,
-        ServiceLogger serviceLogger)
+        ServiceLogger serviceLogger,
+        TimeProvider? timeProvider = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Guid> CreateAccessGroupAsync(string name, CancellationToken cancellationToken = default)
@@ -46,7 +49,7 @@ public class AccessGroupService
         {
             Id = Guid.NewGuid(),
             OwnerId = user.Id,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = GetUtcNow(),
             Name = accessGroupName,
             Users = [],
             SubGroups = []
@@ -105,6 +108,11 @@ public class AccessGroupService
             "Session user is required to manage access groups.",
             "Banned users cannot manage access groups.",
             "Users must be whitelisted before managing access groups.");
+    }
+
+    private DateTime GetUtcNow()
+    {
+        return _timeProvider.GetUtcNow().UtcDateTime;
     }
 
 }
