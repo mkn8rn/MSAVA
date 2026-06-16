@@ -785,14 +785,77 @@ public class FileDeduplicationServiceTests
             newData.Description.Should().Be("normalized dedupe description");
             newData.Tags.Should().Equal("copy", "shared");
             newData.Categories.Should().Equal("tests");
-            newData.Metadata.Should().NotBeSameAs(existingData.Metadata);
-            newData.Metadata.RootElement.GetRawText().Should().Be(existingData.Metadata.RootElement.GetRawText());
+            newData.Metadata.RootElement.GetRawText().Should().Be("{}");
             newData.SavedAt.Should().Be(FixedNow.UtcDateTime);
             newData.LastModifiedAt.Should().Be(FixedNow.UtcDateTime);
             metadataStore.GetByAccessGroup(targetGroup.Id)
                 .Should()
                 .ContainSingle(record => record.RefId == result.ReferenceId)
                 .Which.CreatedAt.Should().Be(FixedNow.UtcDateTime);
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CheckAndGetReferenceAsync_DoesNotCopyInaccessibleReferenceMetadataToNewReference()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-private-metadata-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var targetGroup = CreateAccessGroup(sessionUser, "target");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
+            existingData.Name = "private source name";
+            existingData.Description = "private source description";
+            existingData.Tags = ["private-tag"];
+            existingData.Categories = ["private-category"];
+            existingData.Metadata = JsonDocument.Parse("""{"private":"metadata"}""");
+            var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(targetGroup, existingGroup);
+            context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
+            await context.SaveChangesAsync();
+            metadataStore.AddMetadata(existingMetadata);
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = targetGroup.Id,
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeTrue();
+            result.NewReferenceCreated.Should().BeTrue();
+            result.ReferenceId.Should().NotBeNull();
+            result.Error.Should().BeNull();
+
+            var newData = context.FileData.Single(fileData => fileData.FileReferenceId == result.ReferenceId);
+            newData.Name.Should().Be("Unnamed");
+            newData.Description.Should().BeEmpty();
+            newData.Tags.Should().BeEmpty();
+            newData.Categories.Should().BeEmpty();
+            newData.Metadata.RootElement.GetRawText().Should().Be("{}");
+            newData.SizeInBytes.Should().Be(existingData.SizeInBytes);
+            newData.Checksum.Should().Be(existingData.Checksum);
+            newData.MimeType.Should().Be(existingData.MimeType);
         }
         finally
         {

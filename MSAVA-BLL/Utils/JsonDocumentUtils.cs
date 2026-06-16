@@ -9,10 +9,4 @@ internal static class JsonDocumentUtils
         return JsonDocument.Parse("{}");
     }
 
-    public static JsonDocument Clone(JsonDocument document)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-
-        return JsonDocument.Parse(document.RootElement.GetRawText());
-    }
 }

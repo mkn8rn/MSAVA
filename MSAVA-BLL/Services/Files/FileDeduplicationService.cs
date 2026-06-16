@@ -241,10 +241,10 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             PublicDownload = request.PublicDownload
         };
 
-        string fileName = FileMetadataPolicy.NormalizeFileName(request.FileName ?? existingData?.Name ?? "Unnamed");
-        string description = FileMetadataPolicy.NormalizeDescription(request.Description ?? existingData?.Description);
-        IEnumerable<string>? tagValues = request.Tags is not null ? request.Tags : existingData?.Tags;
-        IEnumerable<string>? categoryValues = request.Categories is not null ? request.Categories : existingData?.Categories;
+        string fileName = FileMetadataPolicy.NormalizeFileName(request.FileName ?? "Unnamed");
+        string description = FileMetadataPolicy.NormalizeDescription(request.Description);
+        IEnumerable<string>? tagValues = request.Tags;
+        IEnumerable<string>? categoryValues = request.Categories;
         var tags = FileMetadataPolicy.NormalizeMetadataValues(tagValues, nameof(request.Tags));
         var categories = FileMetadataPolicy.NormalizeMetadataValues(categoryValues, nameof(request.Categories));
         DateTime utcNow = GetUtcNow();
@@ -262,9 +262,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             FileExtension = extension,
             Tags = tags.ToArray(),
             Categories = categories.ToArray(),
-            Metadata = existingData is not null
-                ? JsonDocumentUtils.Clone(existingData.Metadata)
-                : JsonDocumentUtils.CreateEmpty(),
+            Metadata = JsonDocumentUtils.CreateEmpty(),
             PublicViewing = request.PublicViewing,
             OriginalCreator = userId,
             LastModifiedById = userId,
