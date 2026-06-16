@@ -1,4 +1,6 @@
 using System.Xml.Linq;
+using System.Text.Json;
+using MSAVA_App.Models;
 using MSAVA_BLL.Services.Files;
 using MSAVA_Shared.Models;
 
@@ -69,6 +71,26 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void AppSettings_ApiClientKeysMatchBoundOptions()
+    {
+        string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");
+        var supportedKeys = typeof(ApiClientOptions)
+            .GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var unsupportedKeys = Directory
+            .EnumerateFiles(appDirectory, "appsettings*.json", SearchOption.TopDirectoryOnly)
+            .SelectMany(file => GetApiClientKeys(file)
+                .Where(key => !supportedKeys.Contains(key))
+                .Select(key => $"{Path.GetFileName(file)}:{ApiClientOptions.SectionName}:{key}"))
+            .ToList();
+
+        unsupportedKeys.Should().BeEmpty(
+            "committed ApiClient configuration should not contain keys that no bound option reads");
+    }
+
+    [Test]
     public void FileUploadFormFields_MatchServerFormDtoPropertyNames()
     {
         var serverDto = typeof(SaveFileFromFormFileDTO);
@@ -88,6 +110,21 @@ public class ProjectConfigurationTests
     {
         return string.Equals(itemPath, ".env", StringComparison.OrdinalIgnoreCase)
             || string.Equals(itemPath, ".env.development", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> GetApiClientKeys(string jsonFile)
+    {
+        using var stream = File.OpenRead(jsonFile);
+        using var document = JsonDocument.Parse(stream);
+
+        if (!document.RootElement.TryGetProperty(ApiClientOptions.SectionName, out var apiClient) ||
+            apiClient.ValueKind != JsonValueKind.Object)
+        {
+            yield break;
+        }
+
+        foreach (var property in apiClient.EnumerateObject())
+            yield return property.Name;
     }
 
     private static string FindRepositoryRoot()
