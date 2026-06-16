@@ -365,6 +365,91 @@ public class ProviderImportServiceTests
         }
     }
 
+    [TestCase("https://files.example.test/shared/file.txt")]
+    [TestCase("https://1drv.ms.evil.test/u/s!abcDEF12345")]
+    [TestCase("https://sharepoint.com.evil.test/sites/team/shared.txt")]
+    public async Task OneDriveImportAsync_RejectsNonOneDriveUrlBeforeCreatingHttpClient(
+        string fileUrl)
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = fileUrl,
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl must be a OneDrive or SharePoint sharing URL.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_AcceptsSharePointSharingUrl()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("sharepoint failure")
+            });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://contoso-my.sharepoint.com/personal/user/documents/file.txt",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            var exception = await act.Should().ThrowAsync<HttpRequestException>()
+                .WithMessage("OneDrive download failed 400: sharepoint failure");
+
+            exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            httpClientFactory.WasCalled.Should().BeTrue();
+            httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
+            handler.Requests.Should().ContainSingle();
+            handler.Requests[0].RequestUri!.Host.Should().Be("api.onedrive.com");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     [Test]
     public async Task OneDriveImportAsync_RejectsMissingSessionBeforeCreatingHttpClient()
     {

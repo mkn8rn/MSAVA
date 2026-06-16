@@ -11,6 +11,12 @@ namespace MSAVA_BLL.Services.Import;
 
 public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO>
 {
+    private static readonly HashSet<string> SupportedOneDriveHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "1drv.ms",
+        "onedrive.live.com"
+    };
+
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -118,7 +124,21 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
             throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", nameof(fileUrl));
         }
 
+        if (!IsSupportedOneDriveUri(uri))
+        {
+            throw new ArgumentException(
+                "FileUrl must be a OneDrive or SharePoint sharing URL.",
+                nameof(fileUrl));
+        }
+
         return uri;
+    }
+
+    private static bool IsSupportedOneDriveUri(Uri uri)
+    {
+        string host = uri.IdnHost.TrimEnd('.');
+        return SupportedOneDriveHosts.Contains(host) ||
+            host.EndsWith(".sharepoint.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Base64UrlEncode(string input)
