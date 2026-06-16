@@ -127,27 +127,34 @@ public class ProjectConfigurationTests
     }
 
     [Test]
-    public void FilePersistenceService_DoesNotReadRawRequestSession()
+    public void CurrentSessionFileServices_DoNotReadRawRequestSession()
     {
-        var persistenceServiceType = typeof(FilePersistenceService);
+        Type[] currentSessionFileServices =
+        [
+            typeof(FileDeduplicationService),
+            typeof(FilePersistenceService)
+        ];
 
-        var requestSessionConstructorParameters = persistenceServiceType
-            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .SelectMany(constructor => constructor.GetParameters())
-            .Where(parameter => parameter.ParameterType == typeof(IRequestSessionAccessor))
-            .Select(parameter => parameter.Name)
+        var rawRequestSessionMembers = currentSessionFileServices
+            .SelectMany(serviceType =>
+            {
+                var constructorParameters = serviceType
+                    .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .SelectMany(constructor => constructor.GetParameters())
+                    .Where(parameter => parameter.ParameterType == typeof(IRequestSessionAccessor))
+                    .Select(parameter => $"{serviceType.Name} constructor parameter '{parameter.Name}'");
+
+                var fields = serviceType
+                    .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Where(field => field.FieldType == typeof(IRequestSessionAccessor))
+                    .Select(field => $"{serviceType.Name} field '{field.Name}'");
+
+                return constructorParameters.Concat(fields);
+            })
             .ToList();
 
-        var requestSessionFields = persistenceServiceType
-            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Where(field => field.FieldType == typeof(IRequestSessionAccessor))
-            .Select(field => field.Name)
-            .ToList();
-
-        requestSessionConstructorParameters.Should().BeEmpty(
-            "file persistence should use IUserSessionService so create authorization uses the refreshed current session boundary");
-        requestSessionFields.Should().BeEmpty(
-            "file persistence should not cache raw request-session access beside the current-session service");
+        rawRequestSessionMembers.Should().BeEmpty(
+            "file services that make create/reference authorization decisions should use IUserSessionService for refreshed current-session state");
     }
 
     [Test]

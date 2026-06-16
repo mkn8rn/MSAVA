@@ -19,7 +19,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 {
     private readonly BaseDataContext _context;
     private readonly MetadataStore _metadataStore;
-    private readonly IRequestSessionAccessor _requestSessionAccessor;
+    private readonly IUserSessionService _userService;
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FileDeduplicationService> _logger;
     private readonly TimeProvider _timeProvider;
@@ -27,14 +27,14 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     public FileDeduplicationService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        IRequestSessionAccessor requestSessionAccessor,
+        IUserSessionService userService,
         ServiceLogger serviceLogger,
         ILogger<FileDeduplicationService> logger,
         TimeProvider? timeProvider = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
-        _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
+        _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -57,30 +57,27 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.Failed(hashHex, extensionValidationError);
         }
 
-        if (!TryGetActiveSession(out SessionDTO session, out string? sessionError))
-        {
-            return HashCheckResult.Failed(hashHex, sessionError);
-        }
-
-        Guid sessionUserId = session.UserId;
-        var fileHash = Convert.FromHexString(hashHex);
-
-        CurrentUserFileAccess currentUserAccess;
+        SessionDTO session;
         try
         {
-            currentUserAccess = await GetCurrentUserFileAccessAsync(sessionUserId, cancellationToken);
+            session = await GetActiveSessionAsync(cancellationToken);
         }
         catch (UnauthorizedAccessException ex)
         {
             return HashCheckResult.Failed(hashHex, ex.Message);
         }
 
+        Guid sessionUserId = session.UserId;
+        var fileHash = Convert.FromHexString(hashHex);
+        List<Guid> currentUserAccessGroups = session.AccessGroups ?? [];
+        bool currentUserIsAdmin = session.IsAdmin;
+
         // Check if user already has a reference they can access
         var existingReference = await FindExistingAccessibleReferenceAsync(
             fileHash,
             extension,
-            currentUserAccess.AccessGroupIds,
-            currentUserAccess.IsAdmin,
+            currentUserAccessGroups,
+            currentUserIsAdmin,
             cancellationToken);
 
         if (existingReference != null)
@@ -100,7 +97,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         var accessGroupResolution = await ResolveReferenceAccessGroupAsync(
             request.AccessGroupId,
             sessionUserId,
-            currentUserAccess.AccessGroupIds,
+            currentUserAccessGroups,
             cancellationToken);
 
         if (!accessGroupResolution.Succeeded)
@@ -185,31 +182,6 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             out _,
             out extension,
             out error);
-    }
-
-    private async Task<CurrentUserFileAccess> GetCurrentUserFileAccessAsync(
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        var user = await _context.Users
-            .AsNoTracking()
-            .Where(user => user.Id == userId)
-            .Select(user => new { user.IsAdmin, user.IsBanned, user.IsWhitelisted })
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
-
-        if (user.IsBanned)
-            throw new UnauthorizedAccessException("Banned users cannot check file hashes.");
-
-        if (!user.IsWhitelisted)
-            throw new UnauthorizedAccessException("Users must be whitelisted before checking file hashes.");
-
-        var accessGroupIds = await _context.AccessGroups
-            .Where(ag => ag.OwnerId == userId || ag.Users.Any(u => u.Id == userId))
-            .Select(ag => ag.Id)
-            .ToListAsync(cancellationToken);
-
-        return new CurrentUserFileAccess(accessGroupIds, user.IsAdmin);
     }
 
     private async Task<SavedFileReferenceDB?> FindExistingAccessibleReferenceAsync(
@@ -421,23 +393,14 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             .ThenBy(accessGroup => accessGroup.Id);
     }
 
-    private bool TryGetActiveSession(out SessionDTO session, out string error)
+    private async Task<SessionDTO> GetActiveSessionAsync(CancellationToken cancellationToken)
     {
-        session = new SessionDTO();
-
-        if (!SessionGuard.TryRequireActive(
-                _requestSessionAccessor.GetSession(),
-                out var activeSession,
-                out error,
-                "User session not found.",
-                "Banned users cannot check file hashes."))
-            return false;
-
-        session = activeSession;
-        return true;
+        return SessionGuard.RequireActiveWhitelisted(
+            await _userService.GetCurrentSessionAsync(cancellationToken),
+            "User session not found.",
+            "Banned users cannot check file hashes.",
+            "Users must be whitelisted before checking file hashes.");
     }
-
-    private sealed record CurrentUserFileAccess(List<Guid> AccessGroupIds, bool IsAdmin);
 
     private sealed record ReferenceAccessGroupResolution(
         bool Succeeded,

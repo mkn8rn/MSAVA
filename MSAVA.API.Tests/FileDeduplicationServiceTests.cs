@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
+using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
@@ -190,7 +191,7 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
-    public async Task CheckAndGetReferenceAsync_ReturnsFailureForBannedSessionBeforeReferenceLookup()
+    public async Task CheckAndGetReferenceAsync_ReturnsFailureForDatabaseBannedUserBeforeReferenceLookup()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-banned-session-{Guid.NewGuid()}"));
         var metadataDirectory = CreateTempDirectory();
@@ -199,15 +200,20 @@ public class FileDeduplicationServiceTests
         {
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("banned", isBanned: true);
+            context.Users.Add(sessionUser);
+            await context.SaveChangesAsync();
+
             var service = CreateService(context, metadataStore, new SessionDTO
             {
                 LoggedIn = true,
-                UserId = Guid.NewGuid(),
-                Username = "banned",
+                UserId = sessionUser.Id,
+                Username = sessionUser.Username,
                 IsAdmin = false,
-                IsBanned = true,
+                IsBanned = false,
                 IsWhitelisted = true,
-                Roles = ["Whitelisted", "Banned"],
+                Roles = ["Whitelisted"],
                 Claims = [],
                 AccessGroups = [],
                 IssuedAt = DateTime.UtcNow.AddMinutes(-1),
@@ -945,7 +951,7 @@ public class FileDeduplicationServiceTests
         return new FileDeduplicationService(
             context,
             metadataStore,
-            new TestRequestSessionAccessor(session),
+            new UserSessionService(context, new TestRequestSessionAccessor(session)),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context, timeProvider),
             NullLogger<FileDeduplicationService>.Instance,
             timeProvider);
@@ -984,7 +990,8 @@ public class FileDeduplicationServiceTests
     private static UserDB CreateUser(
         string username,
         bool isAdmin = false,
-        bool isWhitelisted = true)
+        bool isWhitelisted = true,
+        bool isBanned = false)
     {
         return new UserDB
         {
@@ -993,7 +1000,7 @@ public class FileDeduplicationServiceTests
             PasswordHash = [1],
             PasswordSalt = [2],
             IsAdmin = isAdmin,
-            IsBanned = false,
+            IsBanned = isBanned,
             IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
         };
