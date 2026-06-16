@@ -91,6 +91,23 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
+    public async Task InvokeAsync_PassesRequestCancellationTokenToErrorLogPersistence()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var context = CreateHttpContext();
+        context.RequestAborted = cancellationTokenSource.Token;
+        var middleware = new ExceptionCatcherMiddleware(
+            _ => throw new ArgumentException("Bad query."),
+            new FixedTimeProvider(FixedNow));
+
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+
+        dbContext.SaveChangesAsyncTokens.Should().ContainSingle()
+            .Which.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
     public async Task InvokeAsync_PersistsErrorLogWithJwtSubjectWhenNameIdentifierIsMissing()
     {
         using var dbContext = CreateContext(throwOnSave: false);
@@ -355,6 +372,7 @@ public class ExceptionCatcherMiddlewareTests
 
         public int SaveChangesCalls { get; private set; }
         public int SaveChangesAsyncCalls { get; private set; }
+        public List<CancellationToken> SaveChangesAsyncTokens { get; } = [];
 
         public override int SaveChanges()
         {
@@ -369,6 +387,7 @@ public class ExceptionCatcherMiddlewareTests
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             SaveChangesAsyncCalls++;
+            SaveChangesAsyncTokens.Add(cancellationToken);
 
             if (_saveException is not null)
                 throw _saveException;

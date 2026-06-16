@@ -57,7 +57,13 @@ namespace MSAVA_API.Middleware
                 int statusCode = GetStatusCode(ex, context.User?.Identity?.IsAuthenticated == true);
                 logger.LogError(ex, "Unhandled exception occurred: " + errorId);
                 await TryLogErrorToDbAsync(errorId, timestamp, context, dbContext, statusCode, logger);
-                await HandleExceptionAsync(errorId, timestamp, context, ex, env.IsDevelopment(), statusCode);
+                await HandleExceptionAsync(
+                    errorId,
+                    timestamp,
+                    context,
+                    ex,
+                    env.IsDevelopment(),
+                    statusCode);
             }
         }
 
@@ -80,7 +86,7 @@ namespace MSAVA_API.Middleware
             try
             {
                 dbContext.ErrorLogs.Add(errorLog);
-                await dbContext.SaveChangesAsync();
+                await dbContext.SaveChangesAsync(context.RequestAborted);
             }
             catch (Exception logException) when (CriticalExceptionPolicy.ContainsCriticalException(logException))
             {
@@ -253,7 +259,9 @@ namespace MSAVA_API.Middleware
 
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
-            await context.Response.WriteAsync(JsonSerializer.Serialize(responseDto));
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(responseDto),
+                context.RequestAborted);
         }
 
         private static string GetResponseMessage(Exception exception, bool isDevelopment, int statusCode)
