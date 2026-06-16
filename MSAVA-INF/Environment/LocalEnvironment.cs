@@ -20,9 +20,11 @@ namespace MSAVA_INF.Environment
         public LocalEnvironment()
         {
             _envFileName = GetEnvFileName();
-            _envFilePathForErrors = ResolveEnvFilePath(_envFileName)
-                ?? Path.Combine(AppContext.BaseDirectory, _envFileName);
-            _values = LoadEnvFile(_envFilePathForErrors);
+            string? envFilePath = ResolveEnvFilePath(_envFileName);
+            _envFilePathForErrors = envFilePath ?? Path.Combine(Directory.GetCurrentDirectory(), _envFileName);
+            _values = envFilePath is null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : LoadEnvFile(envFilePath);
             Values = new LocalEnvironmentValues
             {
                 JwtIssuerSigningKey = GetRequiredValue("jwt_issuer_signing_key"),
@@ -172,10 +174,11 @@ namespace MSAVA_INF.Environment
 
         private static IEnumerable<string> GetSearchDirectories()
         {
-            foreach (string directory in EnumerateDirectoryAndAncestors(Directory.GetCurrentDirectory()))
-                yield return directory;
+            string currentDirectory = Directory.GetCurrentDirectory();
+            if (IsBuildOutputOrIntermediateDirectory(currentDirectory))
+                yield break;
 
-            foreach (string directory in EnumerateDirectoryAndAncestors(AppContext.BaseDirectory))
+            foreach (string directory in EnumerateDirectoryAndAncestors(currentDirectory))
                 yield return directory;
         }
 
@@ -188,6 +191,24 @@ namespace MSAVA_INF.Environment
                 yield return directory.FullName;
                 directory = directory.Parent;
             }
+        }
+
+        private static bool IsBuildOutputOrIntermediateDirectory(string path)
+        {
+            var directory = new DirectoryInfo(path);
+
+            while (directory is not null)
+            {
+                if (string.Equals(directory.Name, "bin", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(directory.Name, "obj", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                directory = directory.Parent;
+            }
+
+            return false;
         }
 
         private static IEnumerable<string> GetDirectoryCandidates(string directory, string envFileName)

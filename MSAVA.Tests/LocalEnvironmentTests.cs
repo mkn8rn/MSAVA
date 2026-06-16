@@ -67,6 +67,42 @@ public class LocalEnvironmentTests
     }
 
     [Test]
+    public void Constructor_IgnoresDevelopmentEnvFileInBuildOutputDirectory()
+    {
+        var values = CreateValidEnvironmentValues();
+        string temporaryRoot = Path.Combine(Path.GetTempPath(), "msava-env-tests", Guid.NewGuid().ToString("N"));
+        string outputDirectory = Path.Combine(temporaryRoot, "bin", "Debug", "net10.0");
+        string originalCurrentDirectory = Directory.GetCurrentDirectory();
+
+        using var restore = new EnvironmentVariableRestore(values.Keys.Append("ASPNETCORE_ENVIRONMENT"));
+        ClearEnvironmentValues(values.Keys);
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            File.WriteAllLines(
+                Path.Combine(outputDirectory, ".env.development"),
+                values.Select(value => $"{value.Key}={value.Value}"));
+
+            Directory.SetCurrentDirectory(outputDirectory);
+
+            Action act = () => _ = new LocalEnvironment();
+
+            act.Should()
+                .Throw<InvalidOperationException>()
+                .WithMessage("Required configuration value 'jwt_issuer_signing_key' is missing or empty.*");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+
+            if (Directory.Exists(temporaryRoot))
+                Directory.Delete(temporaryRoot, recursive: true);
+        }
+    }
+
+    [Test]
     public void GetSigningKeyBytes_RejectsSigningKeyShorterThan32Bytes()
     {
         var values = CreateValidEnvironmentValues();
