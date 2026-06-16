@@ -30,8 +30,17 @@ internal static class RemoteFileHostPolicy
     {
         string host = GetNormalizedHost(uri);
 
-        if (IPAddress.TryParse(host, out _))
+        if (IPAddress.TryParse(host, out var literalAddress))
+        {
+            if (IsPrivateOrReservedAddress(literalAddress))
+            {
+                throw new ArgumentException(
+                    "FileUrl host is not allowed for server-side ingestion.",
+                    parameterName);
+            }
+
             return;
+        }
 
         IPAddress[] addresses = await resolver(host, cancellationToken);
         EnsureResolvedAddressesAreAllowed(host, addresses, parameterName);
