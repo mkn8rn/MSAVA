@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
@@ -48,6 +50,39 @@ public class ApiServiceTests
     }
 
     [Test]
+    public async Task CreateJsonRequest_SerializesBodyWithProvidedJsonMetadata()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+
+        using var request = api.CreateJsonRequest(
+            HttpMethod.Post,
+            "api/test",
+            new ApiServiceTestPayload("alpha"),
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload,
+            anonymous: true);
+
+        string body = await request.Content!.ReadAsStringAsync();
+
+        body.Should().Be("""{"value":"alpha"}""");
+    }
+
+    [Test]
+    public async Task SendForAsync_DeserializesResponseWithProvidedJsonMetadata()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"value":"alpha"}""", Encoding.UTF8, "application/json")
+        });
+
+        var result = await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
+
+        result.Should().Be(new ApiServiceTestPayload("alpha"));
+    }
+
+    [Test]
     public async Task SendForAsync_PropagatesCancellationDuringJsonDeserialization()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
@@ -55,7 +90,10 @@ public class ApiServiceTests
             Content = new CancelledJsonContent()
         });
 
-        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+        var act = async () => await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
@@ -70,7 +108,10 @@ public class ApiServiceTests
                 new OperationCanceledException("cancelled")))
         });
 
-        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+        var act = async () => await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("wrapped cancellation");
@@ -85,7 +126,11 @@ public class ApiServiceTests
         });
         using var content = new MultipartFormDataContent();
 
-        var act = async () => await api.SendMultipartForAsync<TestPayload>(HttpMethod.Post, "api/test", content);
+        var act = async () => await api.SendMultipartForAsync(
+            HttpMethod.Post,
+            "api/test",
+            content,
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
@@ -98,7 +143,10 @@ public class ApiServiceTests
             Content = new ThrowingJsonContent(new OutOfMemoryException("Critical memory failure."))
         });
 
-        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+        var act = async () => await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         await act.Should().ThrowAsync<OutOfMemoryException>();
     }
@@ -113,7 +161,10 @@ public class ApiServiceTests
                 new AccessViolationException("native failure")))
         });
 
-        var act = async () => await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+        var act = async () => await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("wrapped native failure");
@@ -128,7 +179,11 @@ public class ApiServiceTests
         });
         using var content = new MultipartFormDataContent();
 
-        var act = async () => await api.SendMultipartForAsync<TestPayload>(HttpMethod.Post, "api/test", content);
+        var act = async () => await api.SendMultipartForAsync(
+            HttpMethod.Post,
+            "api/test",
+            content,
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         await act.Should().ThrowAsync<OutOfMemoryException>();
     }
@@ -141,7 +196,10 @@ public class ApiServiceTests
             Content = new StringContent("{not-json", Encoding.UTF8, "application/json")
         });
 
-        var result = await api.SendForAsync<TestPayload>(HttpMethod.Get, "api/test");
+        var result = await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         result.Should().BeNull();
     }
@@ -155,7 +213,11 @@ public class ApiServiceTests
         });
         using var content = new MultipartFormDataContent();
 
-        var result = await api.SendMultipartForAsync<TestPayload>(HttpMethod.Post, "api/test", content);
+        var result = await api.SendMultipartForAsync(
+            HttpMethod.Post,
+            "api/test",
+            content,
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
 
         result.Should().BeNull();
     }
@@ -167,8 +229,6 @@ public class ApiServiceTests
             new ApiClientOptions { Url = "https://api.msava.test/" },
             NullLogger<ApiService>.Instance);
     }
-
-    private sealed record TestPayload(string Value);
 
     private sealed class StaticHttpClientFactory : IHttpClientFactory
     {
@@ -256,3 +316,9 @@ public class ApiServiceTests
         }
     }
 }
+
+internal sealed record ApiServiceTestPayload(string Value);
+
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[JsonSerializable(typeof(ApiServiceTestPayload))]
+internal sealed partial class ApiServiceTestJsonSerializerContext : JsonSerializerContext;

@@ -25,6 +25,7 @@ namespace MSAVA_App.Services.Files
             var list = await _api.SendForAsync<List<SearchFileDataDTO>>(
                 HttpMethod.Get,
                 ApiService.Routes.FilesRetrieveMetaAll,
+                AppJsonSerializerContext.Default.ListSearchFileDataDTO,
                 cancellationToken: cancellationToken);
 
             if (list is null)

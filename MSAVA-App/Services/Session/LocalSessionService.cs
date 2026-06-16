@@ -1,6 +1,5 @@
 using System;
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,7 +42,12 @@ public class LocalSessionService
             Password = password
         };
 
-        using var msg = _api.CreateJsonRequest(HttpMethod.Post, ApiService.Routes.AuthLogin, requestBody, anonymous: true);
+        using var msg = _api.CreateJsonRequest(
+            HttpMethod.Post,
+            ApiService.Routes.AuthLogin,
+            requestBody,
+            AppJsonSerializerContext.Default.LoginRequestDTO,
+            anonymous: true);
 
         try
         {
@@ -54,7 +58,11 @@ public class LocalSessionService
                 return null;
             }
 
-            var payload = await resp.Content.ReadFromJsonAsync<LoginResponseDTO>(cancellationToken: cancellationToken);
+            await using var responseStream = await resp.Content.ReadAsStreamAsync(cancellationToken);
+            var payload = await JsonSerializer.DeserializeAsync(
+                responseStream,
+                AppJsonSerializerContext.Default.LoginResponseDTO,
+                cancellationToken);
             var token = payload?.Token;
             if (string.IsNullOrWhiteSpace(token))
             {

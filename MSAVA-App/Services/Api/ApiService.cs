@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -66,18 +66,28 @@ public class ApiService
         return client;
     }
 
-    public HttpRequestMessage CreateJsonRequest(HttpMethod method, string relativeUrl, object? body = null, bool anonymous = false)
+    public HttpRequestMessage CreateJsonRequest(HttpMethod method, string relativeUrl, bool anonymous = false)
     {
         var request = new HttpRequestMessage(method, relativeUrl);
-        if (body is not null)
-        {
-            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        }
-        // Automatically attach bearer token if available and not an anonymous call
-        if (!anonymous && !string.IsNullOrWhiteSpace(_accessToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-        }
+        AttachAuthorizationHeader(request, anonymous);
+        return request;
+    }
+
+    public HttpRequestMessage CreateJsonRequest<TBody>(
+        HttpMethod method,
+        string relativeUrl,
+        TBody body,
+        JsonTypeInfo<TBody> bodyTypeInfo,
+        bool anonymous = false)
+    {
+        ArgumentNullException.ThrowIfNull(bodyTypeInfo);
+
+        var request = CreateJsonRequest(method, relativeUrl, anonymous);
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(body, bodyTypeInfo),
+            Encoding.UTF8,
+            "application/json");
+
         return request;
     }
 
@@ -87,10 +97,7 @@ public class ApiService
         {
             Content = content
         };
-        if (!anonymous && !string.IsNullOrWhiteSpace(_accessToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-        }
+        AttachAuthorizationHeader(request, anonymous);
         return request;
     }
 
@@ -100,9 +107,14 @@ public class ApiService
         return await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
-    public async Task<T?> SendForAsync<T>(HttpMethod method, string relativeUrl, object? body = null, CancellationToken cancellationToken = default, bool anonymous = false)
+    public async Task<T?> SendForAsync<T>(
+        HttpMethod method,
+        string relativeUrl,
+        JsonTypeInfo<T> responseTypeInfo,
+        CancellationToken cancellationToken = default,
+        bool anonymous = false)
     {
-        using var msg = CreateJsonRequest(method, relativeUrl, body, anonymous);
+        using var msg = CreateJsonRequest(method, relativeUrl, anonymous);
         using var resp = await SendAsync(msg, cancellationToken);
         if (!resp.IsSuccessStatusCode)
         {
@@ -114,10 +126,17 @@ public class ApiService
             resp,
             relativeUrl,
             ApiResponseKind.Json,
+            responseTypeInfo,
             cancellationToken);
     }
 
-    public async Task<T?> SendMultipartForAsync<T>(HttpMethod method, string relativeUrl, MultipartFormDataContent content, CancellationToken cancellationToken = default, bool anonymous = false)
+    public async Task<T?> SendMultipartForAsync<T>(
+        HttpMethod method,
+        string relativeUrl,
+        MultipartFormDataContent content,
+        JsonTypeInfo<T> responseTypeInfo,
+        CancellationToken cancellationToken = default,
+        bool anonymous = false)
     {
         using var msg = CreateMultipartRequest(method, relativeUrl, content, anonymous);
         using var resp = await SendAsync(msg, cancellationToken);
@@ -131,6 +150,7 @@ public class ApiService
             resp,
             relativeUrl,
             ApiResponseKind.Multipart,
+            responseTypeInfo,
             cancellationToken);
     }
 
@@ -138,11 +158,15 @@ public class ApiService
         HttpResponseMessage response,
         string relativeUrl,
         ApiResponseKind responseKind,
+        JsonTypeInfo<T> responseTypeInfo,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(responseTypeInfo);
+
         try
         {
-            return await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonSerializer.DeserializeAsync(stream, responseTypeInfo, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -152,6 +176,14 @@ public class ApiService
         {
             LogDeserializationFailure(ex, responseKind, relativeUrl);
             return default;
+        }
+    }
+
+    private void AttachAuthorizationHeader(HttpRequestMessage request, bool anonymous)
+    {
+        if (!anonymous && !string.IsNullOrWhiteSpace(_accessToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         }
     }
 

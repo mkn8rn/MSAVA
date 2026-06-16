@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -96,7 +95,11 @@ public class FileUploadClientService
     {
         try
         {
-            var id = await response.Content.ReadFromJsonAsync<Guid>(cancellationToken: cancellationToken);
+            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var id = await JsonSerializer.DeserializeAsync(
+                responseStream,
+                AppJsonSerializerContext.Default.Guid,
+                cancellationToken);
             return new UploadOutcome(true, statusCode, id.ToString(), null);
         }
         catch (OperationCanceledException)
