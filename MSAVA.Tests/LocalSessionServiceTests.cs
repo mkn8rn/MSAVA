@@ -91,6 +91,31 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_ClearsPreviousSessionAndApiTokenWhenLoginFails()
+    {
+        var userId = Guid.NewGuid();
+        const string token = "previous-token";
+        var responses = new Queue<HttpResponseMessage>([
+            CreateLoginResponse(token),
+            CreateSessionResponse(userId, "database-alice", isAdmin: false, loggedIn: true),
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        ]);
+        var service = CreateService(
+            new RecordingHttpMessageHandler((_, _) => Task.FromResult(responses.Dequeue())),
+            out var api);
+        await service.LoginAsync("alice", "password");
+
+        var result = await service.LoginAsync("bob", "wrong-password");
+
+        result.Should().BeNull();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+        using var request = api.CreateJsonRequest(HttpMethod.Get, ApiService.Routes.UsersSession);
+        request.Headers.Authorization.Should().BeNull();
+    }
+
+    [Test]
     public async Task LoginAsync_StoresAccessTokenAndCurrentSessionFromApi()
     {
         var userId = Guid.NewGuid();
@@ -162,8 +187,15 @@ public class LocalSessionServiceTests
 
     private static LocalSessionService CreateService(HttpMessageHandler handler)
     {
+        return CreateService(handler, out _);
+    }
+
+    private static LocalSessionService CreateService(
+        HttpMessageHandler handler,
+        out ApiService api)
+    {
         var client = new HttpClient(handler);
-        var api = new ApiService(
+        api = new ApiService(
             new StaticHttpClientFactory(client),
             new ApiClientOptions { Url = "https://api.msava.test/" },
             NullLogger<ApiService>.Instance);

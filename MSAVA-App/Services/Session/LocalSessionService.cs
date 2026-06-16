@@ -56,6 +56,7 @@ public class LocalSessionService
             if (!resp.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Login failed with status code {StatusCode}", resp.StatusCode);
+                ClearSessionState();
                 return null;
             }
 
@@ -68,6 +69,7 @@ public class LocalSessionService
             if (string.IsNullOrWhiteSpace(token))
             {
                 _logger.LogWarning("Login response did not contain a token");
+                ClearSessionState();
                 return null;
             }
 
@@ -75,6 +77,7 @@ public class LocalSessionService
             if (session?.LoggedIn != true)
             {
                 _logger.LogWarning("Login response token did not resolve to an active current session");
+                ClearSessionState();
                 return null;
             }
 
@@ -90,6 +93,7 @@ public class LocalSessionService
         catch (Exception ex) when (IsRecoverableLoginFailure(ex))
         {
             _logger.LogError(ex, "Failed to call authentication API");
+            ClearSessionState();
             return null;
         }
     }
@@ -134,9 +138,14 @@ public class LocalSessionService
 
     public void Logout()
     {
+        ClearSessionState();
+        LoggedOut?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ClearSessionState()
+    {
         _accessToken = null;
         _session = null;
         _api.ClearAccessToken();
-        LoggedOut?.Invoke(this, EventArgs.Empty);
     }
 }
