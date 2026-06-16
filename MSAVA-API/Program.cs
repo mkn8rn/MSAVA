@@ -26,7 +26,8 @@ using MSAVA_Shared.Models;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-Directory.CreateDirectory("Logs");
+string logDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
+Directory.CreateDirectory(logDirectory);
 
 // Register local environment
 var env = new LocalEnvironment();
@@ -42,7 +43,7 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.WithThreadId()
     .Enrich.WithProcessId()
     .WriteTo.Async(a => a.File(
-        path: "Logs/serilog-.txt",
+        path: Path.Combine(logDirectory, "serilog-.txt"),
         rollingInterval: env.Values.SerilogRollingInterval,
         retainedFileCountLimit: env.Values.SerilogRetainedFileCountLimit,
         fileSizeLimitBytes: env.Values.SerilogFileSizeLimitBytes,

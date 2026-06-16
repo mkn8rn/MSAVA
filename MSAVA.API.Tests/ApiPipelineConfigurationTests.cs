@@ -47,13 +47,16 @@ public class ApiPipelineConfigurationTests
         string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
         string normalizedProgramText = programText.Replace("\r\n", "\n");
 
-        normalizedProgramText.Should().Contain("Directory.CreateDirectory(\"Logs\");");
-        normalizedProgramText.Should().Contain("path: \"Logs/serilog-.txt\"");
+        normalizedProgramText.Should().Contain("string logDirectory = Path.Combine(AppContext.BaseDirectory, \"Logs\");");
+        normalizedProgramText.Should().Contain("Directory.CreateDirectory(logDirectory);");
+        normalizedProgramText.Should().Contain("path: Path.Combine(logDirectory, \"serilog-.txt\")");
 
         int directoryCreateIndex = normalizedProgramText.IndexOf(
-            "Directory.CreateDirectory(\"Logs\");",
+            "Directory.CreateDirectory(logDirectory);",
             StringComparison.Ordinal);
-        int fileSinkIndex = normalizedProgramText.IndexOf("path: \"Logs/serilog-.txt\"", StringComparison.Ordinal);
+        int fileSinkIndex = normalizedProgramText.IndexOf(
+            "path: Path.Combine(logDirectory, \"serilog-.txt\")",
+            StringComparison.Ordinal);
 
         directoryCreateIndex.Should().BeGreaterThanOrEqualTo(0);
         fileSinkIndex.Should().BeGreaterThan(directoryCreateIndex);
