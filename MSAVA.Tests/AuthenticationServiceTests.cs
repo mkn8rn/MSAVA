@@ -214,6 +214,28 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_RejectsDuplicateUsernameIgnoringCaseBeforeJwtIsPersisted()
+    {
+        using var context = CreateContext();
+        context.Users.AddRange(
+            CreateUser("duplicate-user", "correct-password", isBanned: false),
+            CreateUser("DUPLICATE-USER", "other-password", isBanned: false));
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = "  duplicate-user  ",
+            Password = "correct-password"
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Duplicate user records were found for the requested username.");
+        context.Jwts.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task LoginAsync_TrimsUsernameBeforeLookup()
     {
         using var context = CreateContext();
@@ -231,6 +253,26 @@ public class AuthenticationServiceTests
 
         response.Token.Should().NotBeNullOrWhiteSpace();
         context.Jwts.Should().ContainSingle(jwt => jwt.Username == "trimmed-user");
+    }
+
+    [Test]
+    public async Task LoginAsync_MatchesUsernameIgnoringCase()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("MixedCaseUser", "correct-password", isBanned: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        var response = await service.LoginAsync(new LoginRequestDTO
+        {
+            Username = "  mixedcaseuser  ",
+            Password = "correct-password"
+        });
+
+        response.Token.Should().NotBeNullOrWhiteSpace();
+        context.Jwts.Should().ContainSingle(jwt => jwt.Username == "MixedCaseUser");
     }
 
     [Test]
@@ -536,6 +578,30 @@ public class AuthenticationServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Username already exists.");
         context.Users.Should().ContainSingle(user => user.Username == "existing-user");
+    }
+
+    [Test]
+    public async Task RegisterAsync_RejectsDuplicateUsernameIgnoringCase()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        var existingUser = CreateUser("Existing-User", "password", isBanned: false);
+        context.InviteCodes.Add(inviteCode);
+        context.Users.Add(existingUser);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "  existing-user  ",
+            Password = "password",
+            InviteCode = inviteCode.Id
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Username already exists.");
+        context.Users.Should().ContainSingle(user => user.Username == "Existing-User");
     }
 
     private static AuthenticationService CreateService(

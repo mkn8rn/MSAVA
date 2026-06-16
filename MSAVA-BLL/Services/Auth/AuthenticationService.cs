@@ -66,10 +66,12 @@ public class AuthenticationService : IAuthenticationService
 
     private async Task<UserDB?> GetUniqueUserForLoginAsync(string username, CancellationToken cancellationToken)
     {
+        string usernameComparisonKey = CreateUsernameComparisonKey(username);
+
         List<UserDB> matchingUsers = await _context.Users
             .AsNoTracking()
             .Include(u => u.AccessGroups)
-            .Where(u => u.Username == username)
+            .Where(u => u.Username.ToUpper() == usernameComparisonKey)
             .Take(2)
             .ToListAsync(cancellationToken);
 
@@ -168,11 +170,7 @@ public class AuthenticationService : IAuthenticationService
         if (!await _inviteCodeService.IsValidInviteCodeAsync(inviteCode, cancellationToken))
             throw new ArgumentException("Invalid or expired invite code.", nameof(RegisterRequestDTO.InviteCode));
 
-        bool exists = await _context.Users
-            .AsNoTracking()
-            .AnyAsync(u => u.Username == username, cancellationToken);
-
-        if (exists)
+        if (await UsernameExistsAsync(username, cancellationToken))
             throw new InvalidOperationException("Username already exists.");
 
         byte[] salt = PasswordUtils.GenerateSalt();
@@ -197,6 +195,20 @@ public class AuthenticationService : IAuthenticationService
         await _serviceLogger.WriteLogAsync(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
 
         return user.Id;
+    }
+
+    private async Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken)
+    {
+        string usernameComparisonKey = CreateUsernameComparisonKey(username);
+
+        return await _context.Users
+            .AsNoTracking()
+            .AnyAsync(user => user.Username.ToUpper() == usernameComparisonKey, cancellationToken);
+    }
+
+    private static string CreateUsernameComparisonKey(string username)
+    {
+        return username.ToUpperInvariant();
     }
 
     private bool ShouldUseSerializableRegistrationTransaction()
