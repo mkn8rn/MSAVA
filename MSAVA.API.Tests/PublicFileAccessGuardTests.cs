@@ -244,6 +244,64 @@ public class PublicFileAccessGuardTests
         }
     }
 
+    [Test]
+    public async Task PublicFileAccessMiddleware_IgnoresTraversalPathBeforeCheckingPhysicalFile()
+    {
+        await using var context = CreateDataContext();
+        string outsideDirectory = CreateTempDirectory();
+        string outsideFile = Path.Combine(outsideDirectory, "outside.txt");
+        CreateFile(outsideFile);
+        var httpContext = CreatePublicFileRequestFromRelativePath("../" + Path.GetFileName(outsideFile));
+        bool nextCalled = false;
+        var middleware = new PublicFileAccessMiddleware(
+            _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            FileContentUtils.FilesDirectory,
+            "/api/files/public");
+
+        try
+        {
+            await middleware.InvokeAsync(
+                httpContext,
+                context,
+                NullLogger<PublicFileAccessMiddleware>.Instance);
+
+            httpContext.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+            nextCalled.Should().BeTrue();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(outsideDirectory);
+        }
+    }
+
+    [Test]
+    public async Task PublicFileAccessMiddleware_IgnoresMalformedPathBeforeExceptionMiddleware()
+    {
+        await using var context = CreateDataContext();
+        var httpContext = CreatePublicFileRequestFromRelativePath("bad\u0000name.txt");
+        bool nextCalled = false;
+        var middleware = new PublicFileAccessMiddleware(
+            _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            FileContentUtils.FilesDirectory,
+            "/api/files/public");
+
+        await middleware.InvokeAsync(
+            httpContext,
+            context,
+            NullLogger<PublicFileAccessMiddleware>.Instance);
+
+        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        nextCalled.Should().BeTrue();
+    }
+
     private static SavedFileReferenceDB CreateReference(byte[] hash, bool publicDownload)
     {
         return new SavedFileReferenceDB
@@ -282,12 +340,17 @@ public class PublicFileAccessGuardTests
 
     private static DefaultHttpContext CreatePublicFileRequest(string physicalPath)
     {
+        return CreatePublicFileRequestFromRelativePath(Path.GetFileName(physicalPath));
+    }
+
+    private static DefaultHttpContext CreatePublicFileRequestFromRelativePath(string relativePath)
+    {
         return new DefaultHttpContext
         {
             Request =
             {
                 Method = HttpMethods.Get,
-                Path = "/api/files/public/" + Path.GetFileName(physicalPath)
+                Path = "/api/files/public/" + relativePath
             }
         };
     }

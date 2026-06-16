@@ -60,7 +60,36 @@ public sealed class PublicFileAccessMiddleware
             return false;
 
         string pathUnderPublicDirectory = relativePath.Replace('/', Path.DirectorySeparatorChar);
-        physicalPath = Path.GetFullPath(Path.Combine(_publicFilesDirectory, pathUnderPublicDirectory));
-        return true;
+
+        try
+        {
+            string candidatePath = Path.GetFullPath(Path.Combine(_publicFilesDirectory, pathUnderPublicDirectory));
+            if (!IsPathUnderPublicFilesDirectory(candidatePath))
+                return false;
+
+            physicalPath = candidatePath;
+            return true;
+        }
+        catch (Exception ex) when (IsPathResolutionFailure(ex))
+        {
+            return false;
+        }
+    }
+
+    private bool IsPathUnderPublicFilesDirectory(string candidatePath)
+    {
+        string publicFilesDirectory = _publicFilesDirectory;
+        if (!Path.EndsInDirectorySeparator(publicFilesDirectory))
+            publicFilesDirectory += Path.DirectorySeparatorChar;
+
+        return candidatePath.StartsWith(publicFilesDirectory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPathResolutionFailure(Exception exception)
+    {
+        return exception is ArgumentException
+            or IOException
+            or NotSupportedException
+            or UnauthorizedAccessException;
     }
 }
