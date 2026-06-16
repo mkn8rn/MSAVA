@@ -137,6 +137,34 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void ProductionSource_DoesNotUseNullForgivingSuppressions()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string[] nullForgivingSuppressions =
+        [
+            "default!",
+            "null!"
+        ];
+
+        var suppressions = EnumerateProductionSourceFiles(repositoryRoot)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => nullForgivingSuppressions.Any(marker =>
+                sourceLine.Line.Contains(marker, StringComparison.Ordinal)))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        suppressions.Should().BeEmpty(
+            "production code should express nullability with required members, nullable references, or real defaults instead of suppressing compiler checks");
+    }
+
+    [Test]
     public void SearchFileDataDto_DefaultRequiredStringsAreEmpty()
     {
         var dto = new SearchFileDataDTO();

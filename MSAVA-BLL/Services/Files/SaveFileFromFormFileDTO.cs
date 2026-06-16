@@ -6,7 +6,7 @@ public class SaveFileFromFormFileDTO
 {
     public required string FileName { get; set; }
     public required string FileExtension { get; set; }
-    public IFormFile FormFile { get; set; } = null!;
+    public required IFormFile FormFile { get; set; }
     public required Guid AccessGroupId { get; set; }
     public List<string>? Tags { get; set; } = [];
     public List<string>? Categories { get; set; } = [];

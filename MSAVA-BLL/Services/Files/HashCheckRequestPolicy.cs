@@ -10,7 +10,8 @@ public static class HashCheckRequestPolicy
     public static bool TryValidate(
         [NotNullWhen(true)]
         HashCheckRequest? request,
-        out HashCheckResult failureResult)
+        [NotNullWhen(false)]
+        out HashCheckResult? failureResult)
     {
         if (request is null)
         {
@@ -18,7 +19,7 @@ public static class HashCheckRequestPolicy
             return false;
         }
 
-        failureResult = null!;
+        failureResult = null;
         return true;
     }
 }
