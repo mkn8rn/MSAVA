@@ -73,6 +73,34 @@ public class AdminAuthorizationPolicyTests
     }
 
     [Test]
+    public void ApiControllers_DeclareAuthorizationIntent()
+    {
+        var controllersWithoutAuthorizationIntent = GetControllerTypes()
+            .Where(type =>
+                !type.GetCustomAttributes<AuthorizeAttribute>().Any() &&
+                !type.GetCustomAttributes<AllowAnonymousAttribute>().Any())
+            .Select(type => type.Name)
+            .ToList();
+
+        controllersWithoutAuthorizationIntent.Should().BeEmpty(
+            "every API controller should explicitly require current-user access or allow anonymous access");
+    }
+
+    [Test]
+    public void ApiControllers_UseNamedAuthorizationPolicies()
+    {
+        var authorizeAttributesWithoutNamedPolicy = GetControllerTypes()
+            .SelectMany(GetControllerAndActionAuthorizeAttributes)
+            .Where(attribute =>
+                attribute.Policy != AuthorizationPolicies.CurrentUser &&
+                attribute.Policy != AuthorizationPolicies.CurrentAdmin)
+            .ToList();
+
+        authorizeAttributesWithoutNamedPolicy.Should().BeEmpty(
+            "controller authorization should use the database-backed current user or current admin policies");
+    }
+
+    [Test]
     public void AdminEndpoints_UseCurrentAdminPolicy()
     {
         AssertUsesCurrentAdminPolicy(typeof(UsersController), nameof(UsersController.GetAll));
@@ -109,6 +137,29 @@ public class AdminAuthorizationPolicyTests
         method.GetCustomAttributes<AuthorizeAttribute>()
             .Should()
             .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentAdmin);
+    }
+
+    private static IReadOnlyList<Type> GetControllerTypes()
+    {
+        return typeof(UsersController).Assembly
+            .GetTypes()
+            .Where(type =>
+                typeof(ControllerBase).IsAssignableFrom(type) &&
+                !type.IsAbstract &&
+                type.Name.EndsWith("Controller", StringComparison.Ordinal))
+            .ToList();
+    }
+
+    private static IEnumerable<AuthorizeAttribute> GetControllerAndActionAuthorizeAttributes(Type controllerType)
+    {
+        foreach (var attribute in controllerType.GetCustomAttributes<AuthorizeAttribute>())
+            yield return attribute;
+
+        foreach (var method in controllerType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
+        {
+            foreach (var attribute in method.GetCustomAttributes<AuthorizeAttribute>())
+                yield return attribute;
+        }
     }
 
     private static void AssertRequiresAuthenticatedCurrentUserAccess(AuthorizationPolicy policy)
