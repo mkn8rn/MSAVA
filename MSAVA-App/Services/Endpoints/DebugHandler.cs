@@ -2,12 +2,23 @@ namespace MSAVA_App.Services.Endpoints;
 
 internal class DebugHttpHandler : DelegatingHandler
 {
-    private readonly ILogger _logger;
+    private const string RedactedValue = "[redacted]";
+
+    private static readonly HashSet<string> SensitiveHeaderNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Authorization",
+        "Proxy-Authorization",
+        "Cookie",
+        "Set-Cookie",
+        "X-Api-Key"
+    };
+
+    private readonly ILogger<DebugHttpHandler> _logger;
 
     public DebugHttpHandler(ILogger<DebugHttpHandler> logger, HttpMessageHandler? innerHandler = null)
         : base(innerHandler ?? new HttpClientHandler())
     {
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected async override Task<HttpResponseMessage> SendAsync(
@@ -15,30 +26,46 @@ internal class DebugHttpHandler : DelegatingHandler
         CancellationToken cancellationToken)
     {
         var response = await base.SendAsync(request, cancellationToken);
-#if DEBUG
+
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogDebugMessage("Unsuccessful API Call");
-            if (request.RequestUri is not null)
-            {
-                _logger.LogDebugMessage($"{request.RequestUri} ({request.Method})");
-            }
-            
-            foreach ((var key, var values) in request.Headers.ToDictionary(x => x.Key, x => string.Join(", ", x.Value)))
-            {
-                _logger.LogDebugMessage($"{key}: {values}");
-            }
+            _logger.LogDebug(
+                "Unsuccessful API call {Method} {Uri} returned {StatusCode}",
+                request.Method,
+                request.RequestUri,
+                response.StatusCode);
 
-            var content = request.Content is not null ? await request.Content.ReadAsStringAsync() : null;
-            if (!string.IsNullOrEmpty(content))
-            {
-                _logger.LogDebugMessage(content);
-            }
+            LogHeaders(request.Headers);
 
-            // Uncomment to automatically break when an API call fails while debugging
-            // System.Diagnostics.Debugger.Break();
+            if (request.Content is not null)
+            {
+                LogHeaders(request.Content.Headers);
+                _logger.LogDebug(
+                    "Request body redacted. Content-Type={ContentType}; Content-Length={ContentLength}",
+                    request.Content.Headers.ContentType?.ToString() ?? "unknown",
+                    request.Content.Headers.ContentLength);
+            }
         }
-#endif
+
         return response;
+    }
+
+    private void LogHeaders(IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers)
+    {
+        foreach (var header in headers)
+        {
+            _logger.LogDebug(
+                "{HeaderName}: {HeaderValue}",
+                header.Key,
+                FormatHeaderValue(header.Key, header.Value));
+        }
+    }
+
+    private static string FormatHeaderValue(string headerName, IEnumerable<string> headerValues)
+    {
+        if (SensitiveHeaderNames.Contains(headerName))
+            return RedactedValue;
+
+        return string.Join(", ", headerValues);
     }
 }
