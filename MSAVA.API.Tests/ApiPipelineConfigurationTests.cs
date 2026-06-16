@@ -60,6 +60,16 @@ public class ApiPipelineConfigurationTests
     }
 
     [Test]
+    public void Program_DoesNotRegisterGlobalSwaggerSecurityRequirement()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+
+        programText.Should().Contain("c.AddSecurityDefinition(\"Bearer\"");
+        programText.Should().NotContain("c.AddSecurityRequirement(",
+            "anonymous actions should be able to omit bearer auth through AuthorizeCheckOperationFilter");
+    }
+
+    [Test]
     public void Program_RegistersExceptionCatcherBeforeRoutingAndStaticFiles()
     {
         string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
