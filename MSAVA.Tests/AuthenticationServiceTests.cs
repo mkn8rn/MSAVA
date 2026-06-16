@@ -16,6 +16,8 @@ namespace MSAVA_App.Tests;
 
 public class AuthenticationServiceTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 11, 15, 0, TimeSpan.Zero);
+
     [Test]
     public void AuthenticationService_DoesNotExposePublicJwtMintingMethod()
     {
@@ -268,6 +270,31 @@ public class AuthenticationServiceTests
             .Be(accessGroup.Id.ToString());
     }
 
+    [Test]
+    public async Task LoginAsync_PersistsJwtWithInjectedClock()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("clocked-user", "correct-password", isBanned: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, new FixedTimeProvider(FixedNow));
+
+        var response = await service.LoginAsync(new LoginRequestDTO
+        {
+            Username = user.Username,
+            Password = "correct-password"
+        });
+
+        var jwt = context.Jwts.Should().ContainSingle().Which;
+        jwt.IssuedAt.Should().Be(FixedNow.UtcDateTime);
+        jwt.ExpiresAt.Should().Be(FixedNow.UtcDateTime.AddHours(2));
+
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(response.Token);
+        token.ValidFrom.Should().Be(FixedNow.UtcDateTime);
+        token.ValidTo.Should().Be(FixedNow.UtcDateTime.AddHours(2));
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task RegisterAsync_RejectsMissingUsername(string username)
@@ -438,6 +465,30 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task RegisterAsync_PersistsUserWithInjectedClock()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid(), FixedNow.UtcDateTime.AddHours(1));
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, new FixedTimeProvider(FixedNow));
+
+        await service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "clocked-user",
+            Password = "password",
+            InviteCode = inviteCode.Id
+        });
+
+        var user = context.Users.Should().ContainSingle().Which;
+        user.Username.Should().Be("clocked-user");
+        user.CreatedAt.Should().Be(FixedNow.UtcDateTime);
+        user.InviteCodeId.Should().Be(inviteCode.Id);
+        user.IsWhitelisted.Should().BeTrue();
+    }
+
+    [Test]
     public async Task RegisterAsync_RejectsDuplicateUsernameAfterTrimming()
     {
         using var context = CreateContext();
@@ -461,19 +512,26 @@ public class AuthenticationServiceTests
         context.Users.Should().ContainSingle(user => user.Username == "existing-user");
     }
 
-    private static AuthenticationService CreateService(BaseDataContext context)
+    private static AuthenticationService CreateService(
+        BaseDataContext context,
+        TimeProvider? timeProvider = null)
     {
-        var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var serviceLogger = new ServiceLogger(
+            NullLogger<ServiceLogger>.Instance,
+            context,
+            timeProvider);
         var inviteCodeService = new InviteCodeService(
             context,
             new TestUserSessionService(Guid.NewGuid()),
-            serviceLogger);
+            serviceLogger,
+            timeProvider);
 
         return new AuthenticationService(
             context,
             inviteCodeService,
             new TestEnvironment(),
-            serviceLogger);
+            serviceLogger,
+            timeProvider);
     }
 
     private static BaseDataContext CreateContext()
@@ -505,14 +563,14 @@ public class AuthenticationServiceTests
         };
     }
 
-    private static InviteCodeDB CreateInviteCode(Guid ownerId)
+    private static InviteCodeDB CreateInviteCode(Guid ownerId, DateTime? expiresAt = null)
     {
         return new InviteCodeDB
         {
             Id = Guid.NewGuid(),
             OwnerId = ownerId,
             CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            ExpiresAt = expiresAt ?? DateTime.UtcNow.AddHours(1),
             MaxUses = 1
         };
     }
@@ -598,5 +656,10 @@ public class AuthenticationServiceTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

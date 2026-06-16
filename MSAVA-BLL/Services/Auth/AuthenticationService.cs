@@ -20,12 +20,14 @@ public class AuthenticationService : IAuthenticationService
     private readonly string _jwtAudience;
     private readonly byte[] _jwtKeyBytes;
     private readonly ServiceLogger _serviceLogger;
+    private readonly TimeProvider _timeProvider;
 
     public AuthenticationService(
         BaseDataContext context,
         IInviteCodeService inviteCodeService,
         ILocalEnvironment env,
-        ServiceLogger serviceLogger)
+        ServiceLogger serviceLogger,
+        TimeProvider? timeProvider = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         ArgumentNullException.ThrowIfNull(env);
@@ -35,6 +37,7 @@ public class AuthenticationService : IAuthenticationService
         _jwtKeyBytes = env.GetSigningKeyBytes();
         _inviteCodeService = inviteCodeService ?? throw new ArgumentNullException(nameof(inviteCodeService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
@@ -78,7 +81,7 @@ public class AuthenticationService : IAuthenticationService
     private async Task<JwtDB> GenerateJwtTokenAsync(UserDB user, CancellationToken cancellationToken)
     {
         Guid jwtId = Guid.NewGuid();
-        DateTime issuedAt = DateTime.UtcNow;
+        DateTime issuedAt = GetUtcNow();
         DateTime expiresAt = issuedAt.AddHours(2);
 
         List<Claim> claims =
@@ -164,6 +167,7 @@ public class AuthenticationService : IAuthenticationService
             IsBanned = false,
             IsWhitelisted = true,
             InviteCodeId = request.InviteCode,
+            CreatedAt = GetUtcNow()
         };
 
         _context.Users.Add(user);
@@ -172,6 +176,11 @@ public class AuthenticationService : IAuthenticationService
         await _serviceLogger.WriteLogAsync(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
 
         return user.Id;
+    }
+
+    private DateTime GetUtcNow()
+    {
+        return _timeProvider.GetUtcNow().UtcDateTime;
     }
 
 }
