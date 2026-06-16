@@ -131,7 +131,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
     private static string GetExtensionFromResponse(HttpResponseMessage resp)
     {
         var mediaType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-        var ext = GetExtensionFromContentType(mediaType);
+        var ext = ProviderContentType.InferExtension(mediaType);
 
         if (!string.IsNullOrWhiteSpace(ext))
             return ext;
@@ -149,31 +149,6 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         }
 
         return string.Empty;
-    }
-
-    private static string GetExtensionFromContentType(string contentType)
-    {
-        if (string.IsNullOrWhiteSpace(contentType)) return string.Empty;
-        contentType = contentType.ToLowerInvariant();
-
-        return contentType switch
-        {
-            "video/mp4" => "mp4",
-            "video/webm" => "webm",
-            "audio/mpeg" or "audio/mp3" => "mp3",
-            "audio/ogg" => "ogg",
-            "image/png" => "png",
-            "image/jpeg" => "jpg",
-            "application/pdf" => "pdf",
-            "application/zip" => "zip",
-            "application/octet-stream" => "bin",
-            "text/plain" => "txt",
-            _ when contentType.Contains("mp4") => "mp4",
-            _ when contentType.Contains("mpeg") => "mp3",
-            _ when contentType.Contains("jpeg") || contentType.Contains("jpg") => "jpg",
-            _ when contentType.Contains("png") => "png",
-            _ => string.Empty
-        };
     }
 
     private void EnsureDeclaredContentLengthWithinMaximum(HttpContent content)

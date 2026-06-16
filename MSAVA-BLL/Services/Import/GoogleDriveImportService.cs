@@ -103,7 +103,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
                 if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("Google Drive returned HTML instead of file content.");
 
-                var inferredExtension = GetExtensionFromContentType(downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty);
+                var inferredExtension = ProviderContentType.InferExtension(downloadResp.Content.Headers.ContentType?.MediaType);
                 finalExtension = ProviderFileType.RequireSupportedExtension("Google Drive", inferredExtension);
                 EnsureDeclaredContentLengthWithinMaximum(downloadResp.Content);
 
@@ -162,30 +162,6 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         }
 
         return null;
-    }
-
-    private static string GetExtensionFromContentType(string contentType)
-    {
-        if (string.IsNullOrWhiteSpace(contentType)) return string.Empty;
-        contentType = contentType.ToLowerInvariant();
-
-        return contentType switch
-        {
-            "video/mp4" => "mp4",
-            "video/webm" => "webm",
-            "audio/mpeg" or "audio/mp3" => "mp3",
-            "audio/ogg" => "ogg",
-            "image/png" => "png",
-            "image/jpeg" => "jpg",
-            "application/pdf" => "pdf",
-            "application/zip" => "zip",
-            "application/octet-stream" => "bin",
-            "text/plain" => "txt",
-            _ when contentType.Contains("mp4") => "mp4",
-            _ when contentType.Contains("mpeg") => "mp3",
-            _ when contentType.Contains("png") => "png",
-            _ => string.Empty
-        };
     }
 
     private void EnsureDeclaredContentLengthWithinMaximum(HttpContent content)

@@ -18,6 +18,30 @@ namespace MSAVA_App.Tests;
 
 public class ProviderImportServiceTests
 {
+    [TestCase(null, "")]
+    [TestCase("", "")]
+    [TestCase(" ", "")]
+    [TestCase("VIDEO/MP4", "mp4")]
+    [TestCase("video/webm", "webm")]
+    [TestCase("audio/mpeg", "mp3")]
+    [TestCase("audio/mp3", "mp3")]
+    [TestCase("audio/ogg", "ogg")]
+    [TestCase("image/png", "png")]
+    [TestCase("image/jpeg", "jpg")]
+    [TestCase("image/pjpeg", "jpg")]
+    [TestCase("image/jpg", "jpg")]
+    [TestCase("application/pdf", "pdf")]
+    [TestCase("application/zip", "zip")]
+    [TestCase("application/octet-stream", "bin")]
+    [TestCase("text/plain", "txt")]
+    [TestCase("application/x-unknown", "")]
+    public void ProviderContentType_InferExtension_UsesSharedProviderMapping(
+        string? contentType,
+        string expectedExtension)
+    {
+        ProviderContentType.InferExtension(contentType).Should().Be(expectedExtension);
+    }
+
     [Test]
     public async Task ProviderHttpFailure_UsesReasonPhraseWhenBodyIsMissing()
     {
