@@ -46,6 +46,12 @@ namespace MSAVA_API.Middleware
             }
             catch (Exception ex)
             {
+                if (CriticalExceptionPolicy.ContainsCriticalException(ex))
+                {
+                    logger.LogCritical(ex, "Critical exception escaped the API pipeline");
+                    throw;
+                }
+
                 if (context.Response.HasStarted)
                 {
                     logger.LogError(ex, "Unhandled exception occurred after the response started");
@@ -207,7 +213,6 @@ namespace MSAVA_API.Middleware
                 case DllNotFoundException _:
                 case InsufficientMemoryException _:
                 case ApplicationException _:
-                case OutOfMemoryException _:
                 case StackOverflowException _:
                 case System.Data.DataException _:
                 case ReflectionTypeLoadException _:
@@ -220,12 +225,10 @@ namespace MSAVA_API.Middleware
                 case DivideByZeroException _:
                 case InvalidCastException _:
                 case NotFiniteNumberException _:
-                case AccessViolationException _:
                 case ExternalException _:
                     statusCode = StatusCodes.Status500InternalServerError;
                     break;
                 // --- 503 Service Unavailable ---
-                case OperationCanceledException _:
                 case IOException _:
                     statusCode = StatusCodes.Status503ServiceUnavailable;
                     break;

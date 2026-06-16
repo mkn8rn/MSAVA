@@ -210,23 +210,22 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
-    public async Task InvokeAsync_TreatsAccessViolationAsMaskedServerError()
+    public async Task InvokeAsync_PropagatesCriticalExceptionsWithoutLoggingOrWritingResponse()
     {
         using var dbContext = CreateContext(throwOnSave: false);
         var context = CreateHttpContext();
         var middleware = new ExceptionCatcherMiddleware(_ => throw new AccessViolationException("Native memory boundary failed."));
 
-        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+        var act = async () => await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
-        var body = await ReadResponseBodyAsync(context);
-        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
-        var errorLog = dbContext.ErrorLogs.Single();
-
-        context.Response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
-        response.Should().NotBeNull();
-        response!.Message.Should().Be("An unexpected error occurred.");
-        response.StackTrace.Should().BeNull();
-        errorLog.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        await act.Should().ThrowAsync<AccessViolationException>()
+            .WithMessage("Native memory boundary failed.");
+        dbContext.ErrorLogs.Should().BeEmpty();
+        dbContext.SaveChangesCalls.Should().Be(0);
+        dbContext.SaveChangesAsyncCalls.Should().Be(0);
+        context.Response.ContentType.Should().BeNull();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        (await ReadResponseBodyAsync(context)).Should().BeEmpty();
     }
 
     [Test]
