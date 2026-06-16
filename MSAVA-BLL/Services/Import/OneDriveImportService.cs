@@ -44,7 +44,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         var shareId = "u!" + Base64UrlEncode(fileUri.AbsoluteUri);
         var downloadUrl = $"https://api.onedrive.com/v1.0/shares/{shareId}/root/content";
 
-        _serviceLogger.LogInformation($"Starting OneDrive download. URL: {downloadUrl}");
+        _serviceLogger.LogInformation("Starting OneDrive download from provider endpoint.");
 
         using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 

@@ -402,6 +402,8 @@ public class ProviderImportServiceTests
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
             var tempFilePath = GetLoggedTempFilePath(logger);
             File.Exists(tempFilePath).Should().BeFalse();
+            logger.Messages.Should().NotContain(message =>
+                message.Contains("abcDEF12345", StringComparison.Ordinal));
             handler.Requests.Should().HaveCount(2);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -601,6 +603,10 @@ public class ProviderImportServiceTests
 
             var tempFilePath = GetLoggedTempFilePath(logger);
             File.Exists(tempFilePath).Should().BeFalse();
+            logger.Messages.Should().NotContain(message =>
+                message.Contains("api.onedrive.com", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("shares/", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("u!", StringComparison.Ordinal));
             handler.Requests.Should().ContainSingle();
         }
         finally

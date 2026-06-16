@@ -89,7 +89,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         }
 
         var tempFilePath = Path.GetTempFileName();
-        _serviceLogger.LogInformation($"Downloading Google Drive file {fileId} to temp path {tempFilePath}");
+        _serviceLogger.LogInformation($"Downloading Google Drive content to temp path {tempFilePath}");
 
         try
         {
