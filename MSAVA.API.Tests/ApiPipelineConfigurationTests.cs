@@ -59,6 +59,29 @@ public class ApiPipelineConfigurationTests
         fileSinkIndex.Should().BeGreaterThan(directoryCreateIndex);
     }
 
+    [Test]
+    public void Program_RegistersExceptionCatcherBeforeRoutingAndStaticFiles()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+        string normalizedProgramText = programText.Replace("\r\n", "\n");
+
+        int exceptionMiddlewareIndex = normalizedProgramText.IndexOf(
+            "app.UseMiddleware<ExceptionCatcherMiddleware>();",
+            StringComparison.Ordinal);
+        int routingIndex = normalizedProgramText.IndexOf("app.UseRouting();", StringComparison.Ordinal);
+        int publicFileMiddlewareIndex = normalizedProgramText.IndexOf(
+            "app.UseMiddleware<PublicFileAccessMiddleware>",
+            StringComparison.Ordinal);
+        int staticFilesIndex = normalizedProgramText.IndexOf("app.UseStaticFiles(new StaticFileOptions", StringComparison.Ordinal);
+        int authenticationIndex = normalizedProgramText.IndexOf("app.UseAuthentication();", StringComparison.Ordinal);
+
+        exceptionMiddlewareIndex.Should().BeGreaterThanOrEqualTo(0);
+        routingIndex.Should().BeGreaterThan(exceptionMiddlewareIndex);
+        publicFileMiddlewareIndex.Should().BeGreaterThan(exceptionMiddlewareIndex);
+        staticFilesIndex.Should().BeGreaterThan(exceptionMiddlewareIndex);
+        authenticationIndex.Should().BeGreaterThan(exceptionMiddlewareIndex);
+    }
+
     private static DirectoryInfo FindRepositoryRoot()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);

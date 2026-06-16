@@ -183,6 +183,8 @@ app.UseSerilogRequestLogging(options =>
     };
 });
 
+app.UseMiddleware<ExceptionCatcherMiddleware>();
+
 app.UseRouting();
 
 string publicFilesDirectory = Path.Combine(AppContext.BaseDirectory, "Data");
@@ -195,8 +197,6 @@ app.UseStaticFiles(new StaticFileOptions
     FileProvider = new PhysicalFileProvider(publicFilesDirectory),
     RequestPath = publicFilesRequestPath
 });
-
-app.UseMiddleware<ExceptionCatcherMiddleware>();
 
 app.UseAuthentication();
 app.UseMiddleware<RequestContextMiddleware>();
