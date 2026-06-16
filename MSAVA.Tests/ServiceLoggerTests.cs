@@ -9,6 +9,8 @@ namespace MSAVA_App.Tests;
 
 public class ServiceLoggerTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 11, 0, 0, TimeSpan.Zero);
+
     [Test]
     public void Constructor_RejectsMissingLogger()
     {
@@ -46,17 +48,55 @@ public class ServiceLoggerTests
     public async Task WriteLogAsync_PersistsUserLogWithAsyncSave()
     {
         using var context = CreateContext();
-        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var logger = new ServiceLogger(
+            NullLogger<ServiceLogger>.Instance,
+            context,
+            new FixedTimeProvider(FixedNow));
         var userId = Guid.NewGuid();
 
         await logger.WriteLogAsync(UserLogAction.AccountRegistered, "Registered <user>", userId, null);
 
-        context.UserLogs.Should().ContainSingle(log =>
-            log.UserId == userId &&
-            log.AdminId == null &&
-            log.Action == UserLogAction.AccountRegistered);
+        var log = context.UserLogs.Should().ContainSingle().Which;
+        log.UserId.Should().Be(userId);
+        log.AdminId.Should().BeNull();
+        log.Action.Should().Be(UserLogAction.AccountRegistered);
+        log.Timestamp.Should().Be(FixedNow.UtcDateTime);
         context.SaveChangesCalls.Should().Be(0);
         context.SaveChangesAsyncCalls.Should().Be(1);
+    }
+
+    [Test]
+    public async Task WriteLogAsync_UsesInjectedClockForEveryPersistedLogType()
+    {
+        using var context = CreateContext();
+        var logger = new ServiceLogger(
+            NullLogger<ServiceLogger>.Instance,
+            context,
+            new FixedTimeProvider(FixedNow));
+        var userId = Guid.NewGuid();
+        var codeId = Guid.NewGuid();
+        var groupId = Guid.NewGuid();
+        var firstRefId = Guid.NewGuid();
+        var secondRefId = Guid.NewGuid();
+
+        await logger.WriteLogAsync(500, "Failed", userId);
+        await logger.WriteLogAsync(InviteLogActions.InviteCodeCreated, "Created invite", userId, codeId);
+        await logger.WriteLogAsync(GroupLogActions.AccessGroupCreated, "Created group", userId, groupId);
+        await logger.WriteLogAsync(AccessLogActions.NewFileCreated, "Created file", userId, "file.txt", firstRefId);
+        await logger.WriteLogAsync(AccessLogActions.AccessViaFileStream, "Streamed file", userId, secondRefId);
+        await logger.WriteLogAsync(UserLogAction.AccountRegistered, "Registered user", userId, adminId: null);
+
+        context.ErrorLogs.Should().ContainSingle()
+            .Which.Timestamp.Should().Be(FixedNow.UtcDateTime);
+        context.InviteLogs.Should().ContainSingle()
+            .Which.Timestamp.Should().Be(FixedNow.UtcDateTime);
+        context.GroupLogs.Should().ContainSingle()
+            .Which.Timestamp.Should().Be(FixedNow.UtcDateTime);
+        context.AccessLogs.Should().HaveCount(2)
+            .And.AllSatisfy(log => log.Timestamp.Should().Be(FixedNow.UtcDateTime));
+        context.UserLogs.Should().ContainSingle()
+            .Which.Timestamp.Should().Be(FixedNow.UtcDateTime);
+        context.SaveChangesAsyncCalls.Should().Be(6);
     }
 
     [Test]
@@ -237,5 +277,10 @@ public class ServiceLoggerTests
         {
             Messages.Add(formatter(state, exception));
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

@@ -12,11 +12,16 @@ public class ServiceLogger
 {
     private readonly ILogger<ServiceLogger> _logger;
     private readonly BaseDataContext _context;
+    private readonly TimeProvider _timeProvider;
 
-    public ServiceLogger(ILogger<ServiceLogger> logger, BaseDataContext context)
+    public ServiceLogger(
+        ILogger<ServiceLogger> logger,
+        BaseDataContext context,
+        TimeProvider? timeProvider = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public void LogInformation(string message)
@@ -68,7 +73,7 @@ public class ServiceLogger
             Id = Guid.NewGuid(),
             UserId = userId,
             StatusCode = statusCode,
-            Timestamp = DateTime.UtcNow
+            Timestamp = GetUtcNow()
         };
 
         string sanitizedMessage = SanitizeString(message);
@@ -90,7 +95,7 @@ public class ServiceLogger
             Action = action,
             UserId = userId,
             InviteCodeId = codeId,
-            Timestamp = DateTime.UtcNow
+            Timestamp = GetUtcNow()
         };
 
         string sanitizedMessage = SanitizeString(message);
@@ -112,7 +117,7 @@ public class ServiceLogger
             Action = action,
             UserId = userId,
             GroupId = groupId,
-            Timestamp = DateTime.UtcNow
+            Timestamp = GetUtcNow()
         };
 
         string sanitizedMessage = SanitizeString(message);
@@ -135,7 +140,7 @@ public class ServiceLogger
             Action = action,
             UserId = userId,
             FileRefId = refId,
-            Timestamp = DateTime.UtcNow
+            Timestamp = GetUtcNow()
         };
 
         string sanitizedMessage = SanitizeString(message);
@@ -158,7 +163,7 @@ public class ServiceLogger
             Action = action,
             UserId = userId,
             FileRefId = refId,
-            Timestamp = DateTime.UtcNow
+            Timestamp = GetUtcNow()
         };
 
         string sanitizedMessage = SanitizeString(message);
@@ -180,7 +185,7 @@ public class ServiceLogger
             UserId = userId,
             AdminId = adminId,
             Action = action,
-            Timestamp = DateTime.UtcNow
+            Timestamp = GetUtcNow()
         };
 
         string sanitizedMessage = SanitizeString(message);
@@ -238,6 +243,11 @@ public class ServiceLogger
     private static bool IsCriticalPersistenceFailure(Exception exception)
     {
         return CriticalExceptionPolicy.ContainsCriticalException(exception);
+    }
+
+    private DateTime GetUtcNow()
+    {
+        return _timeProvider.GetUtcNow().UtcDateTime;
     }
 
     private void DetachLog(object log)
