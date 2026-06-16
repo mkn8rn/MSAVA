@@ -32,10 +32,12 @@ jobs:
         uses: microsoft/setup-msbuild@v1.3.1
 
       - name: Build MSAVA App (Debug)
+        timeout-minutes: ${{ fromJSON(env.STEP_TIMEOUT_MINUTES) }}
         shell: pwsh
         run: msbuild ./MSAVA-App/MSAVA-App.csproj /r
         
       - name: Build MSAVA API (Debug)
+        timeout-minutes: ${{ fromJSON(env.STEP_TIMEOUT_MINUTES) }}
         shell: pwsh
         run: msbuild ./MSAVA-API/MSAVA-API.csproj /r
 
@@ -56,17 +58,21 @@ jobs:
         uses: microsoft/setup-msbuild@v1.3.1
 
       - name: Build MSAVA.Tests (Release)
+        timeout-minutes: ${{ fromJSON(env.STEP_TIMEOUT_MINUTES) }}
         shell: pwsh
         run: msbuild ./MSAVA.Tests/MSAVA.Tests.csproj /p:Configuration=Release /p:OverrideTargetFramework=net10.0 /r
 
       - name: Run Unit Tests
+        timeout-minutes: ${{ fromJSON(env.STEP_TIMEOUT_MINUTES) }}
         shell: pwsh
         run: dotnet test ./MSAVA.Tests/MSAVA.Tests.csproj --no-build -c Release --logger GitHubActions --blame-crash --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
       - name: Build MSAVA.API.Tests (Release)
+        timeout-minutes: ${{ fromJSON(env.STEP_TIMEOUT_MINUTES) }}
         shell: pwsh
         run: msbuild ./MSAVA.API.Tests/MSAVA.API.Tests.csproj /p:Configuration=Release /r
 
       - name: Run API Unit Tests
+        timeout-minutes: ${{ fromJSON(env.STEP_TIMEOUT_MINUTES) }}
         shell: pwsh
         run: dotnet test ./MSAVA.API.Tests/MSAVA.API.Tests.csproj --no-build -c Release --logger GitHubActions --blame-crash --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover

@@ -606,6 +606,22 @@ public class ProjectConfigurationTests
             "CI should run the API authorization, middleware, and controller tests");
     }
 
+    [Test]
+    public void ContinuousIntegration_BoundsBuildAndTestSteps()
+    {
+        string workflowPath = Path.Combine(
+            FindRepositoryRoot(),
+            ".github",
+            "workflows",
+            "ci.yml");
+        string workflow = File.ReadAllText(workflowPath);
+
+        var untimedSteps = FindUntimedBuildOrTestWorkflowSteps(workflow).ToList();
+
+        untimedSteps.Should().BeEmpty(
+            "CI build and test commands should have explicit step timeouts so blocked agents or hosted runners fail predictably");
+    }
+
     private static bool IsDotEnvItem(string? itemPath)
     {
         return string.Equals(itemPath, ".env", StringComparison.OrdinalIgnoreCase)
@@ -702,6 +718,60 @@ public class ProjectConfigurationTests
 
         return false;
     }
+
+    private static IEnumerable<string> FindUntimedBuildOrTestWorkflowSteps(string workflow)
+    {
+        string[] lines = workflow.Replace("\r\n", "\n").Split('\n');
+        var currentStepLines = new List<string>();
+
+        foreach (string line in lines)
+        {
+            string trimmed = line.TrimStart();
+
+            if (trimmed.StartsWith("- name:", StringComparison.Ordinal))
+            {
+                foreach (string untimedStep in FindUntimedBuildOrTestCommands(currentStepLines))
+                    yield return untimedStep;
+
+                currentStepLines.Clear();
+                currentStepLines.Add(trimmed);
+                continue;
+            }
+
+            if (currentStepLines.Count == 0)
+                continue;
+
+            currentStepLines.Add(trimmed);
+        }
+
+        foreach (string untimedStep in FindUntimedBuildOrTestCommands(currentStepLines))
+            yield return untimedStep;
+    }
+
+    private static IEnumerable<string> FindUntimedBuildOrTestCommands(
+        IReadOnlyList<string> stepLines)
+    {
+        if (stepLines.Count == 0)
+            yield break;
+
+        string currentStepName = stepLines[0]["- name:".Length..].Trim();
+        bool stepHasTimeout = stepLines.Any(line =>
+            line.StartsWith("timeout-minutes:", StringComparison.Ordinal));
+
+        foreach (string line in stepLines)
+        {
+            if (!line.StartsWith("run:", StringComparison.Ordinal))
+                continue;
+
+            string command = line["run:".Length..].Trim();
+            if (IsLongRunningBuildOrTestCommand(command) && !stepHasTimeout)
+                yield return $"{currentStepName}: {command}";
+        }
+    }
+
+    private static bool IsLongRunningBuildOrTestCommand(string command) =>
+        command.StartsWith("msbuild ", StringComparison.Ordinal) ||
+        command.StartsWith("dotnet test ", StringComparison.Ordinal);
 
     private static IEnumerable<string> FindServiceLoggerWritesWithoutCancellation(
         string file,
