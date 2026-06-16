@@ -91,53 +91,69 @@ public class LocalSessionServiceTests
     }
 
     [Test]
-    public async Task LoginAsync_StoresAccessTokenAndParsedSession()
+    public async Task LoginAsync_StoresAccessTokenAndCurrentSessionFromApi()
     {
         var userId = Guid.NewGuid();
-        string token = CreateToken($$"""
+        const string token = "opaque-login-token";
+        var requests = new List<(HttpMethod Method, string PathAndQuery, string? Authorization)>();
+        var handler = new RecordingHttpMessageHandler((request, _) =>
+        {
+            requests.Add(RecordRequest(request));
+
+            return Task.FromResult(requests.Count switch
             {
-              "sub": "{{userId}}",
-              "unique_name": "alice",
-              "role": "Admin"
-            }
-            """);
-        var handler = new RecordingHttpMessageHandler((_, _) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent($$"""{ "token": "{{token}}" }""", Encoding.UTF8, "application/json")
-            }));
+                1 => CreateLoginResponse(token),
+                2 => CreateSessionResponse(userId, "database-alice", isAdmin: false, loggedIn: true),
+                _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            });
+        });
         var service = CreateService(handler);
 
         var result = await service.LoginAsync("alice", "password");
 
+        requests.Should().HaveCount(2);
+        requests[0].Method.Should().Be(HttpMethod.Post);
+        requests[0].PathAndQuery.Should().Be("/api/auth/login");
+        requests[0].Authorization.Should().BeNull();
+        requests[1].Method.Should().Be(HttpMethod.Get);
+        requests[1].PathAndQuery.Should().Be("/api/users/session");
+        requests[1].Authorization.Should().Be($"Bearer {token}");
         result.Should().Be(token);
         service.AccessToken.Should().Be(token);
         service.IsLoggedIn.Should().BeTrue();
         service.CurrentSession.Should().NotBeNull();
         service.CurrentSession!.LoggedIn.Should().BeTrue();
         service.CurrentSession.UserId.Should().Be(userId);
-        service.CurrentSession.Username.Should().Be("alice");
-        service.CurrentSession.IsAdmin.Should().BeTrue();
+        service.CurrentSession.Username.Should().Be("database-alice");
+        service.CurrentSession.IsAdmin.Should().BeFalse("the app should use the API session response, not local token claims");
+        service.CurrentSession.Claims["source"].Should().Equal("database");
     }
 
     [Test]
-    public async Task LoginAsync_ReturnsNullWhenTokenDoesNotContainActiveSession()
+    public async Task LoginAsync_ReturnsNullWhenCurrentSessionIsInactive()
     {
-        string token = CreateToken("""
+        var userId = Guid.NewGuid();
+        const string token = "opaque-inactive-token";
+        var requests = new List<(HttpMethod Method, string PathAndQuery, string? Authorization)>();
+        var handler = new RecordingHttpMessageHandler((request, _) =>
+        {
+            requests.Add(RecordRequest(request));
+
+            return Task.FromResult(requests.Count switch
             {
-              "unique_name": "alice",
-              "role": "Admin"
-            }
-            """);
-        var handler = new RecordingHttpMessageHandler((_, _) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent($$"""{ "token": "{{token}}" }""", Encoding.UTF8, "application/json")
-            }));
+                1 => CreateLoginResponse(token),
+                2 => CreateSessionResponse(userId, "database-alice", isAdmin: false, loggedIn: false),
+                _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            });
+        });
         var service = CreateService(handler);
 
         var result = await service.LoginAsync("alice", "password");
 
+        requests.Should().HaveCount(2);
+        requests[1].Method.Should().Be(HttpMethod.Get);
+        requests[1].PathAndQuery.Should().Be("/api/users/session");
+        requests[1].Authorization.Should().Be($"Bearer {token}");
         result.Should().BeNull();
         service.AccessToken.Should().BeNull();
         service.CurrentSession.Should().BeNull();
@@ -155,18 +171,48 @@ public class LocalSessionServiceTests
         return new LocalSessionService(NullLogger<LocalSessionService>.Instance, api);
     }
 
-    private static string CreateToken(string payloadJson)
+    private static (HttpMethod Method, string PathAndQuery, string? Authorization) RecordRequest(
+        HttpRequestMessage request)
     {
-        return $"{Base64UrlEncode("{}")}.{Base64UrlEncode(payloadJson)}.signature";
+        return (
+            request.Method,
+            request.RequestUri?.PathAndQuery ?? string.Empty,
+            request.Headers.Authorization?.ToString());
     }
 
-    private static string Base64UrlEncode(string value)
+    private static HttpResponseMessage CreateLoginResponse(string token) =>
+        CreateJsonResponse($$"""{ "token": "{{token}}" }""");
+
+    private static HttpResponseMessage CreateSessionResponse(
+        Guid userId,
+        string username,
+        bool isAdmin,
+        bool loggedIn)
     {
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return CreateJsonResponse($$"""
+            {
+              "userId": "{{userId}}",
+              "username": "{{username}}",
+              "isAdmin": {{JsonBoolean(isAdmin)}},
+              "isBanned": false,
+              "isWhitelisted": true,
+              "accessGroups": [],
+              "roles": [],
+              "claims": { "source": ["database"] },
+              "issuedAt": "2026-06-16T10:00:00Z",
+              "expiresAt": "2026-06-16T11:00:00Z",
+              "loggedIn": {{JsonBoolean(loggedIn)}}
+            }
+            """);
     }
+
+    private static HttpResponseMessage CreateJsonResponse(string json) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+
+    private static string JsonBoolean(bool value) => value ? "true" : "false";
 
     private sealed class StaticHttpClientFactory : IHttpClientFactory
     {

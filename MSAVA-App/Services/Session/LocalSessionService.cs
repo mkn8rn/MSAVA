@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -70,10 +71,10 @@ public class LocalSessionService
                 return null;
             }
 
-            var session = JwtSessionParser.Parse(token, _logger);
+            var session = await LoadCurrentSessionAsync(http, token, cancellationToken);
             if (session?.LoggedIn != true)
             {
-                _logger.LogWarning("Login response token did not contain an active session");
+                _logger.LogWarning("Login response token did not resolve to an active current session");
                 return null;
             }
 
@@ -91,6 +92,31 @@ public class LocalSessionService
             _logger.LogError(ex, "Failed to call authentication API");
             return null;
         }
+    }
+
+    private async Task<SessionDTO?> LoadCurrentSessionAsync(
+        HttpClient http,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
+        using var msg = _api.CreateJsonRequest(
+            HttpMethod.Get,
+            ApiService.Routes.UsersSession,
+            anonymous: true);
+        msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var resp = await http.SendAsync(msg, cancellationToken);
+        if (!resp.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Current session request failed with status code {StatusCode}", resp.StatusCode);
+            return null;
+        }
+
+        await using var responseStream = await resp.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonSerializer.DeserializeAsync(
+            responseStream,
+            AppJsonSerializerContext.Default.SessionDTO,
+            cancellationToken);
     }
 
     private static bool IsRecoverableLoginFailure(Exception exception)

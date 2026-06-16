@@ -8,5 +8,6 @@ namespace MSAVA_App.Services.Api;
 [JsonSerializable(typeof(Guid))]
 [JsonSerializable(typeof(LoginRequestDTO))]
 [JsonSerializable(typeof(LoginResponseDTO))]
+[JsonSerializable(typeof(SessionDTO))]
 [JsonSerializable(typeof(List<SearchFileDataDTO>))]
 internal sealed partial class AppJsonSerializerContext : JsonSerializerContext;
