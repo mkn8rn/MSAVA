@@ -110,6 +110,47 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_KeepsCommittedRegistrationWhenAuditLogIsCanceled()
+    {
+        var content = Encoding.UTF8.GetBytes($"committed-log-cancel-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateAuditLogCancelingContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<OperationCanceledException>()
+                .WithMessage("Audit log persistence canceled.");
+
+            File.Exists(contentPath).Should().BeTrue();
+            metadataStore.GetByFileHash(hash, "txt").Should().ContainSingle();
+            context.FileRefs.AsNoTracking().ToList()
+                .Should()
+                .ContainSingle(fileReference => fileReference.FileHash.SequenceEqual(hash));
+            context.FileData.AsNoTracking().ToList()
+                .Should()
+                .ContainSingle(fileData => fileData.SizeInBytes == (ulong)content.Length);
+            context.AccessLogs.AsNoTracking().Should().BeEmpty();
+            context.ChangeTracker.Entries<AccessLogDB>().Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_RejectsMissingSessionBeforeWritingContent()
     {
         var content = Encoding.UTF8.GetBytes($"missing-session-{Guid.NewGuid()}");
@@ -973,6 +1014,15 @@ public class FilePersistenceServiceTests
         return new ThrowingDataContext(options);
     }
 
+    private static BaseDataContext CreateAuditLogCancelingContext()
+    {
+        var options = new DbContextOptionsBuilder<BaseDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new AuditLogCancelingDataContext(options);
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "msava-tests", Guid.NewGuid().ToString("N"));
@@ -1029,6 +1079,30 @@ public class FilePersistenceServiceTests
     {
         public TestDataContext(DbContextOptions<BaseDataContext> options) : base(options)
         {
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
+        }
+    }
+
+    private sealed class AuditLogCancelingDataContext : BaseDataContext
+    {
+        private int _saveChangesAsyncCalls;
+
+        public AuditLogCancelingDataContext(DbContextOptions<BaseDataContext> options) : base(options)
+        {
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            _saveChangesAsyncCalls++;
+            if (_saveChangesAsyncCalls == 2)
+                return Task.FromException<int>(new OperationCanceledException("Audit log persistence canceled."));
+
+            return base.SaveChangesAsync(cancellationToken);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -158,20 +158,6 @@ public class FilePersistenceService
             _context.FileRefs.Add(savedFileDb);
             _context.FileData.Add(savedFileDataDb);
             await _context.SaveChangesAsync(cancellationToken);
-
-            string fileName = MappingUtils.GetFileName(savedFileDb);
-            string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
-            string fileNameWithExtension = $"{fileName}.{fileExtension}";
-
-            await _serviceLogger.WriteLogAsync(
-                AccessLogActions.NewFileCreated,
-                $"File created: {fileNameWithExtension}",
-                sessionUserId,
-                fileNameWithExtension,
-                savedFileDb.Id,
-                cancellationToken);
-
-            return savedFileDb.Id;
         }
         catch
         {
@@ -179,6 +165,20 @@ public class FilePersistenceService
             DetachPendingFileEntities(savedFileDb, savedFileDataDb);
             throw;
         }
+
+        string fileName = MappingUtils.GetFileName(savedFileDb);
+        string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
+        string fileNameWithExtension = $"{fileName}.{fileExtension}";
+
+        await _serviceLogger.WriteLogAsync(
+            AccessLogActions.NewFileCreated,
+            $"File created: {fileNameWithExtension}",
+            sessionUserId,
+            fileNameWithExtension,
+            savedFileDb.Id,
+            cancellationToken);
+
+        return savedFileDb.Id;
     }
 
     private static void NormalizeAndValidateStreamDto(SaveFileFromStreamDTO dto)
