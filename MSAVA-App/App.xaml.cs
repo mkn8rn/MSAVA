@@ -2,10 +2,6 @@ using MSAVA_App.Presentation.Login;
 using MSAVA_App.Presentation.Welcome;
 using Uno.Resizetizer;
 using MSAVA_App.Services.Session;
-using System.Text;
-using System.Text.Json;
-using System.Net.Http.Json;
-using MSAVA_Shared.Models;
 using MSAVA_App.Services.Api;
 using MSAVA_App.Services.Navigation;
 using MSAVA_App.Services.Files;
@@ -23,10 +19,7 @@ public partial class App : Application
     }
 
     protected Window? MainWindow { get; private set; }
-    protected IHost? Host { get; private set; }
-
-    // Expose services for pages/components that need to resolve singletons
-    public static IServiceProvider? Services => (Current as App)?.Host?.Services;
+    private IHost? _host;
 
     protected async override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -133,7 +126,7 @@ public partial class App : Application
 #endif
         MainWindow.SetWindowIcon();
 
-        Host = await builder.NavigateAsync<Shell>
+        _host = await builder.NavigateAsync<Shell>
             (initialNavigate: (services, navigator) => Task.CompletedTask);
     }
 

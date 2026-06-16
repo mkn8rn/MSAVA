@@ -127,6 +127,48 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void AppCode_DoesNotExposeGlobalServiceProvider()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string appDirectory = Path.Combine(repositoryRoot, "MSAVA-App");
+
+        var globalServiceProviderReferences = Directory
+            .EnumerateFiles(appDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(file =>
+            {
+                string relativePath = Path.GetRelativePath(repositoryRoot, file);
+                string[] segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase) &&
+                    !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
+            })
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => ContainsGlobalServiceProviderReference(sourceLine.Line))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        globalServiceProviderReferences.Should().BeEmpty(
+            "app pages and view-models should use constructor injection or explicit route/navigation services instead of a global App service provider");
+    }
+
+    private static bool ContainsGlobalServiceProviderReference(string line)
+    {
+        if (line.Contains("static IServiceProvider", StringComparison.Ordinal))
+            return true;
+
+        int appServicesIndex = line.IndexOf("App.Services", StringComparison.Ordinal);
+        return appServicesIndex >= 0 &&
+            (appServicesIndex == 0 || line[appServicesIndex - 1] != '_');
+    }
+
+    [Test]
     public void CurrentSessionFileServices_DoNotReadRawRequestSession()
     {
         Type[] currentSessionFileServices =
