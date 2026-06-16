@@ -324,6 +324,29 @@ public class ProjectConfigurationTests
             "initial refresh failures should be logged by the page task guard");
     }
 
+    [Test]
+    public void FileManagementModel_LogsRecoverableAutoDismissFailures()
+    {
+        string modelPath = Path.Combine(
+            FindRepositoryRoot(),
+            "MSAVA-App",
+            "Presentation",
+            "FileManagement",
+            "FileManagementModel.cs");
+        string source = File.ReadAllText(modelPath);
+
+        source.Should().Contain("ILogger<FileManagementModel>",
+            "background upload-result dismissal failures should be visible in the configured logging pipeline");
+        source.Should().Contain("NullLogger<FileManagementModel>.Instance",
+            "tests and fallback construction should have a deterministic logger when DI does not provide one");
+        source.Should().Contain("CriticalExceptionPolicy.ContainsCriticalException(ex)",
+            "recoverable auto-dismiss failures should be logged without swallowing critical runtime failures");
+        source.Should().Contain("Failed to dismiss upload result after delay.",
+            "the logged failure should identify the background auto-dismiss task");
+        source.Should().Contain("catch (OperationCanceledException)",
+            "normal dismissal cancellation should remain a quiet non-error path");
+    }
+
     private static bool ContainsGlobalServiceProviderReference(string line)
     {
         if (line.Contains("static IServiceProvider", StringComparison.Ordinal))

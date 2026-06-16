@@ -10,6 +10,9 @@ using System.Threading.Tasks;
 using MSAVA_App.Services.Files;
 using MSAVA_App.Services.Navigation;
 using MSAVA_App.Presentation.Welcome;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using MSAVA_Shared.Diagnostics;
 using MSAVA_Shared.Models;
 using Uno.Extensions;
 using Uno.Extensions.Navigation;
@@ -22,14 +25,21 @@ public partial record FileManagementModel : INotifyPropertyChanged
     private readonly FileRetrievalService _filesService;
     private readonly NavigationService _navigation;
     private readonly FileUploadClientService _uploadService;
+    private readonly ILogger<FileManagementModel> _logger;
     private CancellationTokenSource? _uploadResultDismissal;
 
-    public FileManagementModel(IDispatcher dispatcher, FileRetrievalService filesService, NavigationService navigation, FileUploadClientService uploadService)
+    public FileManagementModel(
+        IDispatcher dispatcher,
+        FileRetrievalService filesService,
+        NavigationService navigation,
+        FileUploadClientService uploadService,
+        ILogger<FileManagementModel>? logger = null)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _filesService = filesService ?? throw new ArgumentNullException(nameof(filesService));
         _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
         _uploadService = uploadService ?? throw new ArgumentNullException(nameof(uploadService));
+        _logger = logger ?? NullLogger<FileManagementModel>.Instance;
         Files = new ObservableCollection<SearchFileDataDTO>();
     }
 
@@ -296,6 +306,10 @@ public partial record FileManagementModel : INotifyPropertyChanged
         catch (OperationCanceledException)
         {
             // A newer upload result owns the current InfoBar lifetime.
+        }
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
+        {
+            _logger.LogWarning(ex, "Failed to dismiss upload result after delay.");
         }
         finally
         {
