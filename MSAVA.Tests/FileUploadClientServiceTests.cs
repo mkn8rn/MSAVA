@@ -46,6 +46,22 @@ public class FileUploadClientServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromFormFileAsync_ReturnsFailureWhenSuccessfulResponseIsEmptyGuid()
+    {
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(Guid.Empty), Encoding.UTF8, "application/json")
+        });
+
+        var outcome = await CreateUploadAsync(service);
+
+        outcome.Success.Should().BeFalse();
+        outcome.StatusCode.Should().Be((int)HttpStatusCode.OK);
+        outcome.Id.Should().BeNull();
+        outcome.Error.Should().Be(FileUploadClientService.InvalidSuccessResponseMessage);
+    }
+
+    [Test]
     public async Task CreateFileFromFormFileAsync_PropagatesCancellationWhileParsingSuccessfulResponse()
     {
         var service = CreateService(new HttpResponseMessage(HttpStatusCode.OK)

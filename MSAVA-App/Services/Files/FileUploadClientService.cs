@@ -102,6 +102,12 @@ public class FileUploadClientService
                 responseStream,
                 AppJsonSerializerContext.Default.Guid,
                 cancellationToken);
+            if (id == Guid.Empty)
+            {
+                _logger.LogError("Upload response contained an empty file id");
+                return new UploadOutcome(false, statusCode, null, InvalidSuccessResponseMessage);
+            }
+
             return new UploadOutcome(true, statusCode, id.ToString(), null);
         }
         catch (OperationCanceledException)
