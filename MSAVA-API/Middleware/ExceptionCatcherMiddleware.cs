@@ -22,10 +22,12 @@ namespace MSAVA_API.Middleware
         private const string ProductionServerErrorMessage = "An unexpected error occurred.";
 
         private readonly RequestDelegate _next;
+        private readonly TimeProvider _timeProvider;
 
-        public ExceptionCatcherMiddleware(RequestDelegate next)
+        public ExceptionCatcherMiddleware(RequestDelegate next, TimeProvider? timeProvider = null)
         {
             _next = next;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -50,7 +52,7 @@ namespace MSAVA_API.Middleware
                 }
 
                 Guid errorId = Guid.NewGuid();
-                DateTime timestamp = DateTime.UtcNow;
+                DateTime timestamp = GetUtcNow();
                 int statusCode = GetStatusCode(ex, context.User?.Identity?.IsAuthenticated == true);
                 logger.LogError(ex, "Unhandled exception occurred: " + errorId);
                 await TryLogErrorToDbAsync(errorId, timestamp, context, dbContext, statusCode, logger);
@@ -264,6 +266,11 @@ namespace MSAVA_API.Middleware
         private static Guid? GetAuthenticatedUserId(HttpContext context)
         {
             return AuthorizationUser.GetAuthenticatedUserId(context.User);
+        }
+
+        private DateTime GetUtcNow()
+        {
+            return _timeProvider.GetUtcNow().UtcDateTime;
         }
 
     }

@@ -19,6 +19,8 @@ namespace MSAVA_API.Tests;
 
 public class ExceptionCatcherMiddlewareTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+
     [Test]
     public async Task InvokeAsync_ReturnsOriginalErrorResponseWhenDatabaseLoggingFails()
     {
@@ -67,7 +69,9 @@ public class ExceptionCatcherMiddlewareTests
         using var dbContext = CreateContext(throwOnSave: false);
         var userId = Guid.NewGuid();
         var context = CreateHttpContext(dbContext, isDevelopment: false, userId);
-        var middleware = new ExceptionCatcherMiddleware(_ => throw new ArgumentException("Bad query."));
+        var middleware = new ExceptionCatcherMiddleware(
+            _ => throw new ArgumentException("Bad query."),
+            new FixedTimeProvider(FixedNow));
 
         await middleware.InvokeAsync(context);
 
@@ -78,9 +82,11 @@ public class ExceptionCatcherMiddlewareTests
         context.Response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
         response.Should().NotBeNull();
         response!.UserId.Should().Be(userId);
+        response.Timestamp.Should().Be(FixedNow.UtcDateTime);
         errorLog.Id.Should().Be(response.Id);
         errorLog.UserId.Should().Be(userId);
         errorLog.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        errorLog.Timestamp.Should().Be(FixedNow.UtcDateTime);
         dbContext.SaveChangesCalls.Should().Be(0);
         dbContext.SaveChangesAsyncCalls.Should().Be(1);
     }
@@ -411,5 +417,10 @@ public class ExceptionCatcherMiddlewareTests
         public void OnStarting(Func<object, Task> callback, object state)
         {
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }
