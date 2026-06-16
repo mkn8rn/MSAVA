@@ -134,8 +134,13 @@ internal static class RemoteFileHostPolicy
                (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) ||
                (bytes[0] == 169 && bytes[1] == 254) ||
                (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+               (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 0) ||
+               (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 2) ||
+               (bytes[0] == 192 && bytes[1] == 88 && bytes[2] == 99) ||
                (bytes[0] == 192 && bytes[1] == 168) ||
-               (bytes[0] == 198 && (bytes[1] == 18 || bytes[1] == 19));
+               (bytes[0] == 198 && (bytes[1] == 18 || bytes[1] == 19)) ||
+               (bytes[0] == 198 && bytes[1] == 51 && bytes[2] == 100) ||
+               (bytes[0] == 203 && bytes[1] == 0 && bytes[2] == 113);
     }
 
     private static bool IsPrivateOrReservedIPv6(byte[] bytes)
