@@ -107,6 +107,46 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void SharedModels_DoNotUseNullForgivingInitializers()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string sharedModelsDirectory = Path.Combine(repositoryRoot, "MSAVA-Shared", "Models");
+        string[] nullForgivingInitializers =
+        [
+            "default!",
+            "null!"
+        ];
+
+        var filesWithNullForgivingInitializers = Directory
+            .EnumerateFiles(sharedModelsDirectory, "*.cs", SearchOption.AllDirectories)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => nullForgivingInitializers.Any(marker =>
+                sourceLine.Line.Contains(marker, StringComparison.Ordinal)))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        filesWithNullForgivingInitializers.Should().BeEmpty(
+            "shared API contracts should use required, nullable, or concrete default values instead of hiding nullability problems");
+    }
+
+    [Test]
+    public void SearchFileDataDto_DefaultRequiredStringsAreEmpty()
+    {
+        var dto = new SearchFileDataDTO();
+
+        dto.FilePath.Should().BeEmpty();
+        dto.MimeType.Should().BeEmpty();
+        dto.FileExtension.Should().BeEmpty();
+    }
+
+    [Test]
     public void AppCodeBehind_DoesNotReflectOverDataContextShape()
     {
         string presentationDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App", "Presentation");

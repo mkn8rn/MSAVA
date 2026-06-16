@@ -8,7 +8,7 @@ namespace MSAVA_Shared.Models
     public class SearchFileDataDTO
     {
         [Display(Order = 1, Name = "FilePath")]
-        public string FilePath { get; set; } = default!;
+        public string FilePath { get; set; } = string.Empty;
 
         [Display(Order = 0, Name = "Name")]
         public string? Name { get; set; }
@@ -23,10 +23,10 @@ namespace MSAVA_Shared.Models
         public Guid RefId { get; set; }
 
         [Display(Order = 6, Name = "MimeType")]
-        public string MimeType { get; set; } = default!;
+        public string MimeType { get; set; } = string.Empty;
 
         [Display(Order = 7, Name = "FileExtension")]
-        public string FileExtension { get; set; } = default!;
+        public string FileExtension { get; set; } = string.Empty;
 
         // Hide array details; replaced by TagsCount/CategoriesCount
         [Display(AutoGenerateField = false)]

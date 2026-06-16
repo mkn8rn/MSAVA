@@ -10,8 +10,8 @@ namespace MSAVA_Shared.Models
     {
         public string FileUrl { get; set; } = string.Empty;
         public required Guid AccessGroupId { get; set; }
-        public List<string>? Tags { get; set; } = null!;
-        public List<string>? Categories { get; set; } = null!;
+        public List<string>? Tags { get; set; }
+        public List<string>? Categories { get; set; }
         public string Description { get; set; } = string.Empty;
         public bool PublicViewing { get; set; } = false;
         public bool PublicDownload { get; set; } = false;
