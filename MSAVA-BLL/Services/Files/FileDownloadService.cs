@@ -155,17 +155,17 @@ public class FileDownloadService : IFileDownloadService
 
     private async Task<SessionDTO> CanSessionUserAccessFileAsync(SavedFileReferenceDB fileReference, CancellationToken cancellationToken)
     {
-        SessionDTO claims = await GetActiveSessionAsync(cancellationToken);
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
-        if (!CanSessionAccessFile(fileReference, claims))
+        if (!CanSessionAccessFile(fileReference, session))
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
-        return claims;
+        return session;
     }
 
     private async Task<SavedFileReferenceDB> GetFileReferenceByPathAsync(
         string fileNameWithExtension,
-        SessionDTO claims,
+        SessionDTO session,
         CancellationToken cancellationToken)
     {
         if (!FileContentUtils.TryGetSafeFullPath(fileNameWithExtension, out _))
@@ -190,9 +190,9 @@ public class FileDownloadService : IFileDownloadService
                 fileReference.FileExtension == extensionType);
 
         var accessibleReferences = references.Where(fileReference =>
-                claims.IsAdmin ||
+                session.IsAdmin ||
                 fileReference.PublicDownload ||
-                (claims.AccessGroups != null && claims.AccessGroups.Contains(fileReference.AccessGroupId)));
+                (session.AccessGroups != null && session.AccessGroups.Contains(fileReference.AccessGroupId)));
 
         var accessibleReference = await FileReferenceSelectionPolicy
             .OrderForStableSelection(accessibleReferences)
@@ -208,15 +208,15 @@ public class FileDownloadService : IFileDownloadService
         throw new UnauthorizedAccessException("User does not have permission to access this file.");
     }
 
-    private static bool CanSessionAccessFile(SavedFileReferenceDB fileReference, SessionDTO claims)
+    private static bool CanSessionAccessFile(SavedFileReferenceDB fileReference, SessionDTO session)
     {
-        if (claims.IsAdmin)
+        if (session.IsAdmin)
             return true;
 
         if (fileReference.PublicDownload)
             return true;
 
-        List<Guid> userAccessGroups = claims.AccessGroups ?? [];
+        List<Guid> userAccessGroups = session.AccessGroups ?? [];
         return userAccessGroups.Contains(fileReference.AccessGroupId);
     }
 
