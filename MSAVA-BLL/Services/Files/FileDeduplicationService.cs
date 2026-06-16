@@ -6,6 +6,7 @@ using MSAVA_BLL.Utils;
 using MSAVA_BLL.Utils.Metadata;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
+using MSAVA_INF.Utils;
 using MSAVA_Shared.Models;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -72,6 +73,9 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         List<Guid> currentUserAccessGroups = session.AccessGroups ?? [];
         bool currentUserIsAdmin = session.IsAdmin;
 
+        if (!StoredContentExists(fileHash, extension))
+            return HashCheckResult.NotFound(hashHex);
+
         // Check if user already has a reference they can access
         var existingReference = await FindExistingAccessibleReferenceAsync(
             fileHash,
@@ -85,7 +89,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.ExistingAccess(hashHex, existingReference.Id);
         }
 
-        // Check if file exists at all (any reference)
+        // Physical content exists. Check whether any database reference owns it.
         var anyExistingReference = await FindAnyExistingReferenceAsync(fileHash, extension, cancellationToken);
 
         if (anyExistingReference == null)
@@ -167,6 +171,12 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 
         hashHex = contentHashHex.ToUpperInvariant();
         return true;
+    }
+
+    private static bool StoredContentExists(byte[] fileHash, string extension)
+    {
+        string contentPath = FileContentUtils.GetFullPath(fileHash, extension);
+        return File.Exists(contentPath);
     }
 
     private static bool TryNormalizeExtension(

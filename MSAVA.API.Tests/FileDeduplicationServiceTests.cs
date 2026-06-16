@@ -10,6 +10,7 @@ using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
+using MSAVA_INF.Utils;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Tests;
@@ -17,6 +18,18 @@ namespace MSAVA_API.Tests;
 public class FileDeduplicationServiceTests
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 11, 45, 0, TimeSpan.Zero);
+    private readonly List<string> _storedContentPaths = [];
+
+    [TearDown]
+    public void DeleteStoredContentFiles()
+    {
+        foreach (string path in _storedContentPaths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            DeleteFileIfPresent(path);
+        }
+
+        _storedContentPaths.Clear();
+    }
 
     [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsFailureForNullRequest()
@@ -354,6 +367,53 @@ public class FileDeduplicationServiceTests
             result.Error.Should().BeNull();
             context.FileRefs.Should().ContainSingle(reference => reference.Id == existingReference.Id);
             metadataStore.GetByAccessGroup(existingGroup.Id).Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsNotFoundWhenSqlReferenceExistsButContentFileIsMissing()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-missing-content-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var sessionGroup = CreateAccessGroup(sessionUser, "session");
+            var staleReference = CreateFileReference(contentHash, sessionGroup.Id, createStoredContent: false);
+
+            context.Users.Add(sessionUser);
+            context.AccessGroups.Add(sessionGroup);
+            context.FileRefs.Add(staleReference);
+            await context.SaveChangesAsync();
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                FileName = "missing-content-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeFalse();
+            result.UploadRequired.Should().BeTrue();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.Error.Should().BeNull();
+            context.FileRefs.Should().ContainSingle(reference => reference.Id == staleReference.Id);
+            context.FileData.Should().BeEmpty();
+            metadataStore.GetByAccessGroup(sessionGroup.Id).Should().BeEmpty();
         }
         finally
         {
@@ -1091,8 +1151,14 @@ public class FileDeduplicationServiceTests
         return accessGroup;
     }
 
-    private static SavedFileReferenceDB CreateFileReference(byte[] contentHash, Guid accessGroupId)
+    private SavedFileReferenceDB CreateFileReference(
+        byte[] contentHash,
+        Guid accessGroupId,
+        bool createStoredContent = true)
     {
+        if (createStoredContent)
+            CreateStoredContentFile(contentHash);
+
         return new SavedFileReferenceDB
         {
             Id = Guid.NewGuid(),
@@ -1101,6 +1167,18 @@ public class FileDeduplicationServiceTests
             PublicDownload = false,
             AccessGroupId = accessGroupId
         };
+    }
+
+    private void CreateStoredContentFile(byte[] contentHash)
+    {
+        string contentPath = FileContentUtils.GetFullPath(contentHash, "txt");
+        string? contentDirectory = Path.GetDirectoryName(contentPath);
+        if (string.IsNullOrWhiteSpace(contentDirectory))
+            throw new InvalidOperationException("Could not resolve test content directory.");
+
+        Directory.CreateDirectory(contentDirectory);
+        File.WriteAllText(contentPath, "dedupe stored content placeholder");
+        _storedContentPaths.Add(contentPath);
     }
 
     private static SavedFileDataDB CreateFileData(SavedFileReferenceDB reference, Guid creatorId)
@@ -1152,6 +1230,12 @@ public class FileDeduplicationServiceTests
     {
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
+    }
+
+    private static void DeleteFileIfPresent(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
     }
 
     private sealed class ThrowingDataContext : BaseDataContext
