@@ -327,6 +327,19 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void SourceCode_DoesNotUseSwallowingBareCatchBlocks()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+
+        var swallowingBareCatches = EnumerateSourceFiles(repositoryRoot)
+            .SelectMany(file => FindSwallowingBareCatchBlocks(file, repositoryRoot))
+            .ToList();
+
+        swallowingBareCatches.Should().BeEmpty(
+            "parameterless catches that intentionally recover should still log or filter specific exceptions, while cleanup catches should rethrow");
+    }
+
+    [Test]
     public void SourceCode_DoesNotContainMojibakeText()
     {
         string repositoryRoot = FindRepositoryRoot();
@@ -559,6 +572,34 @@ public class ProjectConfigurationTests
         }
     }
 
+    private static IEnumerable<string> FindSwallowingBareCatchBlocks(
+        string file,
+        string repositoryRoot)
+    {
+        string source = File.ReadAllText(file);
+        var bareCatch = new Regex(@"\bcatch\s*\{", RegexOptions.Compiled);
+
+        foreach (Match match in bareCatch.Matches(source))
+        {
+            int openBraceIndex = source.IndexOf('{', match.Index);
+            if (openBraceIndex < 0)
+                continue;
+
+            int closeBraceIndex = FindMatchingBrace(source, openBraceIndex);
+            if (closeBraceIndex < 0)
+            {
+                yield return $"{Path.GetRelativePath(repositoryRoot, file)}:{GetLineNumber(source, match.Index)}";
+                continue;
+            }
+
+            string catchBody = source.Substring(
+                openBraceIndex + 1,
+                closeBraceIndex - openBraceIndex - 1);
+            if (!catchBody.Contains("throw", StringComparison.Ordinal))
+                yield return $"{Path.GetRelativePath(repositoryRoot, file)}:{GetLineNumber(source, match.Index)}";
+        }
+    }
+
     private static int FindMatchingParenthesis(string source, int openParenthesisIndex)
     {
         int depth = 0;
@@ -572,6 +613,29 @@ public class ProjectConfigurationTests
             }
 
             if (source[index] != ')')
+                continue;
+
+            depth--;
+            if (depth == 0)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int FindMatchingBrace(string source, int openBraceIndex)
+    {
+        int depth = 0;
+
+        for (int index = openBraceIndex; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+                continue;
+            }
+
+            if (source[index] != '}')
                 continue;
 
             depth--;

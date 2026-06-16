@@ -198,9 +198,9 @@ public sealed partial class FileManagementPage : Page
             dp.SetText(text);
             Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
         }
-        catch
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
         {
-            // ignore clipboard failures on some platforms
+            _logger.LogWarning(ex, "Failed to copy upload result text to the clipboard.");
         }
     }
 
