@@ -25,6 +25,40 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void InfrastructureProject_DoesNotCopyRuntimeDataPlaceholdersToBuildOutput()
+    {
+        string projectPath = Path.Combine(FindRepositoryRoot(), "MSAVA-INF", "MSAVA-INF.csproj");
+        var project = XDocument.Load(projectPath);
+
+        var runtimeDataCopyItems = project
+            .Descendants("None")
+            .Where(item => ((string?)item.Attribute("Update"))?.StartsWith("Data\\", StringComparison.OrdinalIgnoreCase) == true)
+            .Where(item => item.Elements("CopyToOutputDirectory").Any())
+            .Select(item => (string?)item.Attribute("Update"))
+            .ToList();
+
+        runtimeDataCopyItems.Should().BeEmpty(
+            "runtime file storage should be created by code rather than copied from tracked placeholders");
+    }
+
+    [Test]
+    public void ApiProject_DoesNotCopyRuntimeLogPlaceholdersToBuildOutput()
+    {
+        string projectPath = Path.Combine(FindRepositoryRoot(), "MSAVA-API", "MSAVA-API.csproj");
+        var project = XDocument.Load(projectPath);
+
+        var runtimeLogCopyItems = project
+            .Descendants("None")
+            .Where(item => ((string?)item.Attribute("Update"))?.StartsWith("Logs\\", StringComparison.OrdinalIgnoreCase) == true)
+            .Where(item => item.Elements("CopyToOutputDirectory").Any())
+            .Select(item => (string?)item.Attribute("Update"))
+            .ToList();
+
+        runtimeLogCopyItems.Should().BeEmpty(
+            "runtime logs should be created by the application rather than copied from tracked placeholders");
+    }
+
+    [Test]
     public void SharedModels_DoNotExposeBearerTokenFields()
     {
         string sharedModelsDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-Shared", "Models");

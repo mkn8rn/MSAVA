@@ -22,6 +22,43 @@ public class ApiPipelineConfigurationTests
         httpsRedirectionIndex.Should().BeGreaterThan(hstsIndex);
     }
 
+    [Test]
+    public void Program_CreatesPublicFilesDirectoryBeforeStaticFileProvider()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+        string normalizedProgramText = programText.Replace("\r\n", "\n");
+
+        normalizedProgramText.Should().Contain("string publicFilesDirectory = Path.Combine(AppContext.BaseDirectory, \"Data\");");
+        normalizedProgramText.Should().Contain("Directory.CreateDirectory(publicFilesDirectory);");
+        normalizedProgramText.Should().Contain("FileProvider = new PhysicalFileProvider(publicFilesDirectory)");
+
+        int directoryCreateIndex = normalizedProgramText.IndexOf(
+            "Directory.CreateDirectory(publicFilesDirectory);",
+            StringComparison.Ordinal);
+        int staticFilesIndex = normalizedProgramText.IndexOf("app.UseStaticFiles(new StaticFileOptions", StringComparison.Ordinal);
+
+        directoryCreateIndex.Should().BeGreaterThanOrEqualTo(0);
+        staticFilesIndex.Should().BeGreaterThan(directoryCreateIndex);
+    }
+
+    [Test]
+    public void Program_CreatesLogDirectoryBeforeSerilogFileSink()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+        string normalizedProgramText = programText.Replace("\r\n", "\n");
+
+        normalizedProgramText.Should().Contain("Directory.CreateDirectory(\"Logs\");");
+        normalizedProgramText.Should().Contain("path: \"Logs/serilog-.txt\"");
+
+        int directoryCreateIndex = normalizedProgramText.IndexOf(
+            "Directory.CreateDirectory(\"Logs\");",
+            StringComparison.Ordinal);
+        int fileSinkIndex = normalizedProgramText.IndexOf("path: \"Logs/serilog-.txt\"", StringComparison.Ordinal);
+
+        directoryCreateIndex.Should().BeGreaterThanOrEqualTo(0);
+        fileSinkIndex.Should().BeGreaterThan(directoryCreateIndex);
+    }
+
     private static DirectoryInfo FindRepositoryRoot()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);

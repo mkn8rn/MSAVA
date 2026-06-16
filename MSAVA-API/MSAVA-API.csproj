@@ -47,9 +47,4 @@
 		<Folder Include="Attributes\" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<None Update="Logs\**\*">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
 </Project>

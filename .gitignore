@@ -20,7 +20,9 @@ service-worker-assets.js
 
 # MSAVA logs
 MSAVA-API/Logs/*
-!MSAVA-API/Logs/dummy.txt
+
+# Runtime file data
+MSAVA-INF/Data/
 
 # Internal Codex/supervisor reports
 docs/internal/

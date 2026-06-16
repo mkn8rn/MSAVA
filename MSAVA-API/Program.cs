@@ -26,6 +26,8 @@ using MSAVA_Shared.Models;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+Directory.CreateDirectory("Logs");
+
 // Register local environment
 var env = new LocalEnvironment();
 builder.Services.AddSingleton<ILocalEnvironment>(env);
@@ -182,9 +184,12 @@ app.UseSerilogRequestLogging(options =>
 
 app.UseRouting();
 
+string publicFilesDirectory = Path.Combine(AppContext.BaseDirectory, "Data");
+Directory.CreateDirectory(publicFilesDirectory);
+
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(AppContext.BaseDirectory, "Data")),
+    FileProvider = new PhysicalFileProvider(publicFilesDirectory),
     RequestPath = "/api/files/public",
     OnPrepareResponse = ctx =>
     {
