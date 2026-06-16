@@ -66,6 +66,58 @@ public class ApiServiceTests
         body.Should().Be("""{"value":"alpha"}""");
     }
 
+    [TestCase("https://evil.example/api")]
+    [TestCase("http://evil.example/api")]
+    [TestCase("//evil.example/api")]
+    [TestCase(@"\\evil.example\api")]
+    public void CreateJsonRequest_RejectsNonRelativeApiRoutes(string route)
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("sensitive-token");
+
+        Action act = () =>
+        {
+            using var _ = api.CreateJsonRequest(HttpMethod.Get, route);
+        };
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("API routes must be relative paths.");
+    }
+
+    [TestCase("")]
+    [TestCase(" ")]
+    public void CreateJsonRequest_RejectsMissingApiRoute(string route)
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+
+        Action act = () =>
+        {
+            using var _ = api.CreateJsonRequest(HttpMethod.Get, route);
+        };
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("API route must be provided.*");
+    }
+
+    [Test]
+    public void CreateMultipartRequest_RejectsNonRelativeApiRoutes()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("sensitive-token");
+        using var content = new MultipartFormDataContent();
+
+        Action act = () =>
+        {
+            using var _ = api.CreateMultipartRequest(
+                HttpMethod.Post,
+                "https://evil.example/api",
+                content);
+        };
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("API routes must be relative paths.");
+    }
+
     [Test]
     public async Task SendForAsync_DeserializesResponseWithProvidedJsonMetadata()
     {

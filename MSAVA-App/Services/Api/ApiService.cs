@@ -68,7 +68,7 @@ public class ApiService
 
     public HttpRequestMessage CreateJsonRequest(HttpMethod method, string relativeUrl, bool anonymous = false)
     {
-        var request = new HttpRequestMessage(method, relativeUrl);
+        var request = new HttpRequestMessage(method, CreateRelativeApiUri(relativeUrl));
         AttachAuthorizationHeader(request, anonymous);
         return request;
     }
@@ -93,12 +93,28 @@ public class ApiService
 
     public HttpRequestMessage CreateMultipartRequest(HttpMethod method, string relativeUrl, MultipartFormDataContent content, bool anonymous = false)
     {
-        var request = new HttpRequestMessage(method, relativeUrl)
+        var request = new HttpRequestMessage(method, CreateRelativeApiUri(relativeUrl))
         {
             Content = content
         };
         AttachAuthorizationHeader(request, anonymous);
         return request;
+    }
+
+    private static Uri CreateRelativeApiUri(string relativeUrl)
+    {
+        if (string.IsNullOrWhiteSpace(relativeUrl))
+            throw new ArgumentException("API route must be provided.", nameof(relativeUrl));
+
+        if (Uri.TryCreate(relativeUrl, UriKind.Absolute, out _) ||
+            relativeUrl.StartsWith("//", StringComparison.Ordinal) ||
+            relativeUrl.StartsWith(@"\\", StringComparison.Ordinal) ||
+            !Uri.TryCreate(relativeUrl, UriKind.Relative, out var uri))
+        {
+            throw new InvalidOperationException("API routes must be relative paths.");
+        }
+
+        return uri;
     }
 
     public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage message, CancellationToken cancellationToken = default)
