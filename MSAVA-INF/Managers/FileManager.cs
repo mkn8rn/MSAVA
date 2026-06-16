@@ -60,7 +60,7 @@ public class FileManager
         }
         finally
         {
-            DeleteTempFileIfPresent(tempFilePath);
+            TemporaryFileCleanup.DeleteIfPresent(tempFilePath, _logger);
         }
     }
 
@@ -103,18 +103,4 @@ public class FileManager
         return new FileStream(fullPath, options);
     }
 
-    private void DeleteTempFileIfPresent(string tempFilePath)
-    {
-        if (!File.Exists(tempFilePath))
-            return;
-
-        try
-        {
-            File.Delete(tempFilePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to delete temporary file {TempFilePath}", tempFilePath);
-        }
-    }
 }

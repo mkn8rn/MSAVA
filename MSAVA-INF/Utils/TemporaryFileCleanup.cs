@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
 
-namespace MSAVA_BLL.Utils;
+namespace MSAVA_INF.Utils;
 
-internal static class TemporaryFileCleanup
+public static class TemporaryFileCleanup
 {
     public static void DeleteIfPresent(string? tempFilePath, ILogger logger)
     {
@@ -31,9 +31,17 @@ internal static class TemporaryFileCleanup
         {
             deleteFile(tempFilePath);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverableDeleteFailure(ex))
         {
             logger.LogWarning(ex, "Failed to delete temporary file {TempFilePath}", tempFilePath);
         }
+    }
+
+    private static bool IsRecoverableDeleteFailure(Exception exception)
+    {
+        return exception is IOException
+            or UnauthorizedAccessException
+            or ArgumentException
+            or NotSupportedException;
     }
 }

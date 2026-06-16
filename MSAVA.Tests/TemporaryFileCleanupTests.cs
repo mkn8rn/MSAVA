@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MSAVA_BLL.Utils;
+using MSAVA_INF.Utils;
 
 namespace MSAVA_App.Tests;
 
@@ -41,6 +41,21 @@ public class TemporaryFileCleanupTests
             message.Exception == deleteException &&
             message.Text.Contains("Failed to delete temporary file", StringComparison.Ordinal) &&
             message.Text.Contains("C:\\temp\\stuck.tmp", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void DeleteIfPresent_PropagatesCriticalDeleteFailure()
+    {
+        var deleteException = new OutOfMemoryException("Critical cleanup failure.");
+
+        Action act = () => TemporaryFileCleanup.DeleteIfPresent(
+            "C:\\temp\\stuck.tmp",
+            NullLogger.Instance,
+            _ => true,
+            _ => throw deleteException);
+
+        act.Should().Throw<OutOfMemoryException>()
+            .WithMessage("Critical cleanup failure.");
     }
 
     [Test]
