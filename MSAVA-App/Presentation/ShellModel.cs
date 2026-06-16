@@ -2,6 +2,8 @@ using MSAVA_App.Presentation.Login;
 using MSAVA_App.Presentation.Welcome;
 using MSAVA_App.Services.Navigation;
 using MSAVA_App.Services.Session;
+using MSAVA_Shared.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Uno.Extensions.Authentication;
 using Uno.Extensions.Navigation;
 
@@ -11,22 +13,31 @@ public class ShellModel
 {
     private readonly NavigationService _navigation;
     private readonly IAuthenticationService _auth;
+    private readonly ILogger<ShellModel> _logger;
     private bool _initialized;
 
     public ShellModel(
         LocalSessionService localSession,
         INavigator navigator,
         NavigationService navigation,
-        IAuthenticationService auth)
+        IAuthenticationService auth,
+        ILogger<ShellModel> logger)
     {
-        _navigation = navigation;
-        _auth = auth;
+        ArgumentNullException.ThrowIfNull(localSession);
+
+        _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
+        _auth = auth ?? throw new ArgumentNullException(nameof(auth));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _navigation.SetNavigator(navigator);
         _navigation.SetRootOwner(this);
         localSession.LoggedOut += OnLoggedOut;
 
-        _ = InitializeAsync();
+        InitializationTask = RunShellTaskAsync(
+            InitializeAsync,
+            "Shell initialization navigation failed.");
     }
+
+    internal Task InitializationTask { get; }
 
     private async Task InitializeAsync()
     {
@@ -43,9 +54,24 @@ public class ShellModel
         }
     }
 
-    private async void OnLoggedOut(object? sender, EventArgs e)
+    private void OnLoggedOut(object? sender, EventArgs e)
     {
-        // Centralized navigation to Login using NavigationService
-        await _navigation.NavigateTo<LoginModel>(this, qualifier: Qualifiers.ClearBackStack);
+        _ = RunShellTaskAsync(
+            () => _navigation.NavigateTo<LoginModel>(this, qualifier: Qualifiers.ClearBackStack),
+            "Shell logout navigation failed.");
+    }
+
+    private async Task RunShellTaskAsync(Func<Task> operation, string failureMessage)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        try
+        {
+            await operation();
+        }
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
+        {
+            _logger.LogWarning(ex, "{FailureMessage}", failureMessage);
+        }
     }
 }

@@ -271,6 +271,30 @@ public class ProjectConfigurationTests
             "app pages and view-models should use constructor injection or explicit route/navigation services instead of a global App service provider");
     }
 
+    [Test]
+    public void ShellModel_UsesLoggedAsyncShellTaskGuard()
+    {
+        string shellModelPath = Path.Combine(
+            FindRepositoryRoot(),
+            "MSAVA-App",
+            "Presentation",
+            "ShellModel.cs");
+        string source = File.ReadAllText(shellModelPath);
+
+        source.Should().Contain("ILogger<ShellModel>",
+            "shell startup and logout navigation failures should be visible in the configured logging pipeline");
+        source.Should().Contain("internal Task InitializationTask { get; }",
+            "the constructor-started initialization task should remain observable for diagnostics and tests");
+        source.Should().Contain("RunShellTaskAsync",
+            "fire-and-forget shell navigation should go through one guarded helper");
+        source.Should().Contain("CriticalExceptionPolicy.ContainsCriticalException(ex)",
+            "the shell task guard should log recoverable failures without swallowing critical runtime failures");
+        source.Should().NotContain("_ = InitializeAsync();",
+            "constructor-started initialization should not discard the raw task");
+        source.Should().NotContain("async void",
+            "ShellModel event handlers should use logged task helpers instead of unobserved async void methods");
+    }
+
     private static bool ContainsGlobalServiceProviderReference(string line)
     {
         if (line.Contains("static IServiceProvider", StringComparison.Ordinal))
