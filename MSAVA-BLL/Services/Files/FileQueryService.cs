@@ -112,8 +112,9 @@ public class FileQueryService : IFileQueryService
 
         var groupIds = session.AccessGroups ?? [];
         return query.Where(fileData =>
-            fileData.PublicViewing ||
-            groupIds.Contains(fileData.FileReference!.AccessGroupId));
+            fileData.FileReference != null &&
+            (fileData.PublicViewing ||
+             groupIds.Contains(fileData.FileReference.AccessGroupId)));
     }
 
     private static IQueryable<SavedFileDataDB> ApplySearchFilters(

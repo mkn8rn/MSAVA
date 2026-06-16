@@ -40,7 +40,11 @@ public class FileManager
 
             if (!fileExists)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                string? contentDirectory = Path.GetDirectoryName(path);
+                if (string.IsNullOrWhiteSpace(contentDirectory))
+                    throw new InvalidOperationException("Could not resolve the file content directory.");
+
+                Directory.CreateDirectory(contentDirectory);
 
                 File.Move(tempFilePath, path);
                 contentFileCreated = true;

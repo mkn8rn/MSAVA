@@ -88,6 +88,36 @@ public class FileQueryServiceTests
     }
 
     [Test]
+    public async Task GetAllFileMetadataAsync_IgnoresRowsWithoutFileReference()
+    {
+        using var context = CreateContext();
+        var accessGroupId = Guid.NewGuid();
+        var visibleFile = CreateFileData("visible", accessGroupId, publicViewing: false);
+        var orphanedFile = CreateFileData("orphaned", Guid.NewGuid(), publicViewing: true);
+        orphanedFile.FileReference = null;
+        context.FileRefs.Add(visibleFile.FileReference!);
+        context.FileData.AddRange(visibleFile, orphanedFile);
+        await context.SaveChangesAsync();
+
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [accessGroupId],
+            IsAdmin = false,
+            IsWhitelisted = true
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+
+        var metadata = await service.GetAllFileMetadataAsync();
+        var ids = await service.GetAllFileGuidsAsync();
+
+        metadata.Select(file => file.Name).Should().BeEquivalentTo(["visible"]);
+        ids.Should().BeEquivalentTo([visibleFile.FileReferenceId]);
+    }
+
+    [Test]
     public async Task GetAllFileMetadataAsync_DefaultPageCapsResultsAndOrdersNewestFirst()
     {
         using var context = CreateContext();

@@ -38,8 +38,7 @@ public class MetadataStore : IDisposable
 
     private static string GetDefaultDatabasePath()
     {
-        var baseDir = Path.GetDirectoryName(typeof(MetadataStore).Assembly.Location)!;
-        return Path.Combine(baseDir, "Data", "file_metadata.db");
+        return Path.Combine(AppContext.BaseDirectory, "Data", "file_metadata.db");
     }
 
     /// <summary>

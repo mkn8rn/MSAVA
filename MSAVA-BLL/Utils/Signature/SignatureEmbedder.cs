@@ -154,9 +154,11 @@ public static class SignatureEmbedder
         var exif = image.Metadata.ExifProfile ?? new ExifProfile();
         exif.SetValue(ExifTag.ImageDescription, signature.ToString());
         image.Metadata.ExifProfile = exif;
+        var imageFormat = image.Metadata.DecodedImageFormat
+            ?? throw new InvalidDataException("Image format could not be decoded.");
 
         var output = new MemoryStream();
-        image.Save(output, image.Metadata.DecodedImageFormat!);
+        image.Save(output, imageFormat);
         output.Position = 0;
         return output;
     }
