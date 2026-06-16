@@ -140,6 +140,28 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void SourceCode_DoesNotContainMojibakeText()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        char mojibakeLead = (char)0x00E2;
+        char replacementCharacter = (char)0xFFFD;
+
+        var filesWithMojibakeText = EnumerateSourceFiles(repositoryRoot)
+            .Where(file =>
+            {
+                string content = File.ReadAllText(file);
+
+                return content.Contains(mojibakeLead) ||
+                    content.Contains(replacementCharacter);
+            })
+            .Select(file => Path.GetRelativePath(repositoryRoot, file))
+            .ToList();
+
+        filesWithMojibakeText.Should().BeEmpty(
+            "source comments and literals should not contain corrupted smart quotes or replacement characters");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");

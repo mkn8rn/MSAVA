@@ -10,25 +10,10 @@ using MSAVA_App.Presentation.FileManagement;
 
 namespace MSAVA_App.Presentation;
 
-// Register pages, view models, nested routes, and route guard metadata.
-// Steps to add a new page/route:
-// 1) Create your XAML Page and its ViewModel (e.g., MyPage.xaml + MyModel).
-// 2) In Register(...), add a mapping to views.Register:
-//    - Basic page: new ViewMap<MyPage, MyModel>()
-//    - Page with typed navigation data: new DataViewMap<MyPage, MyModel, MyData>()
-// 3) Register guard options for your ViewModel using NavigationService:
-//    - Public route (accessible offline/unauthenticated): NavigationService.RegisterFor<MyModel>(new NavigationServiceOptions { Public = true });
-//    - Protected route (requires authentication):        NavigationService.RegisterFor<MyModel>(new NavigationServiceOptions { Public = false });
-// 4) In Register(...), add a route entry to the local rootChildren list:
-//    - new("MyPath", typeof(MyModel))
-//    - Initial navigation is handled by ShellModel; no default child is set here.
-// 5) Navigate:
-//    - Direct: await _navigator.NavigateViewModelAsync<MyModel>(this, qualifier: Qualifiers.Nested, data: myData);
-//    - Guarded (recommended): await _navigationService.NavigateTo<MyModel>(this, qualifier: Qualifiers.Nested, data: myData);
-// Notes:
-// - All routes are nested under the Shell root and render in Shell.xaml’s region.
-// - Initial route is chosen by ShellModel after auth refresh, not by default route mapping.
-// - Keep ViewModel types unique per route.
+// Routes are nested under the Shell root and render in Shell.xaml's region.
+// ShellModel chooses the initial route after auth refresh; this map declares
+// available views, their model types, and route guard metadata in one place.
+// Keep view-model types unique so route lookup remains deterministic.
 internal static class Routes
 {
     private sealed record Node(string Path, Type ViewModel, bool IsDefault = false);
