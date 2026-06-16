@@ -22,8 +22,8 @@ public class UsersController : ControllerBase
     public async Task<ActionResult<UserDTO>> GetCurrentUser(CancellationToken cancellationToken = default) =>
         Ok(await _userService.GetSessionUserAsync(cancellationToken));
 
-    [HttpGet("claims")]
-    public async Task<ActionResult<SessionDTO>> GetUserClaims(CancellationToken cancellationToken = default) =>
+    [HttpGet("session")]
+    public async Task<ActionResult<SessionDTO>> GetCurrentSession(CancellationToken cancellationToken = default) =>
         Ok(await _userService.GetCurrentSessionAsync(cancellationToken));
 
     [HttpGet("all")]

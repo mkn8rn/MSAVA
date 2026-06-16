@@ -30,15 +30,38 @@ public class UsersControllerTests
     }
 
     [Test]
-    public async Task GetUserClaims_ReturnsSessionClaims()
+    public async Task GetCurrentSession_ReturnsCurrentSession()
     {
         var service = new TestUserSessionService();
         var controller = new UsersController(service);
 
-        var response = await controller.GetUserClaims();
+        var response = await controller.GetCurrentSession();
 
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
-        ok.Value.Should().BeSameAs(service.SessionClaims);
+        ok.Value.Should().BeSameAs(service.CurrentSession);
+    }
+
+    [Test]
+    public void GetCurrentSession_UsesCurrentSessionRouteWithoutClaimsFallback()
+    {
+        var method = typeof(UsersController).GetMethod(nameof(UsersController.GetCurrentSession))
+            ?? throw new InvalidOperationException("UsersController.GetCurrentSession was not found.");
+
+        var sessionRoute = method.GetCustomAttributes(inherit: false)
+            .OfType<HttpGetAttribute>()
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        sessionRoute.Template.Should().Be("session");
+
+        var userRoutes = typeof(UsersController)
+            .GetMethods()
+            .SelectMany(methodInfo => methodInfo.GetCustomAttributes(inherit: false).OfType<HttpGetAttribute>())
+            .Select(attribute => attribute.Template)
+            .ToList();
+
+        userRoutes.Should().NotContain("claims");
     }
 
     [Test]
@@ -63,7 +86,7 @@ public class UsersControllerTests
             CreatedAt = DateTime.UtcNow
         };
 
-        public SessionDTO SessionClaims { get; } = new()
+        public SessionDTO CurrentSession { get; } = new()
         {
             LoggedIn = true,
             UserId = Guid.NewGuid(),
@@ -98,8 +121,8 @@ public class UsersControllerTests
         public Task<List<UserDTO>> GetAllUsersAsync(CancellationToken cancellationToken = default) => Task.FromResult(AllUsers);
         public Task<bool> IsSessionUserAdminAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<UserDTO> GetSessionUserAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionUser);
-        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims.UserId);
+        public Task<Guid> GetSessionUserIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(CurrentSession.UserId);
         public Task<UserDB> GetSessionUserDBAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(SessionClaims);
+        public Task<SessionDTO> GetCurrentSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(CurrentSession);
     }
 }

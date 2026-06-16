@@ -37,7 +37,7 @@ public class ApiService
         public const string AuthLogin = "api/auth/login";
         public const string AuthRegister = "api/auth/register";
         public const string UsersMe = "api/users/me";
-        public const string UsersClaims = "api/users/claims";
+        public const string UsersSession = "api/users/session";
         public const string FilesRetrieveMetaAll = "api/files/retrieve/meta/all";
         public const string FilesStoreStream = "api/files/store/stream";
         public const string FilesStoreUrl = "api/files/store/url";
