@@ -26,10 +26,10 @@ public sealed partial class FileManagementPage : Page
         this.DataContextChanged += FileManagementPage_DataContextChanged;
     }
 
-    private static FileManagementModel? ResolveVm(object? dc)
-        => dc as FileManagementModel
-           ?? (dc?.GetType().GetProperty("Model")?.GetValue(dc) as FileManagementModel)
-           ?? (dc?.GetType().GetProperty("ViewModel")?.GetValue(dc) as FileManagementModel);
+    private static FileManagementModel? ResolveVm(object? dataContext)
+    {
+        return dataContext as FileManagementModel;
+    }
 
     private async void FileManagementPage_Loaded(object sender, RoutedEventArgs e)
     {

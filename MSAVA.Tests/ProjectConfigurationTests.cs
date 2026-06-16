@@ -105,6 +105,26 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void AppCodeBehind_DoesNotReflectOverDataContextShape()
+    {
+        string presentationDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App", "Presentation");
+
+        var filesWithDataContextReflection = Directory
+            .EnumerateFiles(presentationDirectory, "*.xaml.cs", SearchOption.AllDirectories)
+            .Where(file =>
+            {
+                string content = File.ReadAllText(file);
+                return content.Contains("GetType().GetProperty", StringComparison.Ordinal) &&
+                    content.Contains("DataContext", StringComparison.Ordinal);
+            })
+            .Select(Path.GetFileName)
+            .ToList();
+
+        filesWithDataContextReflection.Should().BeEmpty(
+            "code-behind should use typed view-model contracts instead of reflection over DataContext wrappers");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");
