@@ -1,4 +1,5 @@
 using MSAVA_INF.Contexts;
+using MSAVA_INF.Utils;
 
 namespace MSAVA_API.Authorization;
 
@@ -64,7 +65,7 @@ public sealed class PublicFileAccessMiddleware
         try
         {
             string candidatePath = Path.GetFullPath(Path.Combine(_publicFilesDirectory, pathUnderPublicDirectory));
-            if (!IsPathUnderPublicFilesDirectory(candidatePath))
+            if (!FileContentUtils.IsPathUnderDirectory(_publicFilesDirectory, candidatePath))
                 return false;
 
             physicalPath = candidatePath;
@@ -74,15 +75,6 @@ public sealed class PublicFileAccessMiddleware
         {
             return false;
         }
-    }
-
-    private bool IsPathUnderPublicFilesDirectory(string candidatePath)
-    {
-        string publicFilesDirectory = _publicFilesDirectory;
-        if (!Path.EndsInDirectorySeparator(publicFilesDirectory))
-            publicFilesDirectory += Path.DirectorySeparatorChar;
-
-        return candidatePath.StartsWith(publicFilesDirectory, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPathResolutionFailure(Exception exception)

@@ -55,6 +55,37 @@ public class FileContentUtilsTests
         FileContentUtils.IsSafeFilePath(path).Should().BeFalse();
     }
 
+    [Test]
+    public void IsPathUnderDirectory_AllowsDirectoryItself()
+    {
+        FileContentUtils.IsPathUnderDirectory(
+                FileContentUtils.FilesDirectory,
+                FileContentUtils.FilesDirectory)
+            .Should().BeTrue();
+    }
+
+    [Test]
+    public void IsPathUnderDirectory_RejectsSiblingDirectoryWithMatchingPrefix()
+    {
+        string rootDirectory = Path.Combine(Path.GetTempPath(), "msava-data");
+        string candidatePath = Path.Combine($"{rootDirectory}-outside", "file.txt");
+
+        FileContentUtils.IsPathUnderDirectory(rootDirectory, candidatePath)
+            .Should().BeFalse();
+    }
+
+    [Test]
+    public void IsPathUnderDirectory_UsesPlatformPathComparisonForCaseVariants()
+    {
+        string rootDirectory = Path.Combine(Path.GetTempPath(), "MSAVA-Data");
+        string candidatePath = Path.Combine(Path.GetTempPath(), "msava-data", "file.txt");
+
+        bool result = FileContentUtils.IsPathUnderDirectory(rootDirectory, candidatePath);
+
+        result.Should().Be(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+            "case variants are the same path on Windows and default macOS, but distinct siblings on Linux");
+    }
+
     [TestCase("txt")]
     [TestCase(".TXT")]
     [TestCase("_TXT")]

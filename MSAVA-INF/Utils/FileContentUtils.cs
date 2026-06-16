@@ -66,22 +66,43 @@ public static class FileContentUtils
 
     public static bool IsSafeFilePath(string? fullPath)
     {
-        if (string.IsNullOrWhiteSpace(fullPath))
+        return IsPathUnderDirectory(FilesDirectory, fullPath);
+    }
+
+    public static bool IsPathUnderDirectory(string? rootDirectory, string? candidatePath)
+    {
+        if (string.IsNullOrWhiteSpace(rootDirectory) ||
+            string.IsNullOrWhiteSpace(candidatePath))
+        {
             return false;
+        }
 
         try
         {
-            var filesDirectory = Path.GetFullPath(FilesDirectory);
-            if (!Path.EndsInDirectorySeparator(filesDirectory))
-                filesDirectory += Path.DirectorySeparatorChar;
+            string fullRootDirectory = Path.GetFullPath(rootDirectory);
+            string fullCandidatePath = Path.GetFullPath(candidatePath);
+            string relativePath = Path.GetRelativePath(fullRootDirectory, fullCandidatePath);
 
-            var candidatePath = Path.GetFullPath(fullPath);
-            return candidatePath.StartsWith(filesDirectory, StringComparison.OrdinalIgnoreCase);
+            return relativePath == "." ||
+                (!Path.IsPathRooted(relativePath) &&
+                    !IsParentRelativePath(relativePath));
         }
         catch (Exception ex) when (IsPathResolutionFailure(ex))
         {
             return false;
         }
+    }
+
+    private static bool IsParentRelativePath(string relativePath)
+    {
+        if (relativePath.Equals("..", StringComparison.Ordinal))
+            return true;
+
+        if (relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return true;
+
+        return Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar &&
+            relativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static bool IsPathResolutionFailure(Exception exception)
