@@ -48,7 +48,7 @@ public class AccessGroupServiceTests
     }
 
     [Test]
-    public async Task CreateAccessGroup_RejectsDuplicateNormalizedNameForSameOwner()
+    public async Task CreateAccessGroup_RejectsDuplicateNormalizedNameForSameOwnerIgnoringCase()
     {
         using var context = CreateContext();
 
@@ -60,15 +60,15 @@ public class AccessGroupServiceTests
         var service = CreateService(context, owner.Id, isAdmin: false, logger);
 
         await service.CreateAccessGroupAsync("Editors");
-        Func<Task> act = () => service.CreateAccessGroupAsync("  Editors  ");
+        Func<Task> act = () => service.CreateAccessGroupAsync("  editors  ");
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Access group 'Editors' already exists for this owner.");
+            .WithMessage("Access group 'editors' already exists for this owner.");
         context.AccessGroups.Should().ContainSingle(group => group.OwnerId == owner.Id && group.Name == "Editors");
     }
 
     [Test]
-    public async Task CreateAccessGroup_AllowsSameNormalizedNameForDifferentOwners()
+    public async Task CreateAccessGroup_AllowsSameNormalizedNameWithDifferentCaseForDifferentOwners()
     {
         using var context = CreateContext();
 
@@ -82,13 +82,16 @@ public class AccessGroupServiceTests
         var secondOwnerService = CreateService(context, secondOwner.Id, isAdmin: false, logger);
 
         await firstOwnerService.CreateAccessGroupAsync("Editors");
-        await secondOwnerService.CreateAccessGroupAsync("  Editors  ");
+        await secondOwnerService.CreateAccessGroupAsync("  editors  ");
 
         context.AccessGroups
-            .Where(group => group.Name == "Editors")
-            .Select(group => group.OwnerId)
+            .Select(group => new { group.OwnerId, group.Name })
             .Should()
-            .BeEquivalentTo([firstOwner.Id, secondOwner.Id]);
+            .BeEquivalentTo(
+                [
+                    new { OwnerId = firstOwner.Id, Name = "Editors" },
+                    new { OwnerId = secondOwner.Id, Name = "editors" }
+                ]);
     }
 
     [TestCase("")]

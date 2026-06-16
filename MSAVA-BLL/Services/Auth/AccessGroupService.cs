@@ -5,6 +5,7 @@ using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
 using MSAVA_Shared.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Transactions;
 
 namespace MSAVA_BLL.Services.Auth;
 
@@ -31,18 +32,31 @@ public class AccessGroupService
     public async Task<Guid> CreateAccessGroupAsync(string name, CancellationToken cancellationToken = default)
     {
         string accessGroupName = AccessGroupInputPolicy.NormalizeName(name);
+
+        if (!ShouldUseSerializableAccessGroupTransaction())
+            return await CreateValidatedAccessGroupAsync(accessGroupName, cancellationToken);
+
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            using var transaction = CreateSerializableAccessGroupScope();
+            Guid accessGroupId = await CreateValidatedAccessGroupAsync(accessGroupName, cancellationToken);
+
+            transaction.Complete();
+            return accessGroupId;
+        });
+    }
+
+    private async Task<Guid> CreateValidatedAccessGroupAsync(
+        string accessGroupName,
+        CancellationToken cancellationToken)
+    {
         SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == session.UserId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {session.UserId} not found.");
 
-        bool nameExistsForOwner = await _context.AccessGroups
-            .AsNoTracking()
-            .AnyAsync(
-                group => group.OwnerId == user.Id && group.Name == accessGroupName,
-                cancellationToken);
-
-        if (nameExistsForOwner)
+        if (await OwnerHasAccessGroupNameAsync(user.Id, accessGroupName, cancellationToken))
             throw new InvalidOperationException($"Access group '{accessGroupName}' already exists for this owner.");
 
         var accessGroup = new AccessGroupDB
@@ -67,6 +81,20 @@ public class AccessGroupService
         await _serviceLogger.WriteLogAsync(GroupLogActions.AccessGroupUserAdded, $"User {user.Username} added to access group '{accessGroupName}'.", user.Id, accessGroup.Id);
 
         return accessGroup.Id;
+    }
+
+    private async Task<bool> OwnerHasAccessGroupNameAsync(
+        Guid ownerId,
+        string accessGroupName,
+        CancellationToken cancellationToken)
+    {
+        var ownerGroupNames = await _context.AccessGroups
+            .AsNoTracking()
+            .Where(group => group.OwnerId == ownerId)
+            .Select(group => group.Name)
+            .ToListAsync(cancellationToken);
+
+        return ownerGroupNames.Contains(accessGroupName, StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task AddUserToAccessGroupAsync(Guid userId, Guid accessGroupId, CancellationToken cancellationToken = default)
@@ -108,6 +136,33 @@ public class AccessGroupService
             "Session user is required to manage access groups.",
             "Banned users cannot manage access groups.",
             "Users must be whitelisted before managing access groups.");
+    }
+
+    private bool ShouldUseSerializableAccessGroupTransaction()
+    {
+        if (_context.Database.CurrentTransaction is not null)
+            return false;
+
+        if (Transaction.Current is not null)
+            return false;
+
+        string? providerName = _context.Database.ProviderName;
+        return !string.IsNullOrWhiteSpace(providerName) &&
+            !string.Equals(
+                providerName,
+                "Microsoft.EntityFrameworkCore.InMemory",
+                StringComparison.Ordinal);
+    }
+
+    private static TransactionScope CreateSerializableAccessGroupScope()
+    {
+        return new TransactionScope(
+            TransactionScopeOption.Required,
+            new TransactionOptions
+            {
+                IsolationLevel = IsolationLevel.Serializable
+            },
+            TransactionScopeAsyncFlowOption.Enabled);
     }
 
     private DateTime GetUtcNow()
