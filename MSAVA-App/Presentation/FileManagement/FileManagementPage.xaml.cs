@@ -41,16 +41,14 @@ public sealed partial class FileManagementPage : Page
         return dataContext as FileManagementModel;
     }
 
-    private async void FileManagementPage_Loaded(object sender, RoutedEventArgs e)
+    private void FileManagementPage_Loaded(object sender, RoutedEventArgs e)
     {
         // If VM is already present by the time Loaded fires, trigger once.
         if (_loadedOnce) return;
         var vm = ResolveVm(DataContext);
         if (vm is not null)
         {
-            AttachVm(vm);
-            _loadedOnce = true;
-            await vm.SaveAndRefreshAsync();
+            StartInitialRefresh(vm);
         }
     }
 
@@ -63,17 +61,24 @@ public sealed partial class FileManagementPage : Page
         StopInfoBarProgress();
     }
 
-    private async void FileManagementPage_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+    private void FileManagementPage_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
     {
         // In some platforms DataContext is set after Loaded. Trigger once when VM arrives.
         if (_loadedOnce) return;
         var vm = ResolveVm(args.NewValue);
         if (vm is not null)
         {
-            AttachVm(vm);
-            _loadedOnce = true;
-            await vm.SaveAndRefreshAsync();
+            StartInitialRefresh(vm);
         }
+    }
+
+    private void StartInitialRefresh(FileManagementModel vm)
+    {
+        AttachVm(vm);
+        _loadedOnce = true;
+        _ = RunPageTaskAsync(
+            () => vm.SaveAndRefreshAsync(),
+            "Failed to refresh file management data.");
     }
 
     private void AttachVm(FileManagementModel vm)
@@ -169,22 +174,28 @@ public sealed partial class FileManagementPage : Page
         switch (tag)
         {
             case "Exit":
-                _ = vm.GoToMainAsync();
+                _ = RunPageTaskAsync(
+                    () => vm.GoToMainAsync(),
+                    "Failed to leave file management.");
                 break;
             case "YourFiles":
                 vm.IsAddMode = false;
                 break;
             case "AddFiles":
-                _ = vm.StartAddAsync();
+                _ = RunPageTaskAsync(
+                    vm.StartAddAsync,
+                    "Failed to show the add-file form.");
                 break;
         }
     }
 
-    private async void Upload_Click(object sender, RoutedEventArgs e)
+    private void Upload_Click(object sender, RoutedEventArgs e)
     {
         var vm = _vm ?? ResolveVm(DataContext);
         if (vm is null) return;
-        await vm.UploadAsync();
+        _ = RunPageTaskAsync(
+            () => vm.UploadAsync(),
+            "Failed to upload the selected file.");
     }
 
     private void CopyResult_Click(object sender, RoutedEventArgs e)
@@ -204,11 +215,18 @@ public sealed partial class FileManagementPage : Page
         }
     }
 
-    private async void PickFile_Click(object sender, RoutedEventArgs e)
+    private void PickFile_Click(object sender, RoutedEventArgs e)
     {
         var vm = _vm ?? ResolveVm(DataContext);
         if (vm is null) return;
 
+        _ = RunPageTaskAsync(
+            () => PickFileAsync(vm),
+            "Failed to pick a file for upload.");
+    }
+
+    private static async Task PickFileAsync(FileManagementModel vm)
+    {
         var picked = await FilePicker.PickSingleAsync();
         if (picked is null) return;
 
@@ -223,5 +241,19 @@ public sealed partial class FileManagementPage : Page
         }
 
         vm.NewFileStream = picked.Stream;
+    }
+
+    private async Task RunPageTaskAsync(Func<Task> operation, string failureMessage)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        try
+        {
+            await operation();
+        }
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
+        {
+            _logger.LogWarning(ex, "{FailureMessage}", failureMessage);
+        }
     }
 }

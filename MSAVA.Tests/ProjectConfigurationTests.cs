@@ -295,6 +295,35 @@ public class ProjectConfigurationTests
             "ShellModel event handlers should use logged task helpers instead of unobserved async void methods");
     }
 
+    [Test]
+    public void FileManagementPage_UsesLoggedAsyncPageTaskGuard()
+    {
+        string pagePath = Path.Combine(
+            FindRepositoryRoot(),
+            "MSAVA-App",
+            "Presentation",
+            "FileManagement",
+            "FileManagementPage.xaml.cs");
+        string source = File.ReadAllText(pagePath);
+
+        source.Should().Contain("RunPageTaskAsync",
+            "file-management event handlers should route asynchronous work through one logged helper");
+        source.Should().Contain("CriticalExceptionPolicy.ContainsCriticalException(ex)",
+            "recoverable UI task failures should be logged without swallowing critical runtime failures");
+        source.Should().Contain("StartInitialRefresh",
+            "Loaded and DataContextChanged should share the same initial-refresh flow");
+        source.Should().NotContain("async void",
+            "file-management event handlers should not use unobserved async void methods");
+        source.Should().NotContain("_ = vm.GoToMainAsync();",
+            "navigation tasks should go through the page task guard");
+        source.Should().NotContain("_ = vm.StartAddAsync();",
+            "add-mode tasks should go through the page task guard");
+        source.Should().NotContain("await vm.UploadAsync();",
+            "upload failures should be logged by the page task guard");
+        source.Should().NotContain("await vm.SaveAndRefreshAsync();",
+            "initial refresh failures should be logged by the page task guard");
+    }
+
     private static bool ContainsGlobalServiceProviderReference(string line)
     {
         if (line.Contains("static IServiceProvider", StringComparison.Ordinal))
