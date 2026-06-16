@@ -22,19 +22,22 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     private readonly IRequestSessionAccessor _requestSessionAccessor;
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FileDeduplicationService> _logger;
+    private readonly TimeProvider _timeProvider;
 
     public FileDeduplicationService(
         BaseDataContext context,
         MetadataStore metadataStore,
         IRequestSessionAccessor requestSessionAccessor,
         ServiceLogger serviceLogger,
-        ILogger<FileDeduplicationService> logger)
+        ILogger<FileDeduplicationService> logger,
+        TimeProvider? timeProvider = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _metadataStore = metadataStore ?? throw new ArgumentNullException(nameof(metadataStore));
         _requestSessionAccessor = requestSessionAccessor ?? throw new ArgumentNullException(nameof(requestSessionAccessor));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<HashCheckResult> CheckAndGetReferenceAsync(
@@ -272,6 +275,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         IEnumerable<string>? categoryValues = request.Categories is not null ? request.Categories : existingData?.Categories;
         var tags = FileMetadataPolicy.NormalizeMetadataValues(tagValues, nameof(request.Tags));
         var categories = FileMetadataPolicy.NormalizeMetadataValues(categoryValues, nameof(request.Categories));
+        DateTime utcNow = GetUtcNow();
 
         // Create file data record
         var newData = new SavedFileDataDB
@@ -290,8 +294,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             PublicViewing = request.PublicViewing,
             OriginalCreator = userId,
             LastModifiedById = userId,
-            SavedAt = DateTime.UtcNow,
-            LastModifiedAt = DateTime.UtcNow
+            SavedAt = utcNow,
+            LastModifiedAt = utcNow
         };
 
         // Create metadata record for fast lookups
@@ -378,6 +382,11 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         var entry = _context.Entry(entity);
         if (entry.State != EntityState.Detached)
             entry.State = EntityState.Detached;
+    }
+
+    private DateTime GetUtcNow()
+    {
+        return _timeProvider.GetUtcNow().UtcDateTime;
     }
 
     private async Task<Guid?> GetDefaultAccessGroupAsync(Guid userId, CancellationToken cancellationToken)

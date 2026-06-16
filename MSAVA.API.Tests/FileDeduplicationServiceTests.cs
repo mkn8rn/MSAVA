@@ -15,6 +15,8 @@ namespace MSAVA_API.Tests;
 
 public class FileDeduplicationServiceTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 11, 45, 0, TimeSpan.Zero);
+
     [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsFailureForNullRequest()
     {
@@ -749,7 +751,8 @@ public class FileDeduplicationServiceTests
             await context.SaveChangesAsync();
             metadataStore.AddMetadata(existingMetadata);
 
-            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var fixedTimeProvider = new FixedTimeProvider(FixedNow);
+            var service = CreateService(context, metadataStore, sessionUser.Id, fixedTimeProvider);
             var request = new HashCheckRequest
             {
                 ContentHashHex = Convert.ToHexString(contentHash),
@@ -775,6 +778,8 @@ public class FileDeduplicationServiceTests
             newData.Description.Should().Be("normalized dedupe description");
             newData.Tags.Should().Equal("copy", "shared");
             newData.Categories.Should().Equal("tests");
+            newData.SavedAt.Should().Be(FixedNow.UtcDateTime);
+            newData.LastModifiedAt.Should().Be(FixedNow.UtcDateTime);
             metadataStore.GetByAccessGroup(targetGroup.Id)
                 .Should()
                 .ContainSingle(record => record.RefId == result.ReferenceId);
@@ -911,7 +916,8 @@ public class FileDeduplicationServiceTests
     private static FileDeduplicationService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        Guid sessionUserId)
+        Guid sessionUserId,
+        TimeProvider? timeProvider = null)
     {
         return CreateService(context, metadataStore, new SessionDTO
         {
@@ -926,20 +932,22 @@ public class FileDeduplicationServiceTests
             AccessGroups = [],
             IssuedAt = DateTime.UtcNow.AddMinutes(-1),
             ExpiresAt = DateTime.UtcNow.AddHours(1)
-        });
+        }, timeProvider);
     }
 
     private static FileDeduplicationService CreateService(
         BaseDataContext context,
         MetadataStore metadataStore,
-        SessionDTO session)
+        SessionDTO session,
+        TimeProvider? timeProvider = null)
     {
         return new FileDeduplicationService(
             context,
             metadataStore,
             new TestRequestSessionAccessor(session),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
-            NullLogger<FileDeduplicationService>.Instance);
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context, timeProvider),
+            NullLogger<FileDeduplicationService>.Instance,
+            timeProvider);
     }
 
     private sealed class TestRequestSessionAccessor : IRequestSessionAccessor
@@ -1101,5 +1109,10 @@ public class FileDeduplicationServiceTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }
