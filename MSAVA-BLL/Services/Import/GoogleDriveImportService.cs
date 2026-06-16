@@ -12,6 +12,12 @@ namespace MSAVA_BLL.Services.Import;
 
 public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveDTO>
 {
+    private static readonly HashSet<string> SupportedFileIdHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "drive.google.com",
+        "docs.google.com"
+    };
+
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -142,26 +148,30 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         if (Regex.IsMatch(urlOrId, @"^[A-Za-z0-9_\-]{10,100}$"))
             return urlOrId;
 
-        try
-        {
-            var uri = new Uri(urlOrId);
-            var s = uri.AbsoluteUri;
-
-            var m = Regex.Match(s, @"/d/([A-Za-z0-9_\-]+)");
-            if (m.Success) return m.Groups[1].Value;
-
-            m = Regex.Match(s, @"[?&]id=([A-Za-z0-9_\-]+)");
-            if (m.Success) return m.Groups[1].Value;
-
-            m = Regex.Match(s, @"/uc\?id=([A-Za-z0-9_\-]+)");
-            if (m.Success) return m.Groups[1].Value;
-        }
-        catch (UriFormatException)
+        if (!Uri.TryCreate(urlOrId, UriKind.Absolute, out var uri) ||
+            !IsSupportedFileIdUri(uri))
         {
             return null;
         }
 
+        var s = uri.AbsoluteUri;
+
+        var m = Regex.Match(s, @"/d/([A-Za-z0-9_\-]+)");
+        if (m.Success) return m.Groups[1].Value;
+
+        m = Regex.Match(s, @"[?&]id=([A-Za-z0-9_\-]+)");
+        if (m.Success) return m.Groups[1].Value;
+
+        m = Regex.Match(s, @"/uc\?id=([A-Za-z0-9_\-]+)");
+        if (m.Success) return m.Groups[1].Value;
+
         return null;
+    }
+
+    private static bool IsSupportedFileIdUri(Uri uri)
+    {
+        return (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+            SupportedFileIdHosts.Contains(uri.IdnHost.TrimEnd('.'));
     }
 
     private void EnsureDeclaredContentLengthWithinMaximum(HttpContent content)
