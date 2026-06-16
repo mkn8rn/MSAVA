@@ -50,6 +50,23 @@ public class ApiServiceTests
     }
 
     [Test]
+    public void CreateClient_OverridesFactoryBaseAddressWithConfiguredBaseAddress()
+    {
+        using var factoryClient = new HttpClient
+        {
+            BaseAddress = new Uri("https://wrong-api.msava.test/")
+        };
+        var api = new ApiService(
+            new StaticHttpClientFactory(factoryClient),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
+            NullLogger<ApiService>.Instance);
+
+        var client = api.CreateClient();
+
+        client.BaseAddress.Should().Be(new Uri("https://api.msava.test/"));
+    }
+
+    [Test]
     public async Task CreateJsonRequest_SerializesBodyWithProvidedJsonMetadata()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));

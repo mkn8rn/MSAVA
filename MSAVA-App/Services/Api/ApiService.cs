@@ -54,7 +54,7 @@ public class ApiService
     public HttpClient CreateClient()
     {
         var client = _httpClientFactory.CreateClient("MSAVA-Api");
-        if (client.BaseAddress == null)
+        if (client.BaseAddress != _baseAddress)
         {
             client.BaseAddress = _baseAddress;
         }
