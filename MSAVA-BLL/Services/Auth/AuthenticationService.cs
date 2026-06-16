@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Transactions;
 using MSAVA_INF.Environment;
 using MSAVA_BLL.Utils;
 using MSAVA_BLL.Services.Interfaces;
@@ -144,7 +145,27 @@ public class AuthenticationService : IAuthenticationService
         if (request.InviteCode == Guid.Empty)
             throw new ArgumentException("Invite code is required.", nameof(RegisterRequestDTO.InviteCode));
 
-        if (!await _inviteCodeService.IsValidInviteCodeAsync(request.InviteCode, cancellationToken))
+        if (!ShouldUseSerializableRegistrationTransaction())
+            return await RegisterValidatedUserAsync(username, request.Password, request.InviteCode, cancellationToken);
+
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            using var transaction = CreateSerializableRegistrationScope();
+            Guid userId = await RegisterValidatedUserAsync(username, request.Password, request.InviteCode, cancellationToken);
+
+            transaction.Complete();
+            return userId;
+        });
+    }
+
+    private async Task<Guid> RegisterValidatedUserAsync(
+        string username,
+        string password,
+        Guid inviteCode,
+        CancellationToken cancellationToken)
+    {
+        if (!await _inviteCodeService.IsValidInviteCodeAsync(inviteCode, cancellationToken))
             throw new ArgumentException("Invalid or expired invite code.", nameof(RegisterRequestDTO.InviteCode));
 
         bool exists = await _context.Users
@@ -155,7 +176,7 @@ public class AuthenticationService : IAuthenticationService
             throw new InvalidOperationException("Username already exists.");
 
         byte[] salt = PasswordUtils.GenerateSalt();
-        byte[] hash = PasswordUtils.HashPassword(request.Password, salt);
+        byte[] hash = PasswordUtils.HashPassword(password, salt);
 
         var user = new UserDB
         {
@@ -166,7 +187,7 @@ public class AuthenticationService : IAuthenticationService
             IsAdmin = false,
             IsBanned = false,
             IsWhitelisted = true,
-            InviteCodeId = request.InviteCode,
+            InviteCodeId = inviteCode,
             CreatedAt = GetUtcNow()
         };
 
@@ -176,6 +197,33 @@ public class AuthenticationService : IAuthenticationService
         await _serviceLogger.WriteLogAsync(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
 
         return user.Id;
+    }
+
+    private bool ShouldUseSerializableRegistrationTransaction()
+    {
+        if (_context.Database.CurrentTransaction is not null)
+            return false;
+
+        if (Transaction.Current is not null)
+            return false;
+
+        string? providerName = _context.Database.ProviderName;
+        return !string.IsNullOrWhiteSpace(providerName) &&
+            !string.Equals(
+                providerName,
+                "Microsoft.EntityFrameworkCore.InMemory",
+                StringComparison.Ordinal);
+    }
+
+    private static TransactionScope CreateSerializableRegistrationScope()
+    {
+        return new TransactionScope(
+            TransactionScopeOption.Required,
+            new TransactionOptions
+            {
+                IsolationLevel = IsolationLevel.Serializable
+            },
+            TransactionScopeAsyncFlowOption.Enabled);
     }
 
     private DateTime GetUtcNow()

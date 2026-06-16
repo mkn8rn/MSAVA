@@ -422,6 +422,32 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public async Task RegisterAsync_RejectsExhaustedInviteCodeBeforeCreatingUser()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        var existingUser = CreateUser("existing-user", "password", isBanned: false);
+        existingUser.InviteCodeId = inviteCode.Id;
+        context.InviteCodes.Add(inviteCode);
+        context.Users.Add(existingUser);
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = "new-user",
+            Password = "password",
+            InviteCode = inviteCode.Id
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Invalid or expired invite code.*");
+        context.Users.Should().ContainSingle(user => user.Username == "existing-user");
+        context.UserLogs.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task RegisterAsync_HonorsCanceledTokenBeforeCreatingUser()
     {
         using var context = CreateContext();
