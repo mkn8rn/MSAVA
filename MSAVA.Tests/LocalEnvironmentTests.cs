@@ -120,6 +120,28 @@ public class LocalEnvironmentTests
             .WithMessage("'jwt_issuer_signing_key' must be at least 32 UTF-8 bytes for HMAC SHA-256 signing.");
     }
 
+    [TestCase("replace-with-local-admin-password")]
+    [TestCase(" REPLACE-WITH-POSTGRES-PASSWORD ")]
+    [TestCase("change-me")]
+    [TestCase("changeme")]
+    public void RejectPlaceholderValue_RejectsCopiedExamplePlaceholders(string value)
+    {
+        Action act = () => LocalEnvironment.RejectPlaceholderValue("admin_password", value);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Required configuration value 'admin_password' still contains an example placeholder. Replace it with a real deployment value.");
+    }
+
+    [Test]
+    public void RejectPlaceholderValue_ReturnsConfiguredValue()
+    {
+        string configuredValue = "correct-horse-battery-staple";
+
+        string result = LocalEnvironment.RejectPlaceholderValue("admin_password", configuredValue);
+
+        result.Should().Be(configuredValue);
+    }
+
     private static Dictionary<string, string> CreateValidEnvironmentValues()
     {
         return new Dictionary<string, string>

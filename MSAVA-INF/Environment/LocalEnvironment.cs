@@ -52,12 +52,31 @@ namespace MSAVA_INF.Environment
                 ?? System.Environment.GetEnvironmentVariable(key.ToUpperInvariant());
 
             if (!string.IsNullOrWhiteSpace(environmentValue))
-                return environmentValue;
+                return RejectPlaceholderValue(key, environmentValue);
 
             if (_values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
-                return value;
+                return RejectPlaceholderValue(key, value);
 
             throw new InvalidOperationException($"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {_envFilePathForErrors}.");
+        }
+
+        internal static string RejectPlaceholderValue(string key, string value)
+        {
+            if (IsExamplePlaceholder(value))
+            {
+                throw new InvalidOperationException(
+                    $"Required configuration value '{key}' still contains an example placeholder. Replace it with a real deployment value.");
+            }
+
+            return value;
+        }
+
+        private static bool IsExamplePlaceholder(string value)
+        {
+            string normalizedValue = value.Trim();
+            return normalizedValue.StartsWith("replace-with-", StringComparison.OrdinalIgnoreCase) ||
+                normalizedValue.Equals("change-me", StringComparison.OrdinalIgnoreCase) ||
+                normalizedValue.Equals("changeme", StringComparison.OrdinalIgnoreCase);
         }
 
         private int ParseRequiredInt(string key)
