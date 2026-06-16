@@ -95,6 +95,32 @@ public class ApiPipelineConfigurationTests
         authenticationIndex.Should().BeGreaterThan(exceptionMiddlewareIndex);
     }
 
+    [Test]
+    public void Program_BuildsRequestContextAfterAuthenticationBeforeAuthorization()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+        string normalizedProgramText = programText.Replace("\r\n", "\n");
+
+        normalizedProgramText.Should().Contain(
+            "builder.Services.AddScoped<IRequestSessionAccessor, HttpContextRequestSessionAccessor>();",
+            "BLL services read the request session through the scoped accessor");
+        normalizedProgramText.Should().Contain(
+            "app.UseMiddleware<RequestContextMiddleware>();",
+            "current-user services need the JWT-derived session stored before authorization and controller execution");
+
+        int authenticationIndex = normalizedProgramText.IndexOf("app.UseAuthentication();", StringComparison.Ordinal);
+        int requestContextIndex = normalizedProgramText.IndexOf(
+            "app.UseMiddleware<RequestContextMiddleware>();",
+            StringComparison.Ordinal);
+        int authorizationIndex = normalizedProgramText.IndexOf("app.UseAuthorization();", StringComparison.Ordinal);
+        int controllersIndex = normalizedProgramText.IndexOf("app.MapControllers();", StringComparison.Ordinal);
+
+        authenticationIndex.Should().BeGreaterThanOrEqualTo(0);
+        requestContextIndex.Should().BeGreaterThan(authenticationIndex);
+        authorizationIndex.Should().BeGreaterThan(requestContextIndex);
+        controllersIndex.Should().BeGreaterThan(authorizationIndex);
+    }
+
     private static DirectoryInfo FindRepositoryRoot()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);
