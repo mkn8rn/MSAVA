@@ -485,6 +485,24 @@ public class ProjectConfigurationTests
         serverDto.GetProperty(FileUploadFormFields.PublicDownload).Should().NotBeNull();
     }
 
+    [Test]
+    public void ContinuousIntegration_RunsBothUnitTestProjects()
+    {
+        string workflowPath = Path.Combine(
+            FindRepositoryRoot(),
+            ".github",
+            "workflows",
+            "ci.yml");
+        string workflow = File.ReadAllText(workflowPath);
+
+        workflow.Should().Contain(
+            "dotnet test ./MSAVA.Tests/MSAVA.Tests.csproj",
+            "CI should run the main application and BLL test project");
+        workflow.Should().Contain(
+            "dotnet test ./MSAVA.API.Tests/MSAVA.API.Tests.csproj",
+            "CI should run the API authorization, middleware, and controller tests");
+    }
+
     private static bool IsDotEnvItem(string? itemPath)
     {
         return string.Equals(itemPath, ".env", StringComparison.OrdinalIgnoreCase)

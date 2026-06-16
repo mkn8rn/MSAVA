@@ -62,3 +62,11 @@ jobs:
       - name: Run Unit Tests
         shell: pwsh
         run: dotnet test ./MSAVA.Tests/MSAVA.Tests.csproj --no-build -c Release --logger GitHubActions --blame-crash --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: Build MSAVA.API.Tests (Release)
+        shell: pwsh
+        run: msbuild ./MSAVA.API.Tests/MSAVA.API.Tests.csproj /p:Configuration=Release /r
+
+      - name: Run API Unit Tests
+        shell: pwsh
+        run: dotnet test ./MSAVA.API.Tests/MSAVA.API.Tests.csproj --no-build -c Release --logger GitHubActions --blame-crash --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
