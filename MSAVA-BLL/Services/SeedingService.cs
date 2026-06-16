@@ -14,15 +14,18 @@ namespace MSAVA_BLL.Services
         private readonly BaseDataContext _context;
         private readonly ILocalEnvironment _env;
         private readonly ServiceLogger _serviceLogger;
+        private readonly TimeProvider _timeProvider;
 
         public SeedingService(
             BaseDataContext context,
             ILocalEnvironment env,
-            ServiceLogger serviceLogger)
+            ServiceLogger serviceLogger,
+            TimeProvider? timeProvider = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _env = env ?? throw new ArgumentNullException(nameof(env));
             _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public async Task SeedAsync(CancellationToken cancellationToken = default)
@@ -53,7 +56,7 @@ namespace MSAVA_BLL.Services
                     IsAdmin = true,
                     IsBanned = false,
                     IsWhitelisted = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = GetUtcNow()
                 };
                 _context.Users.Add(adminUser);
                 await _context.SaveChangesAsync(cancellationToken);
@@ -89,6 +92,11 @@ namespace MSAVA_BLL.Services
             }
 
             return changed;
+        }
+
+        private DateTime GetUtcNow()
+        {
+            return _timeProvider.GetUtcNow().UtcDateTime;
         }
     }
 }

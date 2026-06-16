@@ -13,11 +13,13 @@ namespace MSAVA_App.Tests;
 
 public class SeedingServiceTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 12, 15, 0, TimeSpan.Zero);
+
     [Test]
     public async Task SeedAsync_CreatesConfiguredAdminWhenMissing()
     {
         using var context = CreateContext();
-        var service = CreateService(context);
+        var service = CreateService(context, timeProvider: new FixedTimeProvider(FixedNow));
 
         await service.SeedAsync();
 
@@ -25,6 +27,7 @@ public class SeedingServiceTests
         admin.IsAdmin.Should().BeTrue();
         admin.IsBanned.Should().BeFalse();
         admin.IsWhitelisted.Should().BeTrue();
+        admin.CreatedAt.Should().Be(FixedNow.UtcDateTime);
         PasswordUtils.VerifyPassword(TestEnvironment.AdminPasswordValue, admin.PasswordHash, admin.PasswordSalt)
             .Should()
             .BeTrue();
@@ -127,12 +130,14 @@ public class SeedingServiceTests
     private static SeedingService CreateService(
         BaseDataContext context,
         string? adminUsername = null,
-        string? adminPassword = null)
+        string? adminPassword = null,
+        TimeProvider? timeProvider = null)
     {
         return new SeedingService(
             context,
             new TestEnvironment(adminUsername, adminPassword),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context, timeProvider),
+            timeProvider);
     }
 
     private static BaseDataContext CreateContext()
@@ -204,5 +209,10 @@ public class SeedingServiceTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<SavedFileDataDB>().Ignore(fileData => fileData.Metadata);
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }
