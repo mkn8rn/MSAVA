@@ -6,6 +6,13 @@ namespace MSAVA_BLL.Utils.Signature;
 /// </summary>
 public sealed class SignatureService
 {
+    private readonly TimeProvider _timeProvider;
+
+    public SignatureService(TimeProvider? timeProvider = null)
+    {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
     /// <summary>
     /// Prepares a file for download by embedding an MSAVA signature.
     /// </summary>
@@ -19,7 +26,7 @@ public sealed class SignatureService
         if (!SignatureEmbedder.IsSupported(extension))
             return fileStream;
 
-        var signature = MsavaSignature.Create(contentHash, fileId);
+        var signature = MsavaSignature.Create(contentHash, fileId, _timeProvider.GetUtcNow());
         return SignatureEmbedder.TryEmbed(fileStream, extension, signature);
     }
 

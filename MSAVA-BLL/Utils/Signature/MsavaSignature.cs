@@ -33,13 +33,13 @@ public sealed record MsavaSignature
     /// <summary>
     /// Creates a new signature for a file.
     /// </summary>
-    public static MsavaSignature Create(string contentHash, long fileId)
+    public static MsavaSignature Create(string contentHash, long fileId, DateTimeOffset createdAt)
     {
         return new MsavaSignature
         {
             ContentHash = contentHash,
             FileId = fileId,
-            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            Timestamp = createdAt.ToUnixTimeSeconds()
         };
     }
 
@@ -129,5 +129,8 @@ public sealed record MsavaSignature
     /// <summary>
     /// Gets the age of the signature.
     /// </summary>
-    public TimeSpan Age => DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(Timestamp);
+    public TimeSpan GetAge(DateTimeOffset utcNow)
+    {
+        return utcNow - DateTimeOffset.FromUnixTimeSeconds(Timestamp);
+    }
 }
