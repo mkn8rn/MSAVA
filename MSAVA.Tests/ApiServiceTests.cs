@@ -36,6 +36,20 @@ public class ApiServiceTests
             .WithMessage("ApiClient:Url must be an absolute HTTP or HTTPS URL.");
     }
 
+    [TestCase("https://user:pass@api.msava.test/")]
+    [TestCase("https://api.msava.test/?tenant=alpha")]
+    [TestCase("https://api.msava.test/#fragment")]
+    public void Constructor_RejectsApiBaseUrlWithUnsafeComponents(string url)
+    {
+        Action act = () => _ = new ApiService(
+            new StaticHttpClientFactory(new HttpClient()),
+            new ApiClientOptions { Url = url },
+            NullLogger<ApiService>.Instance);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("ApiClient:Url must not contain user info, query, or fragment components.");
+    }
+
     [Test]
     public void CreateClient_AppliesConfiguredBaseAddressWhenFactoryClientHasNone()
     {
@@ -47,6 +61,19 @@ public class ApiServiceTests
         var client = api.CreateClient();
 
         client.BaseAddress.Should().Be(new Uri("https://api.msava.test/"));
+    }
+
+    [Test]
+    public void CreateClient_CanonicalizesConfiguredPathBaseWithTrailingSlash()
+    {
+        var api = new ApiService(
+            new StaticHttpClientFactory(new HttpClient()),
+            new ApiClientOptions { Url = "https://api.msava.test/msava" },
+            NullLogger<ApiService>.Instance);
+
+        var client = api.CreateClient();
+
+        client.BaseAddress.Should().Be(new Uri("https://api.msava.test/msava/"));
     }
 
     [Test]
@@ -87,6 +114,15 @@ public class ApiServiceTests
     [TestCase("http://evil.example/api")]
     [TestCase("//evil.example/api")]
     [TestCase(@"\\evil.example\api")]
+    [TestCase("/api/test")]
+    [TestCase("../api/test")]
+    [TestCase("api/../test")]
+    [TestCase("api/%2e%2e/test")]
+    [TestCase(@"api\test")]
+    [TestCase(" api/test")]
+    [TestCase("api/test ")]
+    [TestCase("?take=10")]
+    [TestCase("api/test#fragment")]
     public void CreateJsonRequest_RejectsNonRelativeApiRoutes(string route)
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
@@ -99,6 +135,28 @@ public class ApiServiceTests
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("API routes must be relative paths.");
+    }
+
+    [Test]
+    public async Task SendForAsync_SendsRelativeRouteUnderConfiguredPathBase()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"value":"alpha"}""", Encoding.UTF8, "application/json")
+        };
+        var handler = new RecordingHttpMessageHandler(response);
+        var api = new ApiService(
+            new StaticHttpClientFactory(new HttpClient(handler)),
+            new ApiClientOptions { Url = "https://api.msava.test/msava" },
+            NullLogger<ApiService>.Instance);
+
+        var result = await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
+
+        result.Should().Be(new ApiServiceTestPayload("alpha"));
+        handler.RequestUri.Should().Be(new Uri("https://api.msava.test/msava/api/test"));
     }
 
     [TestCase("")]
@@ -324,6 +382,26 @@ public class ApiServiceTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            return Task.FromResult(_response);
+        }
+    }
+
+    private sealed class RecordingHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly HttpResponseMessage _response;
+
+        public RecordingHttpMessageHandler(HttpResponseMessage response)
+        {
+            _response = response;
+        }
+
+        public Uri? RequestUri { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestUri = request.RequestUri;
             return Task.FromResult(_response);
         }
     }

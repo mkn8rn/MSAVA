@@ -106,15 +106,43 @@ public class ApiService
         if (string.IsNullOrWhiteSpace(relativeUrl))
             throw new ArgumentException("API route must be provided.", nameof(relativeUrl));
 
-        if (Uri.TryCreate(relativeUrl, UriKind.Absolute, out _) ||
-            relativeUrl.StartsWith("//", StringComparison.Ordinal) ||
-            relativeUrl.StartsWith(@"\\", StringComparison.Ordinal) ||
+        if (!string.Equals(relativeUrl, relativeUrl.Trim(), StringComparison.Ordinal) ||
+            Uri.TryCreate(relativeUrl, UriKind.Absolute, out _) ||
+            relativeUrl.StartsWith("/", StringComparison.Ordinal) ||
+            relativeUrl.StartsWith("?", StringComparison.Ordinal) ||
+            relativeUrl.Contains('#', StringComparison.Ordinal) ||
+            relativeUrl.Contains('\\', StringComparison.Ordinal) ||
+            ContainsDotSegment(relativeUrl) ||
             !Uri.TryCreate(relativeUrl, UriKind.Relative, out var uri))
         {
             throw new InvalidOperationException("API routes must be relative paths.");
         }
 
         return uri;
+    }
+
+    private static bool ContainsDotSegment(string relativeUrl)
+    {
+        int suffixStart = relativeUrl.IndexOfAny(['?', '#']);
+        ReadOnlySpan<char> path = suffixStart >= 0
+            ? relativeUrl.AsSpan(0, suffixStart)
+            : relativeUrl.AsSpan();
+
+        foreach (var range in path.Split('/'))
+        {
+            ReadOnlySpan<char> segment = path[range];
+            if (segment is "." or "..")
+                return true;
+
+            if (segment.IndexOf('%') < 0)
+                continue;
+
+            string decodedSegment = Uri.UnescapeDataString(segment.ToString());
+            if (decodedSegment is "." or "..")
+                return true;
+        }
+
+        return false;
     }
 
     public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage message, CancellationToken cancellationToken = default)
