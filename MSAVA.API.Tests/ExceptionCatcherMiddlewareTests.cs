@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -30,11 +31,11 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
-    public async Task InvokeAsync_ReturnsOriginalErrorResponseWhenDatabaseLoggingFails()
+    public async Task InvokeAsync_ReturnsSanitizedErrorResponseWhenDatabaseLoggingFails()
     {
         using var dbContext = CreateContext(throwOnSave: true);
         var context = CreateHttpContext();
-        var middleware = new ExceptionCatcherMiddleware(_ => throw new KeyNotFoundException("File reference missing."));
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new KeyNotFoundException("File reference e7efb446-cc57-4bee-a477-cd89a3670db9 missing."));
 
         await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
 
@@ -44,7 +45,7 @@ public class ExceptionCatcherMiddlewareTests
         context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
         context.Response.ContentType.Should().Be("application/json");
         response.Should().NotBeNull();
-        response!.Message.Should().Be("File reference missing.");
+        response!.Message.Should().Be("The requested resource was not found.");
         response.StackTrace.Should().BeNull();
         dbContext.ChangeTracker.Entries<ErrorLogDB>().Should().BeEmpty();
     }
@@ -89,6 +90,7 @@ public class ExceptionCatcherMiddlewareTests
 
         context.Response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
         response.Should().NotBeNull();
+        response!.Message.Should().Be("Bad query.");
         response!.UserId.Should().Be(userId);
         response.Timestamp.Should().Be(FixedNow.UtcDateTime);
         errorLog.Id.Should().Be(response.Id);
@@ -150,7 +152,8 @@ public class ExceptionCatcherMiddlewareTests
 
         context.Response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
         response.Should().NotBeNull();
-        response!.UserId.Should().BeNull();
+        response!.Message.Should().Be("Authentication is required.");
+        response.UserId.Should().BeNull();
         errorLog.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
         errorLog.UserId.Should().BeNull();
     }
@@ -171,9 +174,53 @@ public class ExceptionCatcherMiddlewareTests
 
         context.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
         response.Should().NotBeNull();
-        response!.UserId.Should().Be(userId);
+        response!.Message.Should().Be("Access to the requested resource is forbidden.");
+        response.UserId.Should().Be(userId);
         errorLog.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
         errorLog.UserId.Should().Be(userId);
+    }
+
+    [Test]
+    public async Task InvokeAsync_MasksProductionConflictDetails()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext();
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new InvalidOperationException("Duplicate user records were found for username admin@example.test."));
+
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("The request conflicts with the current resource state.");
+        response.Message.Should().NotContain("admin@example.test");
+        errorLog.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+    }
+
+    [Test]
+    public async Task InvokeAsync_MasksProductionUpstreamFailureDetails()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext();
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new HttpRequestException(
+            "Google Drive download failed 502: provider-token=secret-value",
+            null,
+            HttpStatusCode.BadGateway));
+
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status502BadGateway);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("A dependent service request failed.");
+        response.Message.Should().NotContain("secret-value");
+        errorLog.StatusCode.Should().Be(StatusCodes.Status502BadGateway);
     }
 
     [Test]

@@ -21,6 +21,13 @@ namespace MSAVA_API.Middleware
     public class ExceptionCatcherMiddleware
     {
         private const string ProductionServerErrorMessage = "An unexpected error occurred.";
+        private const string ProductionAuthenticationRequiredMessage = "Authentication is required.";
+        private const string ProductionForbiddenMessage = "Access to the requested resource is forbidden.";
+        private const string ProductionNotFoundMessage = "The requested resource was not found.";
+        private const string ProductionConflictMessage = "The request conflicts with the current resource state.";
+        private const string ProductionUpstreamFailureMessage = "A dependent service request failed.";
+        private const string ProductionServiceUnavailableMessage = "A dependent file or service is temporarily unavailable.";
+        private const string ProductionTimeoutMessage = "The request timed out.";
 
         private readonly RequestDelegate _next;
         private readonly TimeProvider _timeProvider;
@@ -270,10 +277,46 @@ namespace MSAVA_API.Middleware
 
         private static string GetResponseMessage(Exception exception, bool isDevelopment, int statusCode)
         {
-            if (isDevelopment || statusCode < StatusCodes.Status500InternalServerError)
+            if (isDevelopment)
                 return exception.Message;
 
-            return ProductionServerErrorMessage;
+            return exception switch
+            {
+                FileTooLargeException => exception.Message,
+                ArgumentException
+                    or FormatException
+                    or InvalidDataException
+                    or SerializationException
+                    or JsonException
+                    or System.Xml.XmlException
+                    or CryptographicException
+                    or ValidationException => exception.Message,
+                UnauthorizedAccessException => statusCode == StatusCodes.Status401Unauthorized
+                    ? ProductionAuthenticationRequiredMessage
+                    : ProductionForbiddenMessage,
+                System.Security.Authentication.AuthenticationException
+                    or SecurityTokenException => ProductionAuthenticationRequiredMessage,
+                System.Security.SecurityException => ProductionForbiddenMessage,
+                KeyNotFoundException
+                    or FileNotFoundException
+                    or DirectoryNotFoundException
+                    or FileLoadException => ProductionNotFoundMessage,
+                DbUpdateConcurrencyException => "The requested resource was updated by another operation.",
+                InvalidOperationException
+                    or DbUpdateException => ProductionConflictMessage,
+                HttpRequestException
+                    or System.Net.Sockets.SocketException
+                    or System.Net.WebException => ProductionUpstreamFailureMessage,
+                IOException => ProductionServiceUnavailableMessage,
+                TimeoutException
+                    or TaskCanceledException => ProductionTimeoutMessage,
+                PlatformNotSupportedException
+                    or NotImplementedException => "The requested operation is not implemented.",
+                NotSupportedException => "The requested operation is not supported.",
+                _ => statusCode >= StatusCodes.Status500InternalServerError
+                    ? ProductionServerErrorMessage
+                    : exception.Message
+            };
         }
 
         private static Guid? GetAuthenticatedUserId(HttpContext context)
