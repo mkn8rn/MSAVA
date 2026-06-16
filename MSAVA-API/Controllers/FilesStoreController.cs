@@ -64,6 +64,7 @@ public class FilesStoreController : ControllerBase
     [HttpPost("formfile")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(FileSizePolicy.MaximumFileSizeBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = FileSizePolicy.MaximumFileSizeBytes)]
     public async Task<ActionResult<Guid>> CreateFileFromFormFile(
         [FromForm][Required] SaveFileFromFormFileDTO dto,
         CancellationToken cancellationToken = default)

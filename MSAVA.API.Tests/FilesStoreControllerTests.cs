@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
+using System.Reflection;
 using MSAVA_API.Controllers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
@@ -16,6 +18,32 @@ public class FilesStoreControllerTests
 
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("ingestionService");
+    }
+
+    [Test]
+    public void CreateFileFromFormFile_DeclaresRequestAndMultipartBodyLimits()
+    {
+        var method = typeof(FilesStoreController).GetMethod(nameof(FilesStoreController.CreateFileFromFormFile))
+            ?? throw new InvalidOperationException("CreateFileFromFormFile action was not found.");
+
+        method.GetCustomAttributes<RequestSizeLimitAttribute>()
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeAssignableTo<IRequestSizeLimitMetadata>()
+            .Which
+            .MaxRequestBodySize
+            .Should()
+            .Be(FileSizePolicy.MaximumFileSizeBytes);
+
+        method.GetCustomAttributes<RequestFormLimitsAttribute>()
+            .Should()
+            .ContainSingle()
+            .Which
+            .MultipartBodyLengthLimit
+            .Should()
+            .Be(FileSizePolicy.MaximumFileSizeBytes);
     }
 
     [Test]
