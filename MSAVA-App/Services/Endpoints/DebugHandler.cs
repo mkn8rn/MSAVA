@@ -13,6 +13,23 @@ internal class DebugHttpHandler : DelegatingHandler
         "X-Api-Key"
     };
 
+    private static readonly HashSet<string> SensitiveQueryParameterNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "access_token",
+        "api_key",
+        "apikey",
+        "client_secret",
+        "code",
+        "id_token",
+        "key",
+        "password",
+        "refresh_token",
+        "secret",
+        "sig",
+        "signature",
+        "token"
+    };
+
     private readonly ILogger<DebugHttpHandler> _logger;
 
     public DebugHttpHandler(ILogger<DebugHttpHandler> logger, HttpMessageHandler? innerHandler = null)
@@ -32,7 +49,7 @@ internal class DebugHttpHandler : DelegatingHandler
             _logger.LogDebug(
                 "Unsuccessful API call {Method} {Uri} returned {StatusCode}",
                 request.Method,
-                request.RequestUri,
+                FormatRequestUri(request.RequestUri),
                 response.StatusCode);
 
             LogHeaders(request.Headers);
@@ -67,5 +84,47 @@ internal class DebugHttpHandler : DelegatingHandler
             return RedactedValue;
 
         return string.Join(", ", headerValues);
+    }
+
+    private static string FormatRequestUri(Uri? requestUri)
+    {
+        if (requestUri is null)
+            return "unknown";
+
+        var text = requestUri.IsAbsoluteUri ? requestUri.AbsoluteUri : requestUri.ToString();
+        var queryStart = text.IndexOf('?', StringComparison.Ordinal);
+        if (queryStart < 0)
+            return text;
+
+        var fragmentStart = text.IndexOf('#', queryStart);
+        var queryEnd = fragmentStart < 0 ? text.Length : fragmentStart;
+        var query = text.Substring(queryStart + 1, queryEnd - queryStart - 1);
+        var fragment = fragmentStart < 0 ? string.Empty : text[fragmentStart..];
+
+        return text[..(queryStart + 1)] + FormatQueryString(query) + fragment;
+    }
+
+    private static string FormatQueryString(string query)
+    {
+        if (string.IsNullOrEmpty(query))
+            return query;
+
+        var parameters = query.Split('&');
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            if (string.IsNullOrEmpty(parameter))
+                continue;
+
+            var separator = parameter.IndexOf('=', StringComparison.Ordinal);
+            var name = separator < 0 ? parameter : parameter[..separator];
+            var decodedName = Uri.UnescapeDataString(name.Replace("+", " ", StringComparison.Ordinal));
+            if (!SensitiveQueryParameterNames.Contains(decodedName))
+                continue;
+
+            parameters[i] = $"{name}={RedactedValue}";
+        }
+
+        return string.Join("&", parameters);
     }
 }

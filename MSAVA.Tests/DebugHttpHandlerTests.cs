@@ -45,6 +45,34 @@ public class DebugHttpHandlerTests
     }
 
     [Test]
+    public async Task SendAsync_RedactsCredentialQueryValuesFromFailedRequestUri()
+    {
+        var logger = new CapturingLogger<DebugHttpHandler>();
+        using var handler = new DebugHttpHandler(
+            logger,
+            new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+        using var invoker = new HttpMessageInvoker(handler);
+        const string requestUri =
+            "https://api.msava.test/api/files/retrieve/meta/all?filter=recent" +
+            "&access_token=super-secret-token&api_key=super-secret-key&sig=super-secret-signature";
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            requestUri);
+
+        using var response = await invoker.SendAsync(request, CancellationToken.None);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        string logText = string.Join(Environment.NewLine, logger.Messages.Select(message => message.Text));
+        logText.Should().Contain("filter=recent");
+        logText.Should().Contain("access_token=[redacted]");
+        logText.Should().Contain("api_key=[redacted]");
+        logText.Should().Contain("sig=[redacted]");
+        logText.Should().NotContain("super-secret-token");
+        logText.Should().NotContain("super-secret-key");
+        logText.Should().NotContain("super-secret-signature");
+    }
+
+    [Test]
     public async Task SendAsync_DoesNotLogSuccessfulRequest()
     {
         var logger = new CapturingLogger<DebugHttpHandler>();
