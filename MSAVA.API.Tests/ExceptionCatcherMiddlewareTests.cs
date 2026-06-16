@@ -40,6 +40,28 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
+    public async Task InvokeAsync_DetachesAndPropagatesCriticalErrorLogPersistenceFailure()
+    {
+        using var dbContext = CreateContext(new InvalidOperationException(
+            "Wrapped cancellation while saving error log.",
+            new OperationCanceledException("Request was canceled.")));
+        var context = CreateHttpContext(dbContext, isDevelopment: false);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw new KeyNotFoundException("File reference missing."));
+
+        var act = async () => await middleware.InvokeAsync(context);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Wrapped cancellation while saving error log.");
+        dbContext.ChangeTracker.Entries<ErrorLogDB>().Should().BeEmpty();
+        dbContext.ErrorLogs.Should().BeEmpty();
+        dbContext.SaveChangesCalls.Should().Be(0);
+        dbContext.SaveChangesAsyncCalls.Should().Be(1);
+        context.Response.ContentType.Should().BeNull();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        (await ReadResponseBodyAsync(context)).Should().BeEmpty();
+    }
+
+    [Test]
     public async Task InvokeAsync_PersistsErrorLogWithAuthenticatedUserWhenDatabaseLoggingSucceeds()
     {
         using var dbContext = CreateContext(throwOnSave: false);
@@ -266,11 +288,18 @@ public class ExceptionCatcherMiddlewareTests
 
     private static TestDataContext CreateContext(bool throwOnSave)
     {
+        return CreateContext(throwOnSave
+            ? new InvalidOperationException("Simulated error-log persistence failure.")
+            : null);
+    }
+
+    private static TestDataContext CreateContext(Exception? saveException)
+    {
         var options = new DbContextOptionsBuilder<BaseDataContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
 
-        return new TestDataContext(options, throwOnSave);
+        return new TestDataContext(options, saveException);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -310,11 +339,11 @@ public class ExceptionCatcherMiddlewareTests
 
     private sealed class TestDataContext : BaseDataContext
     {
-        private readonly bool _throwOnSave;
+        private readonly Exception? _saveException;
 
-        public TestDataContext(DbContextOptions<BaseDataContext> options, bool throwOnSave) : base(options)
+        public TestDataContext(DbContextOptions<BaseDataContext> options, Exception? saveException) : base(options)
         {
-            _throwOnSave = throwOnSave;
+            _saveException = saveException;
         }
 
         public int SaveChangesCalls { get; private set; }
@@ -324,8 +353,8 @@ public class ExceptionCatcherMiddlewareTests
         {
             SaveChangesCalls++;
 
-            if (_throwOnSave)
-                throw new InvalidOperationException("Simulated error-log persistence failure.");
+            if (_saveException is not null)
+                throw _saveException;
 
             return base.SaveChanges();
         }
@@ -334,8 +363,8 @@ public class ExceptionCatcherMiddlewareTests
         {
             SaveChangesAsyncCalls++;
 
-            if (_throwOnSave)
-                throw new InvalidOperationException("Simulated error-log persistence failure.");
+            if (_saveException is not null)
+                throw _saveException;
 
             return base.SaveChangesAsync(cancellationToken);
         }

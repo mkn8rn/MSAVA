@@ -10,6 +10,8 @@ using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
+using System.Data.Common;
+using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
 using MSAVA_BLL.Services.Files;
 
@@ -77,14 +79,33 @@ namespace MSAVA_API.Middleware
                 dbContext.ErrorLogs.Add(errorLog);
                 await dbContext.SaveChangesAsync();
             }
-            catch (Exception logException)
+            catch (Exception logException) when (CriticalExceptionPolicy.ContainsCriticalException(logException))
             {
-                var entry = dbContext.Entry(errorLog);
-                if (entry.State != EntityState.Detached)
-                    entry.State = EntityState.Detached;
+                DetachErrorLog(dbContext, errorLog);
+                throw;
+            }
+            catch (Exception logException) when (IsRecoverableErrorLogPersistenceFailure(logException))
+            {
+                DetachErrorLog(dbContext, errorLog);
 
                 logger.LogError(logException, "Failed to persist error log {ErrorId}", errorId);
             }
+        }
+
+        private static bool IsRecoverableErrorLogPersistenceFailure(Exception exception)
+        {
+            return exception is DbException
+                or DbUpdateException
+                or IOException
+                or InvalidOperationException
+                or UnauthorizedAccessException;
+        }
+
+        private static void DetachErrorLog(BaseDataContext dbContext, ErrorLogDB errorLog)
+        {
+            var entry = dbContext.Entry(errorLog);
+            if (entry.State != EntityState.Detached)
+                entry.State = EntityState.Detached;
         }
 
         private static int GetStatusCode(Exception exception, bool userIsAuthenticated)
