@@ -5,6 +5,7 @@ using MSAVA_App.Services.Session;
 using MSAVA_App.Services.Api;
 using MSAVA_App.Services.Navigation;
 using MSAVA_App.Services.Files;
+using System.Diagnostics.CodeAnalysis;
 
 namespace MSAVA_App;
 public partial class App : Application
@@ -90,23 +91,22 @@ public partial class App : Application
                 {
                     var session = sp.GetRequiredService<LocalSessionService>();
 
-                    if (!(credentials?.TryGetValue(nameof(LoginModel.Username), out var username) ?? false) || string.IsNullOrWhiteSpace(username))
-                        return default;
+                    if (!TryGetNonBlankCredential(credentials, nameof(LoginModel.Username), out var username))
+                        return null;
 
-                    if (!(credentials?.TryGetValue(nameof(LoginModel.Password), out var password) ?? false) || string.IsNullOrWhiteSpace(password))
-                        return default;
+                    if (!TryGetNonBlankCredential(credentials, nameof(LoginModel.Password), out var password))
+                        return null;
 
-                    var token = await session.LoginAsync(username!, password!, cancellationToken);
+                    var token = await session.LoginAsync(username, password, cancellationToken);
                     if (string.IsNullOrWhiteSpace(token))
-                        return default; // fail login
+                        return null;
 
-                    credentials ??= new Dictionary<string, string>();
-                    credentials[TokenCacheExtensions.AccessTokenKey] = token!;
+                    credentials[TokenCacheExtensions.AccessTokenKey] = token;
                     return credentials;
                 })
                 .Refresh((sp, tokenDictionary, cancellationToken) =>
                 {
-                    return ValueTask.FromResult<IDictionary<string, string>?>(default);
+                    return ValueTask.FromResult<IDictionary<string, string>?>(null);
                 }), name: "CustomAuth")
                 )
                 .ConfigureServices((context, services) =>
@@ -137,6 +137,26 @@ public partial class App : Application
         {
             Url = configuration[ApiClientOptions.UrlKey]
         };
+    }
+
+    private static bool TryGetNonBlankCredential(
+        [NotNullWhen(true)] IDictionary<string, string>? credentials,
+        string key,
+        [NotNullWhen(true)] out string? value)
+    {
+        value = null;
+
+        if (credentials is null)
+            return false;
+
+        if (!credentials.TryGetValue(key, out string? candidate))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        value = candidate;
+        return true;
     }
 
     private static void RegisterRoutes(IViewRegistry views, IRouteRegistry routes)

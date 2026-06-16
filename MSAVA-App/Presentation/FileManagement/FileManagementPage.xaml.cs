@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
@@ -8,6 +7,7 @@ using System.IO;
 using MSAVA_App.Services.Pickers;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Services;
 
 namespace MSAVA_App.Presentation.FileManagement;
@@ -16,12 +16,20 @@ public sealed partial class FileManagementPage : Page
 {
     private bool _loadedOnce;
     private FileManagementModel? _vm;
+    private readonly ILogger<FileManagementPage> _logger;
 
     private Storyboard? _progressStoryboard;
     private const int InfoBarDurationMs = 10_000;
 
     public FileManagementPage()
+        : this(NullLogger<FileManagementPage>.Instance)
     {
+    }
+
+    [ActivatorUtilitiesConstructor]
+    public FileManagementPage(ILogger<FileManagementPage> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.InitializeComponent();
         this.Loaded += FileManagementPage_Loaded;
         this.Unloaded += FileManagementPage_Unloaded;
@@ -135,7 +143,7 @@ public sealed partial class FileManagementPage : Page
             }
             catch (Exception ex) when (!AppCriticalExceptionPolicy.ContainsCriticalException(ex))
             {
-                Debug.WriteLine($"Failed to stop upload result progress animation: {ex}");
+                _logger.LogWarning(ex, "Failed to stop upload result progress animation.");
             }
             _progressStoryboard = null;
         }

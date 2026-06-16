@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using System.Text.Json;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using MSAVA_App.Models;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Services.Files;
@@ -195,21 +196,64 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void AppSource_DoesNotUseAdHocDiagnosticWrites()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string[] diagnosticWrites =
+        [
+            "Debug.WriteLine",
+            "Trace.WriteLine",
+            "Console.WriteLine",
+            "Console.Error.WriteLine"
+        ];
+
+        var references = EnumerateAppSourceFiles(repositoryRoot)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => diagnosticWrites.Any(marker =>
+                sourceLine.Line.Contains(marker, StringComparison.Ordinal)))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        references.Should().BeEmpty(
+            "app diagnostics should go through injected loggers so failures are visible in the configured logging pipeline");
+    }
+
+    [Test]
+    public void AppSource_DoesNotUseIdentifierNullForgivingSuppressions()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        var nullForgivingIdentifier = new Regex(@"\b[A-Za-z_][A-Za-z0-9_]*!(?!=)", RegexOptions.Compiled);
+
+        var suppressions = EnumerateAppSourceFiles(repositoryRoot)
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => nullForgivingIdentifier.IsMatch(sourceLine.Line))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        suppressions.Should().BeEmpty(
+            "app code should use nullability flow, nullable contracts, or explicit validation helpers instead of suffix null-forgiving operators");
+    }
+
+    [Test]
     public void AppCode_DoesNotExposeGlobalServiceProvider()
     {
         string repositoryRoot = FindRepositoryRoot();
-        string appDirectory = Path.Combine(repositoryRoot, "MSAVA-App");
 
-        var globalServiceProviderReferences = Directory
-            .EnumerateFiles(appDirectory, "*.cs", SearchOption.AllDirectories)
-            .Where(file =>
-            {
-                string relativePath = Path.GetRelativePath(repositoryRoot, file);
-                string[] segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-                return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase) &&
-                    !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
-            })
+        var globalServiceProviderReferences = EnumerateAppSourceFiles(repositoryRoot)
             .SelectMany(file => File
                 .ReadLines(file)
                 .Select((line, index) => new
@@ -449,6 +493,22 @@ public class ProjectConfigurationTests
 
                 return !excludedSegments.Any(excludedSegment =>
                     segments.Contains(excludedSegment, StringComparer.OrdinalIgnoreCase));
+            });
+    }
+
+    private static IEnumerable<string> EnumerateAppSourceFiles(string repositoryRoot)
+    {
+        string appDirectory = Path.Combine(repositoryRoot, "MSAVA-App");
+
+        return Directory
+            .EnumerateFiles(appDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(file =>
+            {
+                string relativePath = Path.GetRelativePath(repositoryRoot, file);
+                string[] segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase) &&
+                    !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
             });
     }
 
