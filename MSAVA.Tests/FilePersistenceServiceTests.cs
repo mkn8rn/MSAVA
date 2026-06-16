@@ -19,6 +19,8 @@ namespace MSAVA_App.Tests;
 
 public class FilePersistenceServiceTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 12, 45, 0, TimeSpan.Zero);
+
     [Test]
     public async Task CreateFileFromStreamAsync_RemovesNewMetadataAndContentWhenDatabaseSaveFails()
     {
@@ -347,7 +349,11 @@ public class FilePersistenceServiceTests
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
             var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
-            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var service = CreateService(
+                context,
+                metadataStore,
+                sessionUser.Id,
+                timeProvider: new FixedTimeProvider(FixedNow));
             var dto = CreateStreamDto(content, accessGroup.Id);
             dto.FileName = "  normalized-name  ";
             dto.Description = "  normalized description  ";
@@ -363,6 +369,12 @@ public class FilePersistenceServiceTests
             fileData.Description.Should().Be("normalized description");
             fileData.Tags.Should().Equal("alpha", "beta");
             fileData.Categories.Should().Equal("reference");
+            fileData.SavedAt.Should().Be(FixedNow.UtcDateTime);
+            fileData.LastModifiedAt.Should().Be(FixedNow.UtcDateTime);
+            metadataStore.GetByFileHash(hash, "txt")
+                .Should()
+                .ContainSingle(record => record.RefId == fileRefId)
+                .Which.CreatedAt.Should().Be(FixedNow.UtcDateTime);
         }
         finally
         {
@@ -578,7 +590,11 @@ public class FilePersistenceServiceTests
             using var context = CreateContext();
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
             var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
-            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var service = CreateService(
+                context,
+                metadataStore,
+                sessionUser.Id,
+                timeProvider: new FixedTimeProvider(FixedNow));
             var dto = CreateFetchDto(tempFilePath, accessGroup.Id);
             dto.FileName = "  normalized-fetch-name  ";
             dto.Description = "  normalized fetch description  ";
@@ -594,6 +610,12 @@ public class FilePersistenceServiceTests
             fileData.Description.Should().Be("normalized fetch description");
             fileData.Tags.Should().Equal("fetched");
             fileData.Categories.Should().Equal("imports", "tests");
+            fileData.SavedAt.Should().Be(FixedNow.UtcDateTime);
+            fileData.LastModifiedAt.Should().Be(FixedNow.UtcDateTime);
+            metadataStore.GetByFileHash(hash, "txt")
+                .Should()
+                .ContainSingle(record => record.RefId == fileRefId)
+                .Which.CreatedAt.Should().Be(FixedNow.UtcDateTime);
             File.Exists(tempFilePath).Should().BeFalse();
         }
         finally
@@ -849,10 +871,11 @@ public class FilePersistenceServiceTests
         MetadataStore metadataStore,
         Guid? sessionUserId = null,
         bool isBanned = false,
-        long maximumFileSizeBytes = FileSizePolicy.MaximumFileSizeBytes)
+        long maximumFileSizeBytes = FileSizePolicy.MaximumFileSizeBytes,
+        TimeProvider? timeProvider = null)
     {
         var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
-        var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var serviceLogger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context, timeProvider);
         SessionDTO? session = null;
 
         if (sessionUserId is not null)
@@ -879,7 +902,8 @@ public class FilePersistenceServiceTests
             new TestRequestSessionAccessor(session),
             serviceLogger,
             NullLogger<FilePersistenceService>.Instance,
-            maximumFileSizeBytes);
+            maximumFileSizeBytes,
+            timeProvider);
     }
 
     private static (UserDB User, AccessGroupDB AccessGroup) SeedUserWithAccessGroup(BaseDataContext context)
@@ -1029,5 +1053,10 @@ public class FilePersistenceServiceTests
         {
             throw new NotSupportedException();
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

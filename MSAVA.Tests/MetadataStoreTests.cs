@@ -7,6 +7,8 @@ namespace MSAVA_App.Tests;
 
 public class MetadataStoreTests
 {
+    private static readonly DateTime FixedUtcNow = new(2026, 6, 16, 13, 0, 0, DateTimeKind.Utc);
+
     [Test]
     public void GetByFileHash_ReturnsRecordsForHashAndExtension()
     {
@@ -54,6 +56,31 @@ public class MetadataStoreTests
             store.GetByRefId(firstRecord.RefId).Should().BeNull();
             store.GetByRefId(secondRecord.RefId).Should().NotBeNull();
             store.Exists(sharedHash, "txt").Should().BeTrue();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public void GetByRefId_ReturnsCreatedAtAsUtc()
+    {
+        string metadataDirectory = CreateTempDirectory();
+        byte[] fileHash = SHA256.HashData(Encoding.UTF8.GetBytes($"utc-created-at-{Guid.NewGuid()}"));
+        var record = CreateRecord(fileHash);
+        record.CreatedAt = FixedUtcNow;
+
+        try
+        {
+            using var store = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            store.AddMetadata(record);
+
+            var saved = store.GetByRefId(record.RefId);
+
+            saved.Should().NotBeNull();
+            saved!.CreatedAt.Should().Be(FixedUtcNow);
+            saved.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
         }
         finally
         {

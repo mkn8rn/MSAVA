@@ -47,6 +47,8 @@ public class MetadataStore : IDisposable
     /// </summary>
     public void AddMetadata(SavedFileMetaRecord record)
     {
+        ArgumentNullException.ThrowIfNull(record);
+        record.CreatedAt = NormalizeUtc(record.CreatedAt);
         _files.Insert(record);
     }
 
@@ -55,7 +57,8 @@ public class MetadataStore : IDisposable
     /// </summary>
     public SavedFileMetaRecord? GetByRefId(Guid refId)
     {
-        return _files.FindById(refId);
+        var record = _files.FindById(refId);
+        return record is null ? null : NormalizeRecord(record);
     }
 
     /// <summary>
@@ -64,7 +67,9 @@ public class MetadataStore : IDisposable
     public IEnumerable<SavedFileMetaRecord> GetByFileHash(byte[] fileHash, string fileExtension)
     {
         var hashHex = Convert.ToHexString(fileHash);
-        return _files.Find(x => x.FileHashHex == hashHex && x.FileExtension == fileExtension);
+        return _files
+            .Find(x => x.FileHashHex == hashHex && x.FileExtension == fileExtension)
+            .Select(NormalizeRecord);
     }
 
     /// <summary>
@@ -72,7 +77,9 @@ public class MetadataStore : IDisposable
     /// </summary>
     public IEnumerable<SavedFileMetaRecord> GetByAccessGroup(Guid accessGroupId)
     {
-        return _files.Find(x => x.AccessGroupId == accessGroupId);
+        return _files
+            .Find(x => x.AccessGroupId == accessGroupId)
+            .Select(NormalizeRecord);
     }
 
     /// <summary>
@@ -101,5 +108,21 @@ public class MetadataStore : IDisposable
         _disposed = true;
 
         _db.Dispose();
+    }
+
+    private static SavedFileMetaRecord NormalizeRecord(SavedFileMetaRecord record)
+    {
+        record.CreatedAt = NormalizeUtc(record.CreatedAt);
+        return record;
+    }
+
+    private static DateTime NormalizeUtc(DateTime timestamp)
+    {
+        return timestamp.Kind switch
+        {
+            DateTimeKind.Utc => timestamp,
+            DateTimeKind.Local => timestamp.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)
+        };
     }
 }

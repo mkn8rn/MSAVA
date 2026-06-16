@@ -240,7 +240,8 @@ public static class MappingUtils
         ulong sizeInBytes,
         Guid originalCreator,
         Guid lastModifiedBy,
-        JsonDocument metadata)
+        JsonDocument metadata,
+        DateTime utcNow)
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
@@ -249,15 +250,14 @@ public static class MappingUtils
         var mimeType = MetadataExtractor.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
-        var now = DateTime.UtcNow;
 
         return new SavedFileDataDB
         {
             Id = Guid.NewGuid(),
             FileReferenceId = savedFileDb.Id,
             SizeInBytes = sizeInBytes,
-            SavedAt = now,
-            LastModifiedAt = now,
+            SavedAt = utcNow,
+            LastModifiedAt = utcNow,
             LastModifiedById = lastModifiedBy,
             Checksum = checksum,
             Name = dto.FileName,
@@ -278,22 +278,22 @@ public static class MappingUtils
         SavedFileReferenceDB savedFileDb,
         ulong sizeInBytes,
         Guid originalCreator,
-        Guid lastModifiedBy)
+        Guid lastModifiedBy,
+        DateTime utcNow)
     {
         var checksum = BytesToHexString(savedFileDb.FileHash);
         var fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
         var mimeType = MetadataExtractor.GetContentType(fileExtension);
         var tags = dto.Tags?.ToArray() ?? [];
         var categories = dto.Categories?.ToArray() ?? [];
-        var now = DateTime.UtcNow;
 
         return new SavedFileDataDB
         {
             Id = Guid.NewGuid(),
             FileReferenceId = savedFileDb.Id,
             SizeInBytes = sizeInBytes,
-            SavedAt = now,
-            LastModifiedAt = now,
+            SavedAt = utcNow,
+            LastModifiedAt = utcNow,
             LastModifiedById = lastModifiedBy,
             Checksum = checksum,
             Name = dto.FileName,
@@ -338,7 +338,7 @@ public static class MappingUtils
         };
     }
 
-    public static SavedFileMetaRecord MapSavedFileMetaRecord(SavedFileReferenceDB db)
+    public static SavedFileMetaRecord MapSavedFileMetaRecord(SavedFileReferenceDB db, DateTime utcNow)
     {
         return new SavedFileMetaRecord
         {
@@ -347,7 +347,7 @@ public static class MappingUtils
             FileExtension = db.FileExtension.ToString().TrimStart('_').ToLowerInvariant(),
             PublicDownload = db.PublicDownload,
             AccessGroupId = db.AccessGroupId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = utcNow
         };
     }
 }

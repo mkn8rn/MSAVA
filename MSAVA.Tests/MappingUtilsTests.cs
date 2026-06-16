@@ -9,6 +9,8 @@ namespace MSAVA_App.Tests;
 
 public class MappingUtilsTests
 {
+    private static readonly DateTime FixedNow = new(2026, 6, 16, 12, 30, 0, DateTimeKind.Utc);
+
     [Test]
     public void MapSavedFileReferenceDB_FromStream_MapsReferenceFields()
     {
@@ -188,10 +190,13 @@ public class MappingUtilsTests
             (ulong)content.Length,
             Guid.NewGuid(),
             Guid.NewGuid(),
-            MetadataExtractor.ExtractMetadata(stream, "txt", content.Length));
+            MetadataExtractor.ExtractMetadata(stream, "txt", content.Length),
+            FixedNow);
 
         data.FileExtension.Should().Be("txt");
         data.MimeType.Should().Be("text/plain");
+        data.SavedAt.Should().Be(FixedNow);
+        data.LastModifiedAt.Should().Be(FixedNow);
         data.Metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeTrue();
         data.Metadata.RootElement.GetProperty("Type").GetString().Should().Be("Text");
     }
@@ -225,16 +230,34 @@ public class MappingUtilsTests
                 fileReference,
                 11,
                 Guid.NewGuid(),
-                Guid.NewGuid());
+                Guid.NewGuid(),
+                FixedNow);
 
             data.FileExtension.Should().Be("txt");
             data.MimeType.Should().Be("text/plain");
+            data.SavedAt.Should().Be(FixedNow);
+            data.LastModifiedAt.Should().Be(FixedNow);
         }
         finally
         {
             if (File.Exists(dto.TempFilePath))
                 File.Delete(dto.TempFilePath);
         }
+    }
+
+    [Test]
+    public void MapSavedFileMetaRecord_UsesProvidedTimestamp()
+    {
+        var fileReference = CreateFileReference(SHA256.HashData(Encoding.UTF8.GetBytes("metadata-record")));
+
+        var metaRecord = MappingUtils.MapSavedFileMetaRecord(fileReference, FixedNow);
+
+        metaRecord.RefId.Should().Be(fileReference.Id);
+        metaRecord.FileHash.Should().Equal(fileReference.FileHash);
+        metaRecord.FileExtension.Should().Be("txt");
+        metaRecord.AccessGroupId.Should().Be(fileReference.AccessGroupId);
+        metaRecord.PublicDownload.Should().Be(fileReference.PublicDownload);
+        metaRecord.CreatedAt.Should().Be(FixedNow);
     }
 
     private static SavedFileReferenceDB CreateFileReference(byte[] hash)

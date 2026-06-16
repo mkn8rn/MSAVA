@@ -22,20 +22,23 @@ public class FilePersistenceService
     private readonly ServiceLogger _serviceLogger;
     private readonly ILogger<FilePersistenceService> _logger;
     private readonly long _maximumFileSizeBytes;
+    private readonly TimeProvider _timeProvider;
 
     public FilePersistenceService(
         BaseDataContext context,
         FileManager fileManager,
         IRequestSessionAccessor requestSessionAccessor,
         ServiceLogger serviceLogger,
-        ILogger<FilePersistenceService> logger)
+        ILogger<FilePersistenceService> logger,
+        TimeProvider? timeProvider = null)
         : this(
             context,
             fileManager,
             requestSessionAccessor,
             serviceLogger,
             logger,
-            FileSizePolicy.MaximumFileSizeBytes)
+            FileSizePolicy.MaximumFileSizeBytes,
+            timeProvider)
     {
     }
 
@@ -45,7 +48,8 @@ public class FilePersistenceService
         IRequestSessionAccessor requestSessionAccessor,
         ServiceLogger serviceLogger,
         ILogger<FilePersistenceService> logger,
-        long maximumFileSizeBytes)
+        long maximumFileSizeBytes,
+        TimeProvider? timeProvider = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _fileManager = fileManager ?? throw new ArgumentNullException(nameof(fileManager));
@@ -53,6 +57,7 @@ public class FilePersistenceService
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _maximumFileSizeBytes = FileSizePolicy.RequireValidMaximum(maximumFileSizeBytes);
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     internal long MaximumFileSizeBytes => _maximumFileSizeBytes;
@@ -73,14 +78,15 @@ public class FilePersistenceService
                 _maximumFileSizeBytes,
                 cancellationToken);
             var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
-            var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
+            DateTime utcNow = GetUtcNow();
+            var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb, utcNow);
             string fileExtension = FileExtensionUtils.GetFileExtension(savedFileDb);
             JsonDocument metadata = ExtractMetadataFromTempFile(tempFilePath, fileExtension, fileLength);
 
             return await PersistFileRegistrationAsync(
                 savedFileDb,
                 metaRecord,
-                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId, metadata),
+                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId, metadata, utcNow),
                 tempFilePath,
                 sessionUserId,
                 cancellationToken);
@@ -106,12 +112,13 @@ public class FilePersistenceService
             FileSizePolicy.EnsureWithinMaximum(fileLength, _maximumFileSizeBytes);
             byte[] fileHash = await ComputeFileHashAsync(tempFilePath, cancellationToken);
             var savedFileDb = MappingUtils.MapSavedFileReferenceDB(dto, fileHash);
-            var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb);
+            DateTime utcNow = GetUtcNow();
+            var metaRecord = MappingUtils.MapSavedFileMetaRecord(savedFileDb, utcNow);
 
             return await PersistFileRegistrationAsync(
                 savedFileDb,
                 metaRecord,
-                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId),
+                () => MappingUtils.MapSavedFileDataDB(dto, savedFileDb, (ulong)fileLength, sessionUserId, sessionUserId, utcNow),
                 tempFilePath,
                 sessionUserId,
                 cancellationToken);
@@ -318,5 +325,10 @@ public class FilePersistenceService
         var entry = _context.Entry(entity);
         if (entry.State != EntityState.Detached)
             entry.State = EntityState.Detached;
+    }
+
+    private DateTime GetUtcNow()
+    {
+        return _timeProvider.GetUtcNow().UtcDateTime;
     }
 }
