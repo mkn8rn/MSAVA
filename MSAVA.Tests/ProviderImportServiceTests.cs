@@ -910,6 +910,50 @@ public class ProviderImportServiceTests
         }
     }
 
+    [TestCase("video", true)]
+    [TestCase("audio", false)]
+    public async Task YouTubeImportAsync_RejectsUnsupportedMuxContainerBeforeCopyingStreams(
+        string streamType,
+        bool invalidVideoContainer)
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var youTubeClient = new UnsupportedMuxContainerYouTubeDownloadClient(invalidVideoContainer);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = accessGroup.Id,
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage(
+                    $"YouTube {streamType} response file extension is not supported: FileExtension 'bin' is not supported.");
+
+            youTubeClient.ManifestCalls.Should().Be(1);
+            youTubeClient.CopyCalls.Should().Be(0);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     [Test]
     public async Task YouTubeImportAsync_RejectsOversizeStreamWhileCopyingToTempFile()
     {
@@ -1403,6 +1447,37 @@ public class ProviderImportServiceTests
                 [new YouTubeStreamInfo(new object(), "bin", "720p", 720, 1_500)],
                 [],
                 []));
+        }
+
+        public Task CopyToAsync(
+            YouTubeStreamInfo streamInfo,
+            Stream destination,
+            CancellationToken cancellationToken)
+        {
+            CopyCalls++;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class UnsupportedMuxContainerYouTubeDownloadClient(
+        bool invalidVideoContainer) : IYouTubeDownloadClient
+    {
+        public int ManifestCalls { get; private set; }
+        public int CopyCalls { get; private set; }
+
+        public Task<YouTubeDownloadManifest> GetDownloadManifestAsync(
+            string youtubeUrl,
+            CancellationToken cancellationToken)
+        {
+            ManifestCalls++;
+            string videoContainer = invalidVideoContainer ? "bin" : "webm";
+            string audioContainer = invalidVideoContainer ? "m4a" : "bin";
+
+            return Task.FromResult(new YouTubeDownloadManifest(
+                "Unsupported Mux Container Video",
+                [],
+                [new YouTubeStreamInfo(new object(), videoContainer, "720p", 720, 1_500)],
+                [new YouTubeStreamInfo(new object(), audioContainer, null, 0, 128)]));
         }
 
         public Task CopyToAsync(

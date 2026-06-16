@@ -137,8 +137,12 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         var videoStream = GetBestVideoStream(videoStreams, dto.VideoQuality);
         var audioStream = GetBestAudioStream(audioStreams, dto.AudioQuality);
 
-        string videoFormat = videoStream.ContainerName;
-        string audioFormat = audioStream.ContainerName;
+        string videoFormat = ProviderFileType.RequireSupportedExtension(
+            "YouTube video",
+            videoStream.ContainerName);
+        string audioFormat = ProviderFileType.RequireSupportedExtension(
+            "YouTube audio",
+            audioStream.ContainerName);
 
         string videoTemp = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         string audioTemp = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
