@@ -203,8 +203,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     {
         var extensionType = MappingUtils.ParseSupportedFileExtension(extension);
 
-        var matchingReferences = _context.FileRefs
-            .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType);
+        var matchingReferences = CompleteReferencesForContent(fileHash, extensionType);
 
         if (isAdmin)
             return await FileReferenceSelectionPolicy.OrderForStableSelection(matchingReferences)
@@ -222,9 +221,20 @@ public partial class FileDeduplicationService : IFileDeduplicationService
     {
         var extensionType = MappingUtils.ParseSupportedFileExtension(extension);
 
-        return await FileReferenceSelectionPolicy.OrderForStableSelection(_context.FileRefs
-                .Where(fr => fr.FileHash == fileHash && fr.FileExtension == extensionType))
+        return await FileReferenceSelectionPolicy.OrderForStableSelection(
+                CompleteReferencesForContent(fileHash, extensionType))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private IQueryable<SavedFileReferenceDB> CompleteReferencesForContent(
+        byte[] fileHash,
+        FileExtensionType extensionType)
+    {
+        return _context.FileRefs
+            .Where(fr =>
+                fr.FileHash == fileHash &&
+                fr.FileExtension == extensionType &&
+                _context.FileData.Any(fileData => fileData.FileReferenceId == fr.Id));
     }
 
     private async Task<SavedFileReferenceDB> CreateNewReferenceAsync(
@@ -236,10 +246,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         Guid accessGroupId,
         CancellationToken cancellationToken)
     {
-        // Get existing file data for metadata
-        var existingData = await _context.FileData
-            .Where(fd => fd.FileReferenceId == existingReference.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        var existingData = await GetRequiredFileDataAsync(existingReference.Id, cancellationToken);
 
         // Create new reference
         var newReference = new SavedFileReferenceDB
@@ -264,11 +271,11 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         {
             Id = Guid.NewGuid(),
             FileReferenceId = newReference.Id,
-            SizeInBytes = existingData?.SizeInBytes ?? 0,
+            SizeInBytes = existingData.SizeInBytes,
             Checksum = Convert.ToHexString(fileHash),
             Name = fileName,
             Description = description,
-            MimeType = existingData?.MimeType ?? MetadataExtractor.GetContentType(extension),
+            MimeType = existingData.MimeType,
             FileExtension = extension,
             Tags = tags.ToArray(),
             Categories = categories.ToArray(),
@@ -310,6 +317,17 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         return newReference;
+    }
+
+    private async Task<SavedFileDataDB> GetRequiredFileDataAsync(
+        Guid fileReferenceId,
+        CancellationToken cancellationToken)
+    {
+        var fileData = await _context.FileData
+            .SingleOrDefaultAsync(fd => fd.FileReferenceId == fileReferenceId, cancellationToken);
+
+        return fileData ?? throw new InvalidOperationException(
+            $"File reference {fileReferenceId} cannot be reused because it has no file data row.");
     }
 
     private async Task<ReferenceAccessGroupResolution> ResolveReferenceAccessGroupAsync(

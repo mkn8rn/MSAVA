@@ -330,10 +330,12 @@ public class FileDeduplicationServiceTests
             var existingOwner = CreateUser("owner");
             var existingGroup = CreateAccessGroup(existingOwner, "existing");
             var existingReference = CreateFileReference(contentHash, existingGroup.Id);
+            var existingData = CreateFileData(existingReference, existingOwner.Id);
 
             context.Users.AddRange(admin, existingOwner);
             context.AccessGroups.Add(existingGroup);
             context.FileRefs.Add(existingReference);
+            context.FileData.Add(existingData);
             await context.SaveChangesAsync();
 
             var service = CreateService(context, metadataStore, new SessionDTO
@@ -422,6 +424,56 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_ReturnsNotFoundWhenSqlReferenceHasNoFileData()
+    {
+        var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-missing-file-data-{Guid.NewGuid()}"));
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+
+            var sessionUser = CreateUser("session");
+            var existingOwner = CreateUser("owner");
+            var targetGroup = CreateAccessGroup(sessionUser, "target");
+            var existingGroup = CreateAccessGroup(existingOwner, "existing");
+            var referenceWithoutData = CreateFileReference(contentHash, existingGroup.Id);
+
+            context.Users.AddRange(sessionUser, existingOwner);
+            context.AccessGroups.AddRange(targetGroup, existingGroup);
+            context.FileRefs.Add(referenceWithoutData);
+            await context.SaveChangesAsync();
+
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = Convert.ToHexString(contentHash),
+                FileExtension = "txt",
+                AccessGroupId = targetGroup.Id,
+                FileName = "missing-data-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.FileExists.Should().BeFalse();
+            result.UploadRequired.Should().BeTrue();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.Error.Should().BeNull();
+            context.FileRefs.Should().ContainSingle(reference => reference.Id == referenceWithoutData.Id);
+            context.FileData.Should().BeEmpty();
+            metadataStore.GetByAccessGroup(targetGroup.Id).Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsDeterministicExistingAccessibleReference()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-deterministic-existing-{Guid.NewGuid()}"));
@@ -437,12 +489,15 @@ public class FileDeduplicationServiceTests
             var secondGroup = CreateAccessGroup(sessionUser, "second");
             var laterReference = CreateFileReference(contentHash, secondGroup.Id);
             laterReference.Id = Guid.Parse("00000000-0000-0000-0000-000000000002");
+            var laterData = CreateFileData(laterReference, sessionUser.Id);
             var earlierReference = CreateFileReference(contentHash, firstGroup.Id);
             earlierReference.Id = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            var earlierData = CreateFileData(earlierReference, sessionUser.Id);
 
             context.Users.Add(sessionUser);
             context.AccessGroups.AddRange(firstGroup, secondGroup);
             context.FileRefs.AddRange(laterReference, earlierReference);
+            context.FileData.AddRange(laterData, earlierData);
             await context.SaveChangesAsync();
 
             var service = CreateService(context, metadataStore, sessionUser.Id);
