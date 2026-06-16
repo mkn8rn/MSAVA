@@ -427,6 +427,7 @@ public class FileDeduplicationServiceTests
             var existingGroup = CreateAccessGroup(existingOwner, "existing");
             var existingReference = CreateFileReference(contentHash, existingGroup.Id);
             var existingData = CreateFileData(existingReference, existingOwner.Id);
+            existingData.Metadata = JsonDocument.Parse("""{"origin":"existing"}""");
             var existingMetadata = CreateMetadata(existingReference, existingGroup.Id);
 
             context.Users.AddRange(sessionUser, existingOwner);
@@ -784,6 +785,8 @@ public class FileDeduplicationServiceTests
             newData.Description.Should().Be("normalized dedupe description");
             newData.Tags.Should().Equal("copy", "shared");
             newData.Categories.Should().Equal("tests");
+            newData.Metadata.Should().NotBeSameAs(existingData.Metadata);
+            newData.Metadata.RootElement.GetRawText().Should().Be(existingData.Metadata.RootElement.GetRawText());
             newData.SavedAt.Should().Be(FixedNow.UtcDateTime);
             newData.LastModifiedAt.Should().Be(FixedNow.UtcDateTime);
             metadataStore.GetByAccessGroup(targetGroup.Id)

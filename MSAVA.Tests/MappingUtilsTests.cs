@@ -237,6 +237,18 @@ public class MappingUtilsTests
             data.MimeType.Should().Be("text/plain");
             data.SavedAt.Should().Be(FixedNow);
             data.LastModifiedAt.Should().Be(FixedNow);
+
+            var secondData = MappingUtils.MapSavedFileDataDB(
+                dto,
+                fileReference,
+                11,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                FixedNow);
+
+            data.Metadata.Should().NotBeSameAs(secondData.Metadata);
+            data.Metadata.RootElement.GetRawText().Should().Be("{}");
+            secondData.Metadata.RootElement.GetRawText().Should().Be("{}");
         }
         finally
         {

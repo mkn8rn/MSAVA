@@ -262,7 +262,9 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             FileExtension = extension,
             Tags = tags.ToArray(),
             Categories = categories.ToArray(),
-            Metadata = existingData?.Metadata ?? JsonDocument.Parse("{}"),
+            Metadata = existingData is not null
+                ? JsonDocumentUtils.Clone(existingData.Metadata)
+                : JsonDocumentUtils.CreateEmpty(),
             PublicViewing = request.PublicViewing,
             OriginalCreator = userId,
             LastModifiedById = userId,

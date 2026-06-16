@@ -231,9 +231,6 @@ public static class MappingUtils
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
-    // Cached empty JsonDocument to avoid repeated parsing
-    private static readonly JsonDocument EmptyJsonDocument = JsonDocument.Parse("{}");
-
     public static SavedFileDataDB MapSavedFileDataDB(
         SaveFileFromStreamDTO dto,
         SavedFileReferenceDB savedFileDb,
@@ -303,7 +300,7 @@ public static class MappingUtils
             Tags = tags,
             Categories = categories,
             OriginalCreator = originalCreator,
-            Metadata = EmptyJsonDocument,
+            Metadata = JsonDocumentUtils.CreateEmpty(),
             PublicViewing = dto.PublicViewing,
             DownloadCount = 0,
         };
