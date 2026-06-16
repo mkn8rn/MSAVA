@@ -61,7 +61,12 @@ namespace MSAVA_BLL.Services
                 };
                 _context.Users.Add(adminUser);
                 await _context.SaveChangesAsync(cancellationToken);
-                await _serviceLogger.WriteLogAsync(UserLogAction.AccountCreation, $"Admin user '{adminUsername}' created during seeding.", adminUser.Id, null);
+                await _serviceLogger.WriteLogAsync(
+                    UserLogAction.AccountCreation,
+                    $"Admin user '{adminUsername}' created during seeding.",
+                    adminUser.Id,
+                    null,
+                    cancellationToken);
             }
 
             if (EnsureConfiguredAdminIsActive(adminUser))

@@ -132,7 +132,8 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             $"Created reference to existing file: {hashHex}.{extension}",
             sessionUserId,
             $"{hashHex}.{extension}",
-            newReference.Id);
+            newReference.Id,
+            cancellationToken);
 
         return HashCheckResult.NewReference(hashHex, newReference.Id);
     }

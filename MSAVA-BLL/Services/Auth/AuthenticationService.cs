@@ -59,7 +59,12 @@ public class AuthenticationService : IAuthenticationService
             throw new UnauthorizedAccessException("Users must be whitelisted before logging in.");
 
         JwtDB token = await GenerateJwtTokenAsync(user, cancellationToken);
-        await _serviceLogger.WriteLogAsync(UserLogAction.SessionLogIn, $"User {user.Username} logged in successfully.", user.Id, null);
+        await _serviceLogger.WriteLogAsync(
+            UserLogAction.SessionLogIn,
+            $"User {user.Username} logged in successfully.",
+            user.Id,
+            null,
+            cancellationToken);
 
         return new LoginResponseDTO { Token = token.TokenString };
     }
@@ -192,7 +197,12 @@ public class AuthenticationService : IAuthenticationService
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
 
-        await _serviceLogger.WriteLogAsync(UserLogAction.AccountRegistered, $"User {user.Username} registered successfully.", user.Id, null);
+        await _serviceLogger.WriteLogAsync(
+            UserLogAction.AccountRegistered,
+            $"User {user.Username} registered successfully.",
+            user.Id,
+            null,
+            cancellationToken);
 
         return user.Id;
     }

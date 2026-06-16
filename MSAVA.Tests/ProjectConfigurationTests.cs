@@ -409,6 +409,22 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void ProductionServiceLogWrites_PassCallerCancellationToken()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+
+        var logWritesWithoutCancellation = EnumerateProductionSourceFiles(repositoryRoot)
+            .Where(file => !Path.GetFileName(file).Equals(
+                "ServiceLogger.cs",
+                StringComparison.OrdinalIgnoreCase))
+            .SelectMany(file => FindServiceLoggerWritesWithoutCancellation(file, repositoryRoot))
+            .ToList();
+
+        logWritesWithoutCancellation.Should().BeEmpty(
+            "audit-log persistence should observe the same cancellation token as the operation it records");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");
@@ -463,6 +479,77 @@ public class ProjectConfigurationTests
 
         foreach (var property in apiClient.EnumerateObject())
             yield return property.Name;
+    }
+
+    private static IEnumerable<string> FindServiceLoggerWritesWithoutCancellation(
+        string file,
+        string repositoryRoot)
+    {
+        string source = File.ReadAllText(file);
+        const string marker = "_serviceLogger.WriteLogAsync";
+        int searchStart = 0;
+
+        while (true)
+        {
+            int markerIndex = source.IndexOf(marker, searchStart, StringComparison.Ordinal);
+            if (markerIndex < 0)
+                yield break;
+
+            int openParenthesisIndex = source.IndexOf('(', markerIndex);
+            if (openParenthesisIndex < 0)
+                yield break;
+
+            int closeParenthesisIndex = FindMatchingParenthesis(source, openParenthesisIndex);
+            if (closeParenthesisIndex < 0)
+            {
+                yield return $"{Path.GetRelativePath(repositoryRoot, file)}:{GetLineNumber(source, markerIndex)}";
+                yield break;
+            }
+
+            string call = source.Substring(
+                markerIndex,
+                closeParenthesisIndex - markerIndex + 1);
+            if (!call.Contains("cancellationToken", StringComparison.Ordinal))
+                yield return $"{Path.GetRelativePath(repositoryRoot, file)}:{GetLineNumber(source, markerIndex)}";
+
+            searchStart = closeParenthesisIndex + 1;
+        }
+    }
+
+    private static int FindMatchingParenthesis(string source, int openParenthesisIndex)
+    {
+        int depth = 0;
+
+        for (int index = openParenthesisIndex; index < source.Length; index++)
+        {
+            if (source[index] == '(')
+            {
+                depth++;
+                continue;
+            }
+
+            if (source[index] != ')')
+                continue;
+
+            depth--;
+            if (depth == 0)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int GetLineNumber(string source, int index)
+    {
+        int lineNumber = 1;
+
+        for (int i = 0; i < index; i++)
+        {
+            if (source[i] == '\n')
+                lineNumber++;
+        }
+
+        return lineNumber;
     }
 
     private static string FindRepositoryRoot()

@@ -48,6 +48,27 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task CreateAccessGroup_PassesCancellationTokenToDomainAndAuditLogSaves()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        context.Users.Add(owner);
+        await context.SaveChangesAsync();
+        context.SaveChangesAsyncTokens.Clear();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        await service.CreateAccessGroupAsync("Editors", cancellationTokenSource.Token);
+
+        context.SaveChangesAsyncTokens.Should().HaveCount(3);
+        context.SaveChangesAsyncTokens.Should().AllSatisfy(token =>
+            token.Should().Be(cancellationTokenSource.Token));
+    }
+
+    [Test]
     public async Task CreateAccessGroup_RejectsDuplicateNormalizedNameForSameOwnerIgnoringCase()
     {
         using var context = CreateContext();
@@ -305,7 +326,7 @@ public class AccessGroupServiceTests
         target.AccessGroups.Should().ContainSingle(group => group.Id == accessGroup.Id);
     }
 
-    private static BaseDataContext CreateContext()
+    private static TestDataContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<BaseDataContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -435,6 +456,14 @@ public class AccessGroupServiceTests
     {
         public TestDataContext(DbContextOptions<BaseDataContext> options) : base(options)
         {
+        }
+
+        public List<CancellationToken> SaveChangesAsyncTokens { get; } = [];
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            SaveChangesAsyncTokens.Add(cancellationToken);
+            return base.SaveChangesAsync(cancellationToken);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

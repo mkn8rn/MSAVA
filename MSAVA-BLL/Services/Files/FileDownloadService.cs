@@ -49,7 +49,13 @@ public class FileDownloadService : IFileDownloadService
         try
         {
             await IncrementDownloadCountAsync(db.Id, cancellationToken);
-            await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
+            await _serviceLogger.WriteLogAsync(
+                AccessLogActions.AccessViaFileStream,
+                $"User accessed file stream for fileRefId: {db.Id}",
+                session.UserId,
+                fileNameWithExtension,
+                db.Id,
+                cancellationToken);
 
             var result = MappingUtils.MapReturnFileDTO(db, fileStream: fileStream);
             fileStream = null;
@@ -79,7 +85,13 @@ public class FileDownloadService : IFileDownloadService
         string fileNameWithExtension = $"{fileName}.{extension}";
 
         await IncrementDownloadCountAsync(db.Id, cancellationToken);
-        await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file for fileRefId: {db.Id}", session.UserId, fileNameWithExtension, db.Id);
+        await _serviceLogger.WriteLogAsync(
+            AccessLogActions.AccessViaPhysicalFile,
+            $"User accessed physical file for fileRefId: {db.Id}",
+            session.UserId,
+            fileNameWithExtension,
+            db.Id,
+            cancellationToken);
 
         return new PhysicalReturnFileDTO
         {
@@ -102,7 +114,13 @@ public class FileDownloadService : IFileDownloadService
         string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
 
         await IncrementDownloadCountAsync(access.RefId, cancellationToken);
-        await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaPhysicalFile, $"User accessed physical file by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
+        await _serviceLogger.WriteLogAsync(
+            AccessLogActions.AccessViaPhysicalFile,
+            $"User accessed physical file by path: {fileNameWithExtension}",
+            access.Session.UserId,
+            fileNameWithExtension,
+            access.RefId,
+            cancellationToken);
 
         return new PhysicalReturnFileDTO
         {
@@ -126,7 +144,13 @@ public class FileDownloadService : IFileDownloadService
         try
         {
             await IncrementDownloadCountAsync(access.RefId, cancellationToken);
-            await _serviceLogger.WriteLogAsync(AccessLogActions.AccessViaFileStream, $"User accessed file stream by path: {fileNameWithExtension}", access.Session.UserId, fileNameWithExtension, access.RefId);
+            await _serviceLogger.WriteLogAsync(
+                AccessLogActions.AccessViaFileStream,
+                $"User accessed file stream by path: {fileNameWithExtension}",
+                access.Session.UserId,
+                fileNameWithExtension,
+                access.RefId,
+                cancellationToken);
 
             var result = new StreamReturnFileDTO
             {
