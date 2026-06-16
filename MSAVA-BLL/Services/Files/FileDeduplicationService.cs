@@ -7,6 +7,7 @@ using MSAVA_BLL.Utils.Metadata;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
+using MSAVA_Shared.Diagnostics;
 using MSAVA_Shared.Models;
 using System.Text.Json;
 using System.Text.RegularExpressions;

@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
-using MSAVA_BLL.Utils;
+using MSAVA_Shared.Diagnostics;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using TagLib;

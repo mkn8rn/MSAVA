@@ -10,6 +10,7 @@ using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
 using MSAVA_INF.Utils;
+using MSAVA_Shared.Diagnostics;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Files;

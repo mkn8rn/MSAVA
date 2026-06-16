@@ -395,13 +395,14 @@ public class ProjectConfigurationTests
                     LineNumber = index + 1
                 }))
             .Where(sourceLine =>
-                sourceLine.Line.Contains("class CriticalExceptionPolicy", StringComparison.Ordinal))
+                sourceLine.Line.Contains("class CriticalExceptionPolicy", StringComparison.Ordinal) ||
+                sourceLine.Line.Contains("class AppCriticalExceptionPolicy", StringComparison.Ordinal))
             .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
             .ToList();
 
         definitions.Should().BeEquivalentTo(
-            ["MSAVA-BLL\\Utils\\CriticalExceptionPolicy.cs:3"],
-            "critical exception classification should have one implementation so API and BLL filters cannot drift");
+            ["MSAVA-Shared\\Diagnostics\\CriticalExceptionPolicy.cs:3"],
+            "critical exception classification should have one shared implementation so API, BLL, and app filters cannot drift");
     }
 
     [Test]

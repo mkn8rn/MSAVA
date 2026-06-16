@@ -3,6 +3,7 @@ using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Utils;
+using MSAVA_Shared.Diagnostics;
 using MSAVA_Shared.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;

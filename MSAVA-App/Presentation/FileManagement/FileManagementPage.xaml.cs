@@ -8,7 +8,7 @@ using MSAVA_App.Services.Pickers;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.Extensions.Logging.Abstractions;
-using MSAVA_App.Services;
+using MSAVA_Shared.Diagnostics;
 
 namespace MSAVA_App.Presentation.FileManagement;
 
@@ -141,7 +141,7 @@ public sealed partial class FileManagementPage : Page
             {
                 _progressStoryboard.Stop();
             }
-            catch (Exception ex) when (!AppCriticalExceptionPolicy.ContainsCriticalException(ex))
+        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
             {
                 _logger.LogWarning(ex, "Failed to stop upload result progress animation.");
             }

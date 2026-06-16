@@ -1,5 +1,5 @@
 using System.Data.Common;
-using MSAVA_BLL.Utils;
+using MSAVA_Shared.Diagnostics;
 
 namespace MSAVA_API.Authorization;
 

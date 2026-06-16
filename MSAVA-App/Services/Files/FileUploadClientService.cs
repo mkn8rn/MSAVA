@@ -7,8 +7,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using MSAVA_App.Services;
 using MSAVA_App.Services.Api;
+using MSAVA_Shared.Diagnostics;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Services.Files;
@@ -145,7 +145,7 @@ public class FileUploadClientService
 
     private static bool IsRecoverableResponseBodyFailure(Exception exception)
     {
-        if (AppCriticalExceptionPolicy.ContainsCriticalException(exception))
+        if (CriticalExceptionPolicy.ContainsCriticalException(exception))
             return false;
 
         return exception is HttpRequestException

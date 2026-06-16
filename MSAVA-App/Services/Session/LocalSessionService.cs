@@ -6,8 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using MSAVA_Shared.Models;
-using MSAVA_App.Services;
 using MSAVA_App.Services.Api;
+using MSAVA_Shared.Diagnostics;
 
 namespace MSAVA_App.Services.Session;
 public class LocalSessionService
@@ -125,7 +125,7 @@ public class LocalSessionService
 
     private static bool IsRecoverableLoginFailure(Exception exception)
     {
-        if (AppCriticalExceptionPolicy.ContainsNonCancellationCriticalException(exception))
+        if (CriticalExceptionPolicy.ContainsNonCancellationCriticalException(exception))
             return false;
 
         return exception is HttpRequestException

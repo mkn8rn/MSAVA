@@ -1,8 +1,8 @@
 using MSAVA_INF.Models;
 using MSAVA_INF.Contexts;
-using MSAVA_BLL.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using MSAVA_Shared.Diagnostics;
 using System.Data.Common;
 using System.Text;
 
