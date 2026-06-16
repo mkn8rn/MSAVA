@@ -13,6 +13,8 @@ namespace MSAVA_API.Tests;
 
 public class InviteCodeControllerTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 10, 0, 0, TimeSpan.Zero);
+
     [Test]
     public void InviteCodeController_DependsOnInviteCodeServiceInterface()
     {
@@ -43,7 +45,7 @@ public class InviteCodeControllerTests
     public async Task CreateInviteCode_ReturnsServiceResultAndPassesCancellationToken()
     {
         var service = new RecordingInviteCodeService();
-        var controller = new InviteCodeController(service);
+        var controller = new InviteCodeController(service, new FixedTimeProvider(FixedNow));
         using var cancellationTokenSource = new CancellationTokenSource();
 
         var response = await controller.CreateInviteCode(
@@ -54,7 +56,7 @@ public class InviteCodeControllerTests
         var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().Be(service.CreatedInviteCodeId);
         service.CreateMaxUses.Should().Be(4);
-        service.CreateExpiresAt.Should().BeCloseTo(DateTime.UtcNow.AddHours(2), TimeSpan.FromSeconds(5));
+        service.CreateExpiresAt.Should().Be(FixedNow.UtcDateTime.AddHours(2));
         service.CreateCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
@@ -334,6 +336,11 @@ public class InviteCodeControllerTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private sealed class TestDataContext : BaseDataContext

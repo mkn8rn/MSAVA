@@ -113,6 +113,7 @@ builder.Services
     .ConfigurePrimaryHttpMessageHandler(RemoteFileHttpMessageHandlerFactory.Create);
 
 // Register services
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IRequestSessionAccessor, HttpContextRequestSessionAccessor>();
 builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<IFileDownloadService, FileDownloadService>();

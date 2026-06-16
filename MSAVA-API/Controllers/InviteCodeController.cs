@@ -16,10 +16,12 @@ public class InviteCodeController : ControllerBase
     private const string InvalidMaxUsesMessage = "Invite code max uses must be greater than zero.";
 
     private readonly IInviteCodeService _inviteCodeService;
+    private readonly TimeProvider _timeProvider;
 
-    public InviteCodeController(IInviteCodeService inviteCodeService)
+    public InviteCodeController(IInviteCodeService inviteCodeService, TimeProvider? timeProvider = null)
     {
         _inviteCodeService = inviteCodeService ?? throw new ArgumentNullException(nameof(inviteCodeService));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     [HttpGet("remaining-uses/{inviteCodeId:guid}")]
@@ -45,7 +47,7 @@ public class InviteCodeController : ControllerBase
         if (expiresInHours <= 0 || expiresInHours > MaximumInviteCodeLifetimeHours)
             return BadRequest($"Invite code expiration must be between 1 and {MaximumInviteCodeLifetimeHours} hours.");
 
-        var expiresAt = DateTime.UtcNow.AddHours(expiresInHours);
+        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(expiresInHours);
         var id = await _inviteCodeService.CreateNewInviteCodeAsync(maxUses, expiresAt, cancellationToken);
         return Ok(id);
     }

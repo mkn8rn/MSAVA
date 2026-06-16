@@ -14,15 +14,18 @@ public class InviteCodeService
     private readonly BaseDataContext _context;
     private readonly IUserSessionService _userService;
     private readonly ServiceLogger _serviceLogger;
+    private readonly TimeProvider _timeProvider;
 
     public InviteCodeService(
         BaseDataContext context,
         IUserSessionService userService,
-        ServiceLogger serviceLogger)
+        ServiceLogger serviceLogger,
+        TimeProvider? timeProvider = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Guid> CreateNewInviteCodeAsync(
@@ -33,7 +36,9 @@ public class InviteCodeService
         if (maxUses <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxUses), maxUses, "Invite code max uses must be greater than zero.");
 
-        if (expiresAt <= DateTime.UtcNow)
+        DateTime utcNow = GetUtcNow();
+
+        if (expiresAt <= utcNow)
             throw new ArgumentOutOfRangeException(nameof(expiresAt), expiresAt, "Invite code expiration must be in the future.");
 
         SessionDTO session = await GetAuthorizedAdminSessionAsync(cancellationToken);
@@ -42,7 +47,7 @@ public class InviteCodeService
         {
             Id = Guid.NewGuid(),
             OwnerId = session.UserId,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = utcNow,
             ExpiresAt = expiresAt,
             MaxUses = maxUses
         };
@@ -74,7 +79,7 @@ public class InviteCodeService
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
 
-        if (result.ExpiresAt <= DateTime.UtcNow)
+        if (result.ExpiresAt <= GetUtcNow())
             return 0;
 
         return Math.Max(0, result.MaxUses - result.UsedCount);
@@ -98,7 +103,7 @@ public class InviteCodeService
             return false;
 
         // Check expiry and usage
-        return result.ExpiresAt > DateTime.UtcNow && (result.MaxUses - result.UsedCount) > 0;
+        return result.ExpiresAt > GetUtcNow() && (result.MaxUses - result.UsedCount) > 0;
     }
 
     public async Task<List<InviteCodeDTO>> GetAllInviteCodesAsync(CancellationToken cancellationToken = default)
@@ -147,5 +152,10 @@ public class InviteCodeService
             throw new UnauthorizedAccessException("Only active admins can manage invite codes.");
 
         return session;
+    }
+
+    private DateTime GetUtcNow()
+    {
+        return _timeProvider.GetUtcNow().UtcDateTime;
     }
 }

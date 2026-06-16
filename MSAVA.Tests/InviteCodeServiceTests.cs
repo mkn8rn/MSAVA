@@ -11,6 +11,8 @@ namespace MSAVA_App.Tests;
 
 public class InviteCodeServiceTests
 {
+    private static readonly DateTimeOffset FixedNow = new(2026, 6, 16, 10, 0, 0, TimeSpan.Zero);
+
     [Test]
     public async Task CreateNewInviteCode_PersistsInviteCodeForCurrentUser()
     {
@@ -19,14 +21,15 @@ public class InviteCodeServiceTests
         context.Users.Add(owner);
         await context.SaveChangesAsync();
 
-        var service = CreateService(context, owner);
-        var expiresAt = DateTime.UtcNow.AddHours(2);
+        var service = CreateService(context, owner, new FixedTimeProvider(FixedNow));
+        var expiresAt = FixedNow.UtcDateTime.AddHours(2);
 
         var inviteCodeId = await service.CreateNewInviteCodeAsync(maxUses: 3, expiresAt);
 
         var inviteCode = context.InviteCodes.Single();
         inviteCode.Id.Should().Be(inviteCodeId);
         inviteCode.OwnerId.Should().Be(owner.Id);
+        inviteCode.CreatedAt.Should().Be(FixedNow.UtcDateTime);
         inviteCode.MaxUses.Should().Be(3);
         inviteCode.ExpiresAt.Should().Be(expiresAt);
     }
@@ -162,13 +165,13 @@ public class InviteCodeServiceTests
         using var context = CreateContext();
         var admin = CreateUser("admin");
         var inviteCode = CreateInviteCode(admin.Id);
-        inviteCode.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+        inviteCode.ExpiresAt = FixedNow.UtcDateTime;
         inviteCode.MaxUses = 3;
         context.Users.Add(admin);
         context.InviteCodes.Add(inviteCode);
         await context.SaveChangesAsync();
 
-        var service = CreateService(context, admin);
+        var service = CreateService(context, admin, new FixedTimeProvider(FixedNow));
 
         int remainingUses = await service.GetRemainingUsesAsync(inviteCode.Id);
 
@@ -278,15 +281,35 @@ public class InviteCodeServiceTests
     {
         using var context = CreateContext();
         var inviteCode = CreateInviteCode(Guid.NewGuid());
+        inviteCode.ExpiresAt = FixedNow.UtcDateTime.AddMinutes(1);
         context.InviteCodes.Add(inviteCode);
         await context.SaveChangesAsync();
 
         var service = new InviteCodeService(
             context,
             new ThrowingUserSessionService(),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            new FixedTimeProvider(FixedNow));
 
         (await service.IsValidInviteCodeAsync(inviteCode.Id)).Should().BeTrue();
+    }
+
+    [Test]
+    public async Task IsValidInviteCode_ReturnsFalseWhenInviteCodeExpiresAtCurrentTime()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        inviteCode.ExpiresAt = FixedNow.UtcDateTime;
+        context.InviteCodes.Add(inviteCode);
+        await context.SaveChangesAsync();
+
+        var service = new InviteCodeService(
+            context,
+            new ThrowingUserSessionService(),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            new FixedTimeProvider(FixedNow));
+
+        (await service.IsValidInviteCodeAsync(inviteCode.Id)).Should().BeFalse();
     }
 
     [Test]
@@ -297,9 +320,9 @@ public class InviteCodeServiceTests
         context.Users.Add(owner);
         await context.SaveChangesAsync();
 
-        var service = CreateService(context, owner);
+        var service = CreateService(context, owner, new FixedTimeProvider(FixedNow));
 
-        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddMinutes(-1));
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, FixedNow.UtcDateTime);
 
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
             .WithMessage("Invite code expiration must be in the future.*");
@@ -313,9 +336,10 @@ public class InviteCodeServiceTests
         var service = new InviteCodeService(
             context,
             new ThrowingUserSessionService(),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            new FixedTimeProvider(FixedNow));
 
-        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, DateTime.UtcNow.AddMinutes(-1));
+        Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, FixedNow.UtcDateTime);
 
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
             .WithMessage("Invite code expiration must be in the future.*");
@@ -343,12 +367,16 @@ public class InviteCodeServiceTests
             inviteCode.MaxUses == 2);
     }
 
-    private static InviteCodeService CreateService(BaseDataContext context, UserDB sessionUser)
+    private static InviteCodeService CreateService(
+        BaseDataContext context,
+        UserDB sessionUser,
+        TimeProvider? timeProvider = null)
     {
         return new InviteCodeService(
             context,
             new TestUserSessionService(sessionUser),
-            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context));
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            timeProvider);
     }
 
     private static BaseDataContext CreateContext()
@@ -486,6 +514,11 @@ public class InviteCodeServiceTests
                 ExpiresAt = DateTime.UtcNow.AddHours(1)
             });
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private sealed class TestDataContext : BaseDataContext
