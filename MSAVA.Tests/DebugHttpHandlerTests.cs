@@ -73,6 +73,30 @@ public class DebugHttpHandlerTests
     }
 
     [Test]
+    public async Task SendAsync_RedactsRequestUriFragmentFromFailedRequestUri()
+    {
+        var logger = new CapturingLogger<DebugHttpHandler>();
+        using var handler = new DebugHttpHandler(
+            logger,
+            new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+        using var invoker = new HttpMessageInvoker(handler);
+        const string requestUri =
+            "https://api.msava.test/api/auth/callback?state=visible" +
+            "#access_token=super-secret-fragment-token&id_token=super-secret-id-token";
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            requestUri);
+
+        using var response = await invoker.SendAsync(request, CancellationToken.None);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        string logText = string.Join(Environment.NewLine, logger.Messages.Select(message => message.Text));
+        logText.Should().Contain("https://api.msava.test/api/auth/callback?state=visible#[redacted]");
+        logText.Should().NotContain("super-secret-fragment-token");
+        logText.Should().NotContain("super-secret-id-token");
+    }
+
+    [Test]
     public async Task SendAsync_DoesNotLogSuccessfulRequest()
     {
         var logger = new CapturingLogger<DebugHttpHandler>();

@@ -92,16 +92,17 @@ internal class DebugHttpHandler : DelegatingHandler
             return "unknown";
 
         var text = requestUri.IsAbsoluteUri ? requestUri.AbsoluteUri : requestUri.ToString();
-        var queryStart = text.IndexOf('?', StringComparison.Ordinal);
+        var fragmentStart = text.IndexOf('#', StringComparison.Ordinal);
+        var fragment = fragmentStart < 0 ? string.Empty : $"#{RedactedValue}";
+        var textWithoutFragment = fragmentStart < 0 ? text : text[..fragmentStart];
+
+        var queryStart = textWithoutFragment.IndexOf('?', StringComparison.Ordinal);
         if (queryStart < 0)
-            return text;
+            return textWithoutFragment + fragment;
 
-        var fragmentStart = text.IndexOf('#', queryStart);
-        var queryEnd = fragmentStart < 0 ? text.Length : fragmentStart;
-        var query = text.Substring(queryStart + 1, queryEnd - queryStart - 1);
-        var fragment = fragmentStart < 0 ? string.Empty : text[fragmentStart..];
+        var query = textWithoutFragment[(queryStart + 1)..];
 
-        return text[..(queryStart + 1)] + FormatQueryString(query) + fragment;
+        return textWithoutFragment[..(queryStart + 1)] + FormatQueryString(query) + fragment;
     }
 
     private static string FormatQueryString(string query)
