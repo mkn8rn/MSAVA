@@ -54,7 +54,8 @@ namespace MSAVA_API.Middleware
             }
             catch (Exception ex)
             {
-                if (CriticalExceptionPolicy.ContainsCriticalException(ex))
+                if (ex is not OperationCanceledException &&
+                    CriticalExceptionPolicy.ContainsCriticalException(ex))
                 {
                     logger.LogCritical(ex, "Critical exception escaped the API pipeline");
                     throw;
@@ -195,7 +196,7 @@ namespace MSAVA_API.Middleware
                     statusCode = StatusCodes.Status405MethodNotAllowed;
                     break;
                 // --- 408 Request Timeout ---
-                case TaskCanceledException _:
+                case OperationCanceledException _:
                     statusCode = StatusCodes.Status408RequestTimeout;
                     break;
                 // --- 500 Internal Server Error ---
@@ -309,7 +310,7 @@ namespace MSAVA_API.Middleware
                     or System.Net.WebException => ProductionUpstreamFailureMessage,
                 IOException => ProductionServiceUnavailableMessage,
                 TimeoutException
-                    or TaskCanceledException => ProductionTimeoutMessage,
+                    or OperationCanceledException => ProductionTimeoutMessage,
                 PlatformNotSupportedException
                     or NotImplementedException => "The requested operation is not implemented.",
                 NotSupportedException => "The requested operation is not supported.",

@@ -344,6 +344,30 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
+    public async Task InvokeAsync_ReturnsTimeoutForNonAbortedOperationCancellation()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext();
+        var middleware = new ExceptionCatcherMiddleware(
+            _ => throw new OperationCanceledException("Dependent operation timed out."),
+            new FixedTimeProvider(FixedNow));
+
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status408RequestTimeout);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("The request timed out.");
+        response.StackTrace.Should().BeNull();
+        response.Timestamp.Should().Be(FixedNow.UtcDateTime);
+        errorLog.StatusCode.Should().Be(StatusCodes.Status408RequestTimeout);
+        errorLog.Timestamp.Should().Be(FixedNow.UtcDateTime);
+    }
+
+    [Test]
     public async Task InvokeAsync_PropagatesExceptionWhenResponseAlreadyStarted()
     {
         using var dbContext = CreateContext(throwOnSave: false);
