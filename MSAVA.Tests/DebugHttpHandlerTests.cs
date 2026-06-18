@@ -97,6 +97,29 @@ public class DebugHttpHandlerTests
     }
 
     [Test]
+    public async Task SendAsync_RedactsRequestUriUserInfoFromFailedRequestUri()
+    {
+        var logger = new CapturingLogger<DebugHttpHandler>();
+        using var handler = new DebugHttpHandler(
+            logger,
+            new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+        using var invoker = new HttpMessageInvoker(handler);
+        const string requestUri =
+            "https://user:super-secret-password@api.msava.test/api/files?filter=recent&token=super-secret-token";
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            requestUri);
+
+        using var response = await invoker.SendAsync(request, CancellationToken.None);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        string logText = string.Join(Environment.NewLine, logger.Messages.Select(message => message.Text));
+        logText.Should().Contain("https://[redacted]@api.msava.test/api/files?filter=recent&token=[redacted]");
+        logText.Should().NotContain("super-secret-password");
+        logText.Should().NotContain("super-secret-token");
+    }
+
+    [Test]
     public async Task SendAsync_DoesNotLogSuccessfulRequest()
     {
         var logger = new CapturingLogger<DebugHttpHandler>();

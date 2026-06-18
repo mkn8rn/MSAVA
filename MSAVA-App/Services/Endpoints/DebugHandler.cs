@@ -91,7 +91,7 @@ internal class DebugHttpHandler : DelegatingHandler
         if (requestUri is null)
             return "unknown";
 
-        var text = requestUri.IsAbsoluteUri ? requestUri.AbsoluteUri : requestUri.ToString();
+        var text = requestUri.IsAbsoluteUri ? FormatAbsoluteUri(requestUri) : requestUri.ToString();
         var fragmentStart = text.IndexOf('#', StringComparison.Ordinal);
         var fragment = fragmentStart < 0 ? string.Empty : $"#{RedactedValue}";
         var textWithoutFragment = fragmentStart < 0 ? text : text[..fragmentStart];
@@ -127,5 +127,26 @@ internal class DebugHttpHandler : DelegatingHandler
         }
 
         return string.Join("&", parameters);
+    }
+
+    private static string FormatAbsoluteUri(Uri requestUri)
+    {
+        var text = requestUri.AbsoluteUri;
+        if (string.IsNullOrEmpty(requestUri.UserInfo))
+            return text;
+
+        var authorityStart = text.IndexOf("://", StringComparison.Ordinal);
+        if (authorityStart < 0)
+            return text;
+
+        authorityStart += 3;
+        var authorityEnd = text.IndexOfAny(['/', '?', '#'], authorityStart);
+        if (authorityEnd < 0)
+            authorityEnd = text.Length;
+
+        var atSign = text.LastIndexOf('@', authorityEnd - 1, authorityEnd - authorityStart);
+        return atSign < authorityStart
+            ? text
+            : text[..authorityStart] + RedactedValue + text[atSign..];
     }
 }
