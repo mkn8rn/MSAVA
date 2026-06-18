@@ -674,6 +674,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -684,7 +685,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -697,8 +699,8 @@ public class ProviderImportServiceTests
                 .WithMessage("Google Drive download failed 502: download failure");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             logger.Messages.Should().NotContain(message =>
                 message.Contains("abcDEF12345", StringComparison.Ordinal));
             handler.Requests.Should().HaveCount(2);
@@ -726,6 +728,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -736,7 +739,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -748,8 +752,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("Google Drive returned HTML instead of file content.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().HaveCount(2);
         }
         finally
@@ -774,6 +778,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -784,7 +789,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -797,8 +803,8 @@ public class ProviderImportServiceTests
                 .WithMessage("Google Drive returned HTML instead of file content.");
 
             initialHtmlStream.BytesRead.Should().BeLessThan(initialHtmlStream.TotalLength);
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().HaveCount(2);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -824,6 +830,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -834,7 +841,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -846,8 +854,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("Google Drive response file extension is not supported: FileExtension 'bin' is not supported.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().HaveCount(2);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -873,6 +881,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -883,7 +892,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -895,8 +905,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("Google Drive response did not include a supported file extension.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().HaveCount(2);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -922,6 +932,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -932,7 +943,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -944,8 +956,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("Google Drive response did not include a supported file extension.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().HaveCount(2);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -975,6 +987,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -985,7 +998,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id), maximumFileSizeBytes: 4),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<GoogleDriveImportService>.Instance);
+                NullLogger<GoogleDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileGoogleDriveDTO
             {
                 FileUrl = "abcDEF12345",
@@ -998,8 +1012,8 @@ public class ProviderImportServiceTests
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
             declaredContent.SerializeWasCalled.Should().BeFalse();
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().HaveCount(2);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -1025,6 +1039,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -1035,7 +1050,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<OneDriveImportService>.Instance);
+                NullLogger<OneDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "https://1drv.ms/u/s!abcDEF12345",
@@ -1047,8 +1063,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<IOException>()
                 .WithMessage("Simulated provider stream failure.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             logger.Messages.Should().NotContain(message =>
                 message.Contains("api.onedrive.com", StringComparison.OrdinalIgnoreCase) ||
                 message.Contains("shares/", StringComparison.OrdinalIgnoreCase) ||
@@ -1072,6 +1088,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -1082,7 +1099,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id), maximumFileSizeBytes: 4),
                 new ServiceLogger(logger, context),
                 httpClientFactory,
-                NullLogger<OneDriveImportService>.Instance);
+                NullLogger<OneDriveImportService>.Instance,
+                tempFileFactory);
             var dto = new FetchFileFromOneDriveDTO
             {
                 FileUrl = "https://1drv.ms/u/s!abcDEF12345",
@@ -1094,8 +1112,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<FileTooLargeException>()
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             handler.Requests.Should().ContainSingle();
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -1453,6 +1471,7 @@ public class ProviderImportServiceTests
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
         var youTubeClient = new ThrowingYouTubeDownloadClient();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -1463,7 +1482,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
                 new ServiceLogger(logger, context),
                 NullLogger<YouTubeImportService>.Instance,
-                youTubeClient);
+                youTubeClient,
+                tempFileFactory);
             var dto = new FetchFileYouTubeDTO
             {
                 YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
@@ -1477,8 +1497,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<IOException>()
                 .WithMessage("Simulated YouTube stream failure.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             youTubeClient.CopyCalls.Should().Be(1);
         }
         finally
@@ -1577,6 +1597,7 @@ public class ProviderImportServiceTests
         var metadataDirectory = CreateTempDirectory();
         var logger = new CapturingLogger<ServiceLogger>();
         var youTubeClient = new OversizeYouTubeDownloadClient();
+        var tempFileFactory = new TestProviderImportTempFileFactory(metadataDirectory);
 
         try
         {
@@ -1587,7 +1608,8 @@ public class ProviderImportServiceTests
                 CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id), maximumFileSizeBytes: 4),
                 new ServiceLogger(logger, context),
                 NullLogger<YouTubeImportService>.Instance,
-                youTubeClient);
+                youTubeClient,
+                tempFileFactory);
             var dto = new FetchFileYouTubeDTO
             {
                 YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
@@ -1601,8 +1623,8 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<FileTooLargeException>()
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
-            var tempFilePath = GetLoggedTempFilePath(logger);
-            File.Exists(tempFilePath).Should().BeFalse();
+            AssertCreatedTempFilesWereDeleted(tempFileFactory);
+            AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             youTubeClient.ManifestCalls.Should().Be(1);
             youTubeClient.CopyCalls.Should().Be(1);
             context.FileRefs.Should().BeEmpty();
@@ -1750,10 +1772,22 @@ public class ProviderImportServiceTests
         return response;
     }
 
-    private static string GetLoggedTempFilePath(CapturingLogger<ServiceLogger> logger)
+    private static void AssertCreatedTempFilesWereDeleted(TestProviderImportTempFileFactory tempFileFactory)
     {
-        var logMessage = logger.Messages.Single(message => message.Contains("temp path ", StringComparison.Ordinal));
-        return logMessage[(logMessage.LastIndexOf("temp path ", StringComparison.Ordinal) + "temp path ".Length)..];
+        tempFileFactory.CreatedPaths.Should().NotBeEmpty();
+
+        foreach (string tempFilePath in tempFileFactory.CreatedPaths)
+            File.Exists(tempFilePath).Should().BeFalse();
+    }
+
+    private static void AssertLogsDoNotExposeTempPaths(
+        CapturingLogger<ServiceLogger> logger,
+        TestProviderImportTempFileFactory tempFileFactory)
+    {
+        logger.Messages.Should().NotContain(message =>
+            message.Contains("temp path ", StringComparison.OrdinalIgnoreCase) ||
+            tempFileFactory.CreatedPaths.Any(tempFilePath =>
+                message.Contains(tempFilePath, StringComparison.Ordinal)));
     }
 
     private static FilePersistenceService CreatePersistenceService(
@@ -1915,6 +1949,30 @@ public class ProviderImportServiceTests
             Func<TState, Exception?, string> formatter)
         {
             Messages.Add(formatter(state, exception));
+        }
+    }
+
+    private sealed class TestProviderImportTempFileFactory(string directory) : IProviderImportTempFileFactory
+    {
+        private int _nextIndex;
+
+        public List<string> CreatedPaths { get; } = [];
+
+        public string CreateEmptyTempFilePath()
+        {
+            string path = CreateTempFilePath();
+            File.WriteAllBytes(path, []);
+            return path;
+        }
+
+        public string CreateRandomTempFilePath() => CreateTempFilePath();
+
+        private string CreateTempFilePath()
+        {
+            Directory.CreateDirectory(directory);
+            string path = Path.Combine(directory, $"provider-import-{_nextIndex++}.tmp");
+            CreatedPaths.Add(path);
+            return path;
         }
     }
 

@@ -21,17 +21,34 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<OneDriveImportService> _logger;
+    private readonly IProviderImportTempFileFactory _tempFileFactory;
 
     public OneDriveImportService(
         FilePersistenceService persistenceService,
         ServiceLogger serviceLogger,
         IHttpClientFactory httpClientFactory,
         ILogger<OneDriveImportService> logger)
+        : this(
+            persistenceService,
+            serviceLogger,
+            httpClientFactory,
+            logger,
+            FileSystemProviderImportTempFileFactory.Instance)
+    {
+    }
+
+    internal OneDriveImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        IHttpClientFactory httpClientFactory,
+        ILogger<OneDriveImportService> logger,
+        IProviderImportTempFileFactory tempFileFactory)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _tempFileFactory = tempFileFactory ?? throw new ArgumentNullException(nameof(tempFileFactory));
     }
 
     public async Task<Guid> ImportAsync(FetchFileFromOneDriveDTO dto, CancellationToken cancellationToken = default)
@@ -79,8 +96,8 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
         string finalExtension = ProviderFileType.RequireSupportedExtension("OneDrive", inferredExtension);
         EnsureDeclaredContentLengthWithinMaximum(resp.Content);
 
-        var tempFilePath = Path.GetTempFileName();
-        _serviceLogger.LogInformation($"Downloading OneDrive content to temp path {tempFilePath}");
+        var tempFilePath = _tempFileFactory.CreateEmptyTempFilePath();
+        _serviceLogger.LogInformation("Downloading OneDrive content to temporary storage.");
 
         try
         {

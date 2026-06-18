@@ -21,12 +21,18 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
     private readonly ServiceLogger _serviceLogger;
     private readonly IYouTubeDownloadClient _youtubeClient;
     private readonly ILogger<YouTubeImportService> _logger;
+    private readonly IProviderImportTempFileFactory _tempFileFactory;
 
     public YouTubeImportService(
         FilePersistenceService persistenceService,
         ServiceLogger serviceLogger,
         ILogger<YouTubeImportService> logger)
-        : this(persistenceService, serviceLogger, logger, new YoutubeExplodeDownloadClient())
+        : this(
+            persistenceService,
+            serviceLogger,
+            logger,
+            new YoutubeExplodeDownloadClient(),
+            FileSystemProviderImportTempFileFactory.Instance)
     {
     }
 
@@ -35,11 +41,27 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         ServiceLogger serviceLogger,
         ILogger<YouTubeImportService> logger,
         IYouTubeDownloadClient youtubeClient)
+        : this(
+            persistenceService,
+            serviceLogger,
+            logger,
+            youtubeClient,
+            FileSystemProviderImportTempFileFactory.Instance)
+    {
+    }
+
+    internal YouTubeImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        ILogger<YouTubeImportService> logger,
+        IYouTubeDownloadClient youtubeClient,
+        IProviderImportTempFileFactory tempFileFactory)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _youtubeClient = youtubeClient ?? throw new ArgumentNullException(nameof(youtubeClient));
+        _tempFileFactory = tempFileFactory ?? throw new ArgumentNullException(nameof(tempFileFactory));
     }
 
     public async Task<Guid> ImportAsync(FetchFileYouTubeDTO dto, CancellationToken cancellationToken = default)
@@ -52,9 +74,9 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         string fileName = FileCreationRequestValidator.NormalizeFileName(
             string.IsNullOrWhiteSpace(downloadManifest.Title) ? "YouTube Video" : downloadManifest.Title);
         string fileExtension = "mp4";
-        string tempFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        string tempFilePath = _tempFileFactory.CreateRandomTempFilePath();
 
-        _serviceLogger.LogInformation($"Downloading YouTube content to temp path {tempFilePath}");
+        _serviceLogger.LogInformation("Downloading YouTube content to temporary storage.");
 
         try
         {
@@ -142,15 +164,15 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             "YouTube audio",
             audioStream.ContainerName);
 
-        string videoTemp = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        string audioTemp = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        string videoTemp = _tempFileFactory.CreateRandomTempFilePath();
+        string audioTemp = _tempFileFactory.CreateRandomTempFilePath();
 
         try
         {
-            _serviceLogger.LogInformation($"Downloading video to {videoTemp}");
+            _serviceLogger.LogInformation("Downloading selected YouTube video stream to temporary storage.");
             await CopyYouTubeStreamToFileAsync(youtube, videoStream, videoTemp, cancellationToken);
 
-            _serviceLogger.LogInformation($"Downloading audio to {audioTemp}");
+            _serviceLogger.LogInformation("Downloading selected YouTube audio stream to temporary storage.");
             await CopyYouTubeStreamToFileAsync(youtube, audioStream, audioTemp, cancellationToken);
 
             var psi = CreateFfmpegStartInfo(
@@ -160,7 +182,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
                 audioTemp,
                 outputPath,
                 _persistenceService.MaximumFileSizeBytes);
-            _serviceLogger.LogInformation($"Starting FFmpeg mux: {string.Join(' ', psi.ArgumentList)}");
+            _serviceLogger.LogInformation("Starting FFmpeg mux for YouTube video and audio streams.");
 
             using var process = Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start FFmpeg process.");

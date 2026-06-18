@@ -540,6 +540,43 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void ProviderImportServices_DoNotLogTemporaryPathsOrFfmpegArguments()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string[] providerImportFiles =
+        [
+            Path.Combine(repositoryRoot, "MSAVA-BLL", "Services", "Import", "GoogleDriveImportService.cs"),
+            Path.Combine(repositoryRoot, "MSAVA-BLL", "Services", "Import", "OneDriveImportService.cs"),
+            Path.Combine(repositoryRoot, "MSAVA-BLL", "Services", "Import", "YouTubeImportService.cs")
+        ];
+        string[] unsafeLogSnippets =
+        [
+            "temp path",
+            "Downloading video to {",
+            "Downloading audio to {",
+            "Starting FFmpeg mux: {",
+            "string.Join(' ', psi.ArgumentList)"
+        ];
+
+        var unsafeLogLines = providerImportFiles
+            .SelectMany(file => File
+                .ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = line,
+                    LineNumber = index + 1
+                }))
+            .Where(sourceLine => unsafeLogSnippets.Any(snippet =>
+                sourceLine.Line.Contains(snippet, StringComparison.Ordinal)))
+            .Select(sourceLine => $"{Path.GetRelativePath(repositoryRoot, sourceLine.File)}:{sourceLine.LineNumber}")
+            .ToList();
+
+        unsafeLogLines.Should().BeEmpty(
+            "provider import progress logs should not reveal server-local temp paths or complete FFmpeg command lines");
+    }
+
+    [Test]
     public void AppSettings_ApiClientKeysMatchBoundOptions()
     {
         string appDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-App");

@@ -24,17 +24,34 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
     private readonly ServiceLogger _serviceLogger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<GoogleDriveImportService> _logger;
+    private readonly IProviderImportTempFileFactory _tempFileFactory;
 
     public GoogleDriveImportService(
         FilePersistenceService persistenceService,
         ServiceLogger serviceLogger,
         IHttpClientFactory httpClientFactory,
         ILogger<GoogleDriveImportService> logger)
+        : this(
+            persistenceService,
+            serviceLogger,
+            httpClientFactory,
+            logger,
+            FileSystemProviderImportTempFileFactory.Instance)
+    {
+    }
+
+    internal GoogleDriveImportService(
+        FilePersistenceService persistenceService,
+        ServiceLogger serviceLogger,
+        IHttpClientFactory httpClientFactory,
+        ILogger<GoogleDriveImportService> logger,
+        IProviderImportTempFileFactory tempFileFactory)
     {
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _serviceLogger = serviceLogger ?? throw new ArgumentNullException(nameof(serviceLogger));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _tempFileFactory = tempFileFactory ?? throw new ArgumentNullException(nameof(tempFileFactory));
     }
 
     public async Task<Guid> ImportAsync(FetchFileGoogleDriveDTO dto, CancellationToken cancellationToken = default)
@@ -91,8 +108,8 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
                 : $"{baseDownloadUrl}&confirm=t";
         }
 
-        var tempFilePath = Path.GetTempFileName();
-        _serviceLogger.LogInformation($"Downloading Google Drive content to temp path {tempFilePath}");
+        var tempFilePath = _tempFileFactory.CreateEmptyTempFilePath();
+        _serviceLogger.LogInformation("Downloading Google Drive content to temporary storage.");
 
         try
         {
