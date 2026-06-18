@@ -63,6 +63,20 @@ public class ApiPipelineConfigurationTests
     }
 
     [Test]
+    public void Program_SanitizesSerilogRequestDiagnosticValues()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+
+        programText.Should().Contain("using MSAVA_API.Diagnostics;");
+        programText.Should().Contain(
+            "diagnosticContext.Set(\"RequestHost\", RequestLogValueSanitizer.Sanitize(httpContext.Request.Host.Value));");
+        programText.Should().Contain(
+            "diagnosticContext.Set(\"RequestScheme\", RequestLogValueSanitizer.Sanitize(httpContext.Request.Scheme));");
+        programText.Should().Contain(
+            "diagnosticContext.Set(\"UserAgent\", RequestLogValueSanitizer.Sanitize(httpContext.Request.Headers.UserAgent.ToString()));");
+    }
+
+    [Test]
     public void Program_DoesNotRegisterGlobalSwaggerSecurityRequirement()
     {
         string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));

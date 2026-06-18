@@ -1,5 +1,6 @@
 using MSAVA_API.Authorization;
 using MSAVA_API.Authentication;
+using MSAVA_API.Diagnostics;
 using MSAVA_API.Filters;
 using MSAVA_API.Handlers;
 using MSAVA_API.Middleware;
@@ -167,9 +168,9 @@ app.UseSerilogRequestLogging(options =>
     options.MessageTemplate = "Handled {RequestPath}";
     options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
     {
-        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value ?? string.Empty);
-        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme ?? string.Empty);
-        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString() ?? string.Empty);
+        diagnosticContext.Set("RequestHost", RequestLogValueSanitizer.Sanitize(httpContext.Request.Host.Value));
+        diagnosticContext.Set("RequestScheme", RequestLogValueSanitizer.Sanitize(httpContext.Request.Scheme));
+        diagnosticContext.Set("UserAgent", RequestLogValueSanitizer.Sanitize(httpContext.Request.Headers.UserAgent.ToString()));
     };
 });
 
