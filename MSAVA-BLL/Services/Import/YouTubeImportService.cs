@@ -44,14 +44,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 
     public async Task<Guid> ImportAsync(FetchFileYouTubeDTO dto, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        if (string.IsNullOrWhiteSpace(dto.YouTubeUrl))
-            throw new ArgumentException("YouTubeUrl must be provided.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
-        if (!dto.DownloadVideo && !dto.DownloadAudio)
-            throw new ArgumentException("At least one YouTube stream type must be selected.", nameof(dto));
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
 
         await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 

@@ -36,14 +36,9 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
 
     public async Task<Guid> ImportAsync(FetchFileFromOneDriveDTO dto, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(dto);
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
 
-        if (string.IsNullOrWhiteSpace(dto.FileUrl))
-            throw new ArgumentException("FileUrl must be provided.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
-
-        Uri fileUri = ParseFileUrl(dto.FileUrl);
+        Uri fileUri = ParseFileUrl(dto.FileUrl!);
         await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
         var http = _httpClientFactory.CreateClient(FileIngestionService.RemoteFileHttpClientName);

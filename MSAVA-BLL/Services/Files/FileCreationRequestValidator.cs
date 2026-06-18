@@ -74,6 +74,55 @@ internal static class FileCreationRequestValidator
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
     }
 
+    public static void NormalizeAndValidate(FetchFileGoogleDriveDTO dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (string.IsNullOrWhiteSpace(dto.FileUrl))
+            throw new ArgumentException("FileUrl must be provided.", nameof(dto));
+
+        ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
+            dto.Tags,
+            dto.Categories,
+            dto.Description));
+
+        if (dto.AccessGroupId == Guid.Empty)
+            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+    }
+
+    public static void NormalizeAndValidate(FetchFileFromOneDriveDTO dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (string.IsNullOrWhiteSpace(dto.FileUrl))
+            throw new ArgumentException("FileUrl must be provided.", nameof(dto));
+
+        ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
+            dto.Tags,
+            dto.Categories,
+            dto.Description));
+
+        if (dto.AccessGroupId == Guid.Empty)
+            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+    }
+
+    public static void NormalizeAndValidate(FetchFileYouTubeDTO dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (string.IsNullOrWhiteSpace(dto.YouTubeUrl))
+            throw new ArgumentException("YouTubeUrl must be provided.", nameof(dto));
+        if (dto.AccessGroupId == Guid.Empty)
+            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        if (!dto.DownloadVideo && !dto.DownloadAudio)
+            throw new ArgumentException("At least one YouTube stream type must be selected.", nameof(dto));
+
+        ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
+            dto.Tags,
+            dto.Categories,
+            dto.Description));
+    }
+
     private static FileCreationMetadata NormalizeMetadata(
         string? fileName,
         string? fileExtension,
@@ -94,6 +143,25 @@ internal static class FileCreationRequestValidator
         return new FileCreationMetadata(
             normalizedFileName,
             normalizedFileExtension,
+            normalizedTags,
+            normalizedCategories,
+            normalizedDescription);
+    }
+
+    private static SupplementalFileCreationMetadata NormalizeSupplementalMetadata(
+        IEnumerable<string>? tags,
+        IEnumerable<string>? categories,
+        string? description)
+    {
+        string normalizedDescription = FileMetadataPolicy.NormalizeDescription(description);
+        var normalizedTags = FileMetadataPolicy.NormalizeMetadataValues(
+            tags,
+            nameof(SaveFileFromStreamDTO.Tags));
+        var normalizedCategories = FileMetadataPolicy.NormalizeMetadataValues(
+            categories,
+            nameof(SaveFileFromStreamDTO.Categories));
+
+        return new SupplementalFileCreationMetadata(
             normalizedTags,
             normalizedCategories,
             normalizedDescription);
@@ -149,9 +217,41 @@ internal static class FileCreationRequestValidator
         dto.Description = metadata.Description;
     }
 
+    private static void ApplySupplementalMetadata(
+        FetchFileGoogleDriveDTO dto,
+        SupplementalFileCreationMetadata metadata)
+    {
+        dto.Tags = metadata.Tags;
+        dto.Categories = metadata.Categories;
+        dto.Description = metadata.Description;
+    }
+
+    private static void ApplySupplementalMetadata(
+        FetchFileFromOneDriveDTO dto,
+        SupplementalFileCreationMetadata metadata)
+    {
+        dto.Tags = metadata.Tags;
+        dto.Categories = metadata.Categories;
+        dto.Description = metadata.Description;
+    }
+
+    private static void ApplySupplementalMetadata(
+        FetchFileYouTubeDTO dto,
+        SupplementalFileCreationMetadata metadata)
+    {
+        dto.Tags = metadata.Tags;
+        dto.Categories = metadata.Categories;
+        dto.Description = metadata.Description;
+    }
+
     private readonly record struct FileCreationMetadata(
         string FileName,
         string FileExtension,
+        List<string> Tags,
+        List<string> Categories,
+        string Description);
+
+    private readonly record struct SupplementalFileCreationMetadata(
         List<string> Tags,
         List<string> Categories,
         string Description);

@@ -308,6 +308,44 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsInvalidMetadataBeforeSessionOrHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = Guid.NewGuid(),
+                Tags = ["provider", " "]
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage("Tags values must be provided.");
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task OneDriveImportAsync_UsesInjectedHttpClientFactory()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -491,6 +529,44 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<ArgumentException>()
                 .WithMessage("FileUrl must be a OneDrive or SharePoint sharing URL.*");
 
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_RejectsInvalidMetadataBeforeSessionOrHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = Guid.NewGuid(),
+                Categories = ["imports", " "]
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage("Categories values must be provided.");
             httpClientFactory.WasCalled.Should().BeFalse();
             handler.Requests.Should().BeEmpty();
             context.FileRefs.Should().BeEmpty();
@@ -1228,6 +1304,45 @@ public class ProviderImportServiceTests
 
             await act.Should().ThrowAsync<UnauthorizedAccessException>()
                 .WithMessage("User session not found.");
+            youTubeClient.ManifestCalls.Should().Be(0);
+            youTubeClient.CopyCalls.Should().Be(0);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task YouTubeImportAsync_RejectsInvalidMetadataBeforeSessionOrManifest()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var youTubeClient = new ThrowingYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = Guid.NewGuid(),
+                DownloadVideo = true,
+                DownloadAudio = true,
+                Tags = ["youtube", " "]
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage("Tags values must be provided.");
             youTubeClient.ManifestCalls.Should().Be(0);
             youTubeClient.CopyCalls.Should().Be(0);
             context.FileRefs.Should().BeEmpty();

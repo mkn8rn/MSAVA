@@ -39,12 +39,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
 
     public async Task<Guid> ImportAsync(FetchFileGoogleDriveDTO dto, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        if (string.IsNullOrWhiteSpace(dto.FileUrl))
-            throw new ArgumentException("FileUrl must be provided.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
 
         string? fileId = ExtractDriveFileId(dto.FileUrl)
             ?? throw new ArgumentException("Could not extract Google Drive file id from the provided FileUrl.", nameof(dto.FileUrl));
