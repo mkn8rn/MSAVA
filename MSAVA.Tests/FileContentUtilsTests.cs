@@ -145,6 +145,19 @@ public class FileContentUtilsTests
         fullPath.Should().Be(Path.Combine(FileContentUtils.FilesDirectory, fileName));
     }
 
+    [Test]
+    public void TryGetSafeFullPath_ReturnsCanonicalPathForMixedCaseStoredFileName()
+    {
+        string fileName = $"{new string('A', 64)}.TXT";
+
+        bool success = FileContentUtils.TryGetSafeFullPath(fileName, out string fullPath);
+
+        success.Should().BeTrue();
+        fullPath.Should().Be(Path.Combine(
+            FileContentUtils.FilesDirectory,
+            $"{new string('a', 64)}.txt"));
+    }
+
     [TestCase("../secret.txt")]
     [TestCase("folder/file.txt")]
     [TestCase("readme.txt")]

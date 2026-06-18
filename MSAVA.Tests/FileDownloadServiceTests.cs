@@ -559,6 +559,59 @@ public class FileDownloadServiceTests
     }
 
     [Test]
+    public async Task GetPhysicalFileReturnDataByPathAsync_UsesCanonicalContentPathForMixedCaseStoredFileName()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string requestedFileName = $"{Convert.ToHexString(fileHash).ToUpperInvariant()}.TXT";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+        var fileReference = new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = fileHash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = Guid.NewGuid(),
+            PublicDownload = true
+        };
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "canonical-physical-path");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference));
+            await context.SaveChangesAsync();
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false,
+                IsWhitelisted = true
+            });
+
+            var result = await service.GetPhysicalFileReturnDataByPathAsync(requestedFileName);
+
+            result.FilePath.Should().Be(contentPath);
+            context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
+                .DownloadCount
+                .Should()
+                .Be(1);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GetFileStreamByPathAsync_ReturnsNotFoundWhenSqlReferenceHasNoFileData()
     {
         using var context = CreateContext();
