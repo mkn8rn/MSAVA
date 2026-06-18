@@ -12,6 +12,8 @@ namespace MSAVA_BLL.Services.Import;
 
 public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveDTO>
 {
+    private const int MaximumConfirmationPageBodyLength = 64 * 1024;
+
     private static readonly HashSet<string> SupportedFileIdHosts = new(StringComparer.OrdinalIgnoreCase)
     {
         "drive.google.com",
@@ -64,7 +66,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
 
         if (contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
         {
-            var html = await initialResp.Content.ReadAsStringAsync(cancellationToken);
+            var html = await ReadConfirmationPageHtmlAsync(initialResp.Content, cancellationToken);
 
             if (html.Contains("docs.google.com"))
                 throw new InvalidOperationException("The file is a native Google Docs/Sheets/Slides type and cannot be downloaded.");
@@ -180,5 +182,15 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
     {
         if (content.Headers.ContentLength is long contentLength)
             FileSizePolicy.EnsureWithinMaximum(contentLength, _persistenceService.MaximumFileSizeBytes);
+    }
+
+    private static Task<string> ReadConfirmationPageHtmlAsync(
+        HttpContent content,
+        CancellationToken cancellationToken)
+    {
+        return HttpErrorBodyReader.ReadTrimmedBodyAsync(
+            content,
+            MaximumConfirmationPageBodyLength,
+            cancellationToken);
     }
 }

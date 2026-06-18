@@ -663,6 +663,57 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_BoundsInitialHtmlConfirmationPageRead()
+    {
+        var responseIndex = 0;
+        var initialHtmlStream = new CountingRepeatingReadStream((byte)'x', 1_000_000);
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateStreamResponse(HttpStatusCode.OK, "text/html", initialHtmlStream);
+
+            return CreateResponse(HttpStatusCode.OK, "text/html", "<html>not a file</html>");
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Google Drive returned HTML instead of file content.");
+
+            initialHtmlStream.BytesRead.Should().BeLessThan(initialHtmlStream.TotalLength);
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GoogleDriveImportAsync_RejectsUnsupportedInferredExtensionBeforeCopyingDownloadContent()
     {
         var responseIndex = 0;
