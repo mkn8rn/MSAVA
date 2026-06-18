@@ -68,6 +68,29 @@ public class LocalEnvironmentTests
             .WithMessage(expectedMessage);
     }
 
+    [TestCase("serilog_information_level", "2", "Environment variable 'serilog_information_level' must be a named LogEventLevel value: '2'")]
+    [TestCase("serilog_information_level", "999", "Environment variable 'serilog_information_level' must be a named LogEventLevel value: '999'")]
+    [TestCase("serilog_information_level", "Informational", "Environment variable 'serilog_information_level' must be a named LogEventLevel value: 'Informational'")]
+    [TestCase("serilog_rolling_interval", "3", "Environment variable 'serilog_rolling_interval' must be a named RollingInterval value: '3'")]
+    [TestCase("serilog_rolling_interval", "+3", "Environment variable 'serilog_rolling_interval' must be a named RollingInterval value: '+3'")]
+    [TestCase("serilog_rolling_interval", "Daily", "Environment variable 'serilog_rolling_interval' must be a named RollingInterval value: 'Daily'")]
+    public void Constructor_RejectsNumericAndUndefinedEnumValues(
+        string key,
+        string invalidValue,
+        string expectedMessage)
+    {
+        var values = CreateValidEnvironmentValues();
+        values[key] = invalidValue;
+
+        using var restore = new EnvironmentVariableRestore(values.Keys);
+        SetUpperCaseEnvironmentValues(values);
+
+        Action act = () => _ = new LocalEnvironment();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage(expectedMessage);
+    }
+
     [Test]
     public void Constructor_ReadsDevelopmentEnvFileFromRepositoryInfrastructureDirectory()
     {

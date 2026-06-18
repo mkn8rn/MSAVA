@@ -109,9 +109,21 @@ namespace MSAVA_INF.Environment
         private TEnum ParseRequiredEnum<TEnum>(string key) where TEnum : struct
         {
             var value = GetRequiredValue(key);
-            if (Enum.TryParse<TEnum>(value, true, out var result))
+            string normalizedValue = value.Trim();
+            if (!IsNumericEnumLiteral(normalizedValue) &&
+                Enum.TryParse<TEnum>(normalizedValue, true, out var result) &&
+                Enum.IsDefined(typeof(TEnum), result))
+            {
                 return result;
-            throw new InvalidOperationException($"Environment variable '{key}' could not be parsed as {typeof(TEnum).Name}: '{value}'");
+            }
+
+            throw new InvalidOperationException($"Environment variable '{key}' must be a named {typeof(TEnum).Name} value: '{value}'");
+        }
+
+        private static bool IsNumericEnumLiteral(string value)
+        {
+            return value.Length > 0 &&
+                (char.IsAsciiDigit(value[0]) || value[0] is '+' or '-');
         }
 
         private int? ParseNullablePositiveInt(string key)
