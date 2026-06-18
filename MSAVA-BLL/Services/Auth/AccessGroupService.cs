@@ -128,6 +128,12 @@ public class AccessGroupService
             .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken)
             ?? throw new KeyNotFoundException($"User with id {userId} not found.");
 
+        if (user.IsBanned)
+            throw new UnauthorizedAccessException("Banned users cannot be added to access groups.");
+
+        if (!user.IsWhitelisted)
+            throw new UnauthorizedAccessException("Users must be whitelisted before being added to access groups.");
+
         user.AccessGroups ??= [];
 
         if (!user.AccessGroups.Any(g => g.Id == accessGroupId))

@@ -323,6 +323,52 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task AddUserToAccessGroupAsync_RejectsBannedTargetUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        var target = CreateUser("target", isBanned: true);
+        var accessGroup = CreateAccessGroup(owner, "Private");
+
+        context.Users.AddRange(owner, target);
+        context.AccessGroups.Add(accessGroup);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        Func<Task> act = () => service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Banned users cannot be added to access groups.");
+        target.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task AddUserToAccessGroupAsync_RejectsNonWhitelistedTargetUser()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        var target = CreateUser("target", isWhitelisted: false);
+        var accessGroup = CreateAccessGroup(owner, "Private");
+
+        context.Users.AddRange(owner, target);
+        context.AccessGroups.Add(accessGroup);
+        await context.SaveChangesAsync();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        Func<Task> act = () => service.AddUserToAccessGroupAsync(target.Id, accessGroup.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Users must be whitelisted before being added to access groups.");
+        target.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_DoesNotDuplicateExistingMembership()
     {
         using var context = CreateContext();
