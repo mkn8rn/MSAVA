@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -40,11 +41,13 @@ public static partial class VectorMetadataExtractor
         int? parsedWidth = null, parsedHeight = null;
         if (!string.IsNullOrEmpty(viewBox))
         {
-            var parts = viewBox.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var parts = viewBox.Split([' ', '\t', '\r', '\n', ','], StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 4)
             {
-                if (float.TryParse(parts[2], out var w)) parsedWidth = (int)w;
-                if (float.TryParse(parts[3], out var h)) parsedHeight = (int)h;
+                if (float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var w))
+                    parsedWidth = (int)w;
+                if (float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var h))
+                    parsedHeight = (int)h;
             }
         }
 
@@ -55,12 +58,20 @@ public static partial class VectorMetadataExtractor
             Type = "VectorImage",
             Valid = true,
             Format = "SVG",
-            Width = InvalidMetadata.OrInvalid(width ?? parsedWidth?.ToString()),
-            Height = InvalidMetadata.OrInvalid(height ?? parsedHeight?.ToString()),
+            Width = InvalidMetadata.OrInvalid(ResolveSvgDimension(width, parsedWidth)),
+            Height = InvalidMetadata.OrInvalid(ResolveSvgDimension(height, parsedHeight)),
             ViewBox = InvalidMetadata.OrInvalid(viewBox),
             ElementCount = elementCount,
             Size = size
         });
+    }
+
+    private static string? ResolveSvgDimension(string? attributeValue, int? parsedValue)
+    {
+        if (!string.IsNullOrWhiteSpace(attributeValue))
+            return attributeValue;
+
+        return parsedValue?.ToString(CultureInfo.InvariantCulture);
     }
 
     private static int CountElements(XmlNode? node)
@@ -107,10 +118,10 @@ public static partial class VectorMetadataExtractor
         {
             var parts = boundingBox.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 4 &&
-                int.TryParse(parts[0], out var x1) &&
-                int.TryParse(parts[1], out var y1) &&
-                int.TryParse(parts[2], out var x2) &&
-                int.TryParse(parts[3], out var y2))
+                int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x1) &&
+                int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y1) &&
+                int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x2) &&
+                int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y2))
             {
                 width = x2 - x1;
                 height = y2 - y1;

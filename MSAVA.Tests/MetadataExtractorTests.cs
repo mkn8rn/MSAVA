@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -135,6 +136,44 @@ public class MetadataExtractorTests
         metadata.RootElement.GetProperty("Type").GetString().Should().Be("TSV");
         metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
         stream.Position.Should().BeLessThan(stream.Length);
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void ExtractMetadata_ParsesSvgCommaSeparatedViewBoxWithInvariantCulture()
+    {
+        using var _ = new CultureScope("fr-FR");
+        using var stream = new MemoryStream("""
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0,0,100.5,200.5">
+              <path d="M0 0" />
+            </svg>
+            """u8.ToArray());
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "svg", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("VectorImage");
+        metadata.RootElement.GetProperty("Format").GetString().Should().Be("SVG");
+        metadata.RootElement.GetProperty("Width").GetString().Should().Be("100");
+        metadata.RootElement.GetProperty("Height").GetString().Should().Be("200");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void ExtractMetadata_ParsesEpsBoundingBoxWithInvariantCulture()
+    {
+        using var _ = new CultureScope("fr-FR");
+        using var stream = new MemoryStream(Encoding.ASCII.GetBytes("""
+            %!PS-Adobe-3.0 EPSF-3.0
+            %%BoundingBox: 10 20 110 220
+            %%EndComments
+            """));
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "eps", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("VectorImage");
+        metadata.RootElement.GetProperty("Format").GetString().Should().Be("EPS");
+        metadata.RootElement.GetProperty("Width").GetInt32().Should().Be(100);
+        metadata.RootElement.GetProperty("Height").GetInt32().Should().Be(200);
     }
 
     [Test]
@@ -333,5 +372,24 @@ public class MetadataExtractorTests
         content[1] = (byte)'}';
         Array.Fill(content, (byte)' ', 2, content.Length - 2);
         return new MemoryStream(content);
+    }
+
+    private sealed class CultureScope : IDisposable
+    {
+        private readonly CultureInfo _previousCulture = CultureInfo.CurrentCulture;
+        private readonly CultureInfo _previousUiCulture = CultureInfo.CurrentUICulture;
+
+        public CultureScope(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+        }
+
+        public void Dispose()
+        {
+            CultureInfo.CurrentCulture = _previousCulture;
+            CultureInfo.CurrentUICulture = _previousUiCulture;
+        }
     }
 }
