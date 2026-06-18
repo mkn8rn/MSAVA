@@ -1321,6 +1321,50 @@ public class ProviderImportServiceTests
         reader.CharactersRead.Should().Be(0);
     }
 
+    [Test]
+    public async Task WaitForFfmpegExitAsync_ReturnsWhenProcessExitsBeforeTimeout()
+    {
+        var waitWasCalled = false;
+
+        await YouTubeImportService.WaitForFfmpegExitAsync(
+            cancellationToken =>
+            {
+                waitWasCalled = true;
+                cancellationToken.IsCancellationRequested.Should().BeFalse();
+                return Task.CompletedTask;
+            },
+            TimeSpan.FromSeconds(1),
+            CancellationToken.None);
+
+        waitWasCalled.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task WaitForFfmpegExitAsync_PreservesCallerCancellation()
+    {
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        Func<Task> act = () => YouTubeImportService.WaitForFfmpegExitAsync(
+            cancellationToken => Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken),
+            TimeSpan.FromSeconds(30),
+            cancellationTokenSource.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Test]
+    public async Task WaitForFfmpegExitAsync_ConvertsInternalTimeoutToTimeoutException()
+    {
+        Func<Task> act = () => YouTubeImportService.WaitForFfmpegExitAsync(
+            cancellationToken => Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken),
+            TimeSpan.FromMilliseconds(1),
+            CancellationToken.None);
+
+        await act.Should().ThrowAsync<TimeoutException>()
+            .WithMessage("FFmpeg process exceeded 0.001 seconds and was terminated.");
+    }
+
     private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, string contentType, string body)
     {
         var response = new HttpResponseMessage(statusCode)

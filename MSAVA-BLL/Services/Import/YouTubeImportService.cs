@@ -15,6 +15,7 @@ namespace MSAVA_BLL.Services.Import;
 public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 {
     internal const int FfmpegErrorOutputCaptureLimitChars = 4096;
+    internal static readonly TimeSpan FfmpegMuxTimeout = TimeSpan.FromSeconds(15);
 
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
@@ -174,17 +175,22 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
                 process.StandardError,
                 cancellationToken);
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
-
             try
             {
-                await process.WaitForExitAsync(timeoutCts.Token);
+                await WaitForFfmpegExitAsync(
+                    process.WaitForExitAsync,
+                    FfmpegMuxTimeout,
+                    cancellationToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                KillProcessAfterTimeout(process);
-                throw new TimeoutException("FFmpeg process exceeded 15 seconds and was terminated.");
+                KillInterruptedFfmpegProcess(process, "cancellation");
+                throw;
+            }
+            catch (TimeoutException)
+            {
+                KillInterruptedFfmpegProcess(process, "timeout");
+                throw;
             }
 
             string errorOutput = await stderrTask;
@@ -272,6 +278,35 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         }
     }
 
+    internal static async Task WaitForFfmpegExitAsync(
+        Func<CancellationToken, Task> waitForExitAsync,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(waitForExitAsync);
+
+        using var timeoutCts = new CancellationTokenSource();
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        timeoutCts.CancelAfter(timeout);
+
+        try
+        {
+            await waitForExitAsync(waitCts.Token);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "FFmpeg process exceeded {0:g} seconds and was terminated.",
+                    timeout.TotalSeconds));
+        }
+    }
+
     private static YouTubeStreamInfo GetBestVideoStream(IEnumerable<YouTubeStreamInfo> streams, string? preferredQuality)
     {
         YouTubeStreamInfo? stream = null;
@@ -309,7 +344,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             ?? throw new InvalidOperationException("No suitable audio stream found.");
     }
 
-    private void KillProcessAfterTimeout(Process process)
+    private void KillInterruptedFfmpegProcess(Process process, string interruptionReason)
     {
         try
         {
@@ -318,7 +353,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         }
         catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
         {
-            _logger.LogWarning(ex, "Failed to kill FFmpeg process after timeout");
+            _logger.LogWarning(ex, "Failed to kill FFmpeg process after {InterruptionReason}", interruptionReason);
         }
     }
 
