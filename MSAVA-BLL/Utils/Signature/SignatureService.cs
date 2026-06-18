@@ -72,23 +72,7 @@ public sealed class SignatureService
     /// <summary>
     /// Gets the list of extensions that support signature embedding.
     /// </summary>
-    public static IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        // Images (ImageSharp)
-        "png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tga", "pbm", "pgm", "ppm", "dib",
-        
-        // Vector
-        "svg", "svgz",
-        
-        // Audio (TagLib)
-        "mp3", "flac", "m4a", "ogg", "wav", "aac", "wma", "aiff", "opus", "ape", "mpc", "wv", "dsf", "au",
-        
-        // Video (TagLib)
-        "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "mpg", "mpeg", "3gp", "3g2", "ogv", "asf", "m4v", "f4v",
-        
-        // Documents
-        "docx", "xlsx", "pptx", "odt", "ods", "odp", "pdf"
-    };
+    public static IReadOnlySet<string> SupportedExtensions => SignatureEmbedder.SupportedExtensions;
 }
 
 /// <summary>

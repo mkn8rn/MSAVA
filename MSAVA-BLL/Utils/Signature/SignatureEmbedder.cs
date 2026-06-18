@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
@@ -87,13 +88,16 @@ public static class SignatureEmbedder
         ["pdf"] = EmbedInPdf,
     };
 
+    public static IReadOnlySet<string> SupportedExtensions { get; } =
+        Embedders.Keys.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Checks if signature embedding is supported for this extension.
     /// </summary>
     public static bool IsSupported(string extension)
     {
         var ext = extension.TrimStart('.').ToLowerInvariant();
-        return Embedders.ContainsKey(ext);
+        return SupportedExtensions.Contains(ext);
     }
 
     /// <summary>

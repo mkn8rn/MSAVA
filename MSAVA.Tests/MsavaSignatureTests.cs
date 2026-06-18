@@ -49,6 +49,20 @@ public class MsavaSignatureTests
     }
 
     [Test]
+    public void SignatureService_SupportedExtensionsUsesEmbedderSourceOfTruth()
+    {
+        SignatureService.SupportedExtensions.Should().BeSameAs(SignatureEmbedder.SupportedExtensions);
+    }
+
+    [Test]
+    public void SupportsSignature_ReportsEmbedderSupportedExtensions()
+    {
+        "ico".SupportsSignature().Should().BeTrue();
+        ".svg".SupportsSignature().Should().BeTrue();
+        "unknown".SupportsSignature().Should().BeFalse();
+    }
+
+    [Test]
     public void TryParse_AcceptsSha256HexContentHash()
     {
         const string contentHash = "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F";
