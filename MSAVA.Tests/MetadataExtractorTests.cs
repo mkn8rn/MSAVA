@@ -48,6 +48,47 @@ public class MetadataExtractorTests
     }
 
     [Test]
+    public void ExtractMetadata_ReportsJsonMetadataForSmallJsonFile()
+    {
+        using var stream = new MemoryStream("""{"name":"Ada","values":[1,2]}"""u8.ToArray());
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "json", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("JSON");
+        metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeTrue();
+        metadata.RootElement.GetProperty("RootType").GetString().Should().Be("Object");
+        metadata.RootElement.GetProperty("PropertyCount").GetInt32().Should().Be(2);
+        metadata.RootElement.GetProperty("MaxDepth").GetInt32().Should().Be(2);
+        metadata.RootElement.GetProperty("TotalElements").GetInt32().Should().Be(5);
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeFalse();
+    }
+
+    [Test]
+    public void ExtractMetadata_ReturnsInvalidMetadataForSmallInvalidJsonFile()
+    {
+        using var stream = new MemoryStream("{not-json"u8.ToArray());
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "json", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be(InvalidMetadata.String);
+        metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeFalse();
+        metadata.RootElement.GetProperty("Reason").GetString().Should().Be("Extraction failed");
+    }
+
+    [Test]
+    public void ExtractMetadata_BoundsJsonAnalysisForLargeJsonFile()
+    {
+        using var stream = CreateLargeJsonWithTrailingWhitespace();
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "json", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("JSON");
+        metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeTrue();
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
+        stream.Position.Should().BeLessThan(stream.Length);
+    }
+
+    [Test]
     public void ExtractMetadata_ReportsCsvHeaderAndRowsForSmallCsvFile()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
@@ -283,5 +324,14 @@ public class MetadataExtractorTests
 
         output.Position = 0;
         return output;
+    }
+
+    private static MemoryStream CreateLargeJsonWithTrailingWhitespace()
+    {
+        var content = new byte[BoundedMetadataTextReader.MaximumAnalyzedCharacters + 50_000];
+        content[0] = (byte)'{';
+        content[1] = (byte)'}';
+        Array.Fill(content, (byte)' ', 2, content.Length - 2);
+        return new MemoryStream(content);
     }
 }

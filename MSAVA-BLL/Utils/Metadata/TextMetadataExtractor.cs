@@ -158,19 +158,37 @@ public static partial class TextMetadataExtractor
 
     private static JsonDocument ExtractJson(Stream stream, long size)
     {
-        using var doc = JsonDocument.Parse(stream);
-        var root = doc.RootElement;
+        var text = BoundedMetadataTextReader.Read(stream);
 
-        return MetadataExtractor.ToJsonDocument(new
+        try
         {
-            Type = "JSON",
-            RootType = root.ValueKind.ToString(),
-            PropertyCount = root.ValueKind == JsonValueKind.Object ? root.EnumerateObject().Count() : (int?)null,
-            ArrayLength = root.ValueKind == JsonValueKind.Array ? root.GetArrayLength() : (int?)null,
-            MaxDepth = CalculateJsonDepth(root),
-            TotalElements = CountJsonElements(root),
-            Size = size
-        });
+            using var doc = JsonDocument.Parse(text.Content);
+            var root = doc.RootElement;
+
+            return MetadataExtractor.ToJsonDocument(new
+            {
+                Type = "JSON",
+                Valid = true,
+                RootType = root.ValueKind.ToString(),
+                PropertyCount = root.ValueKind == JsonValueKind.Object ? root.EnumerateObject().Count() : (int?)null,
+                ArrayLength = root.ValueKind == JsonValueKind.Array ? root.GetArrayLength() : (int?)null,
+                MaxDepth = CalculateJsonDepth(root),
+                TotalElements = CountJsonElements(root),
+                AnalysisTruncated = text.Truncated,
+                Size = size
+            });
+        }
+        catch (JsonException) when (text.Truncated)
+        {
+            return MetadataExtractor.ToJsonDocument(new
+            {
+                Type = "JSON",
+                Valid = false,
+                Reason = "Analysis truncated",
+                AnalysisTruncated = true,
+                Size = size
+            });
+        }
     }
 
     private static int CalculateJsonDepth(JsonElement element, int depth = 0)
