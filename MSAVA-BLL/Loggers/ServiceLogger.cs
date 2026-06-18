@@ -10,6 +10,8 @@ namespace MSAVA_BLL.Loggers;
 
 public class ServiceLogger
 {
+    internal const int MaximumSanitizedMessageLength = 200;
+
     private readonly ILogger<ServiceLogger> _logger;
     private readonly BaseDataContext _context;
     private readonly TimeProvider _timeProvider;
@@ -34,10 +36,9 @@ public class ServiceLogger
         if (string.IsNullOrEmpty(message))
             return string.Empty;
 
-        var sb = new StringBuilder(Math.Min(message.Length * 2, 200));
-        int maxLen = Math.Min(message.Length, 200);
+        var sb = new StringBuilder(Math.Min(message.Length, MaximumSanitizedMessageLength));
 
-        for (int i = 0; i < maxLen; i++)
+        for (int i = 0; i < message.Length && sb.Length < MaximumSanitizedMessageLength; i++)
         {
             char c = message[i];
             string? replacement = c switch
@@ -54,12 +55,26 @@ public class ServiceLogger
             };
 
             if (replacement != null)
-                sb.Append(replacement);
+            {
+                if (!TryAppendWithinLimit(sb, replacement))
+                    break;
+            }
             else
+            {
                 sb.Append(c);
+            }
         }
 
         return sb.ToString();
+    }
+
+    private static bool TryAppendWithinLimit(StringBuilder builder, string value)
+    {
+        if (builder.Length + value.Length > MaximumSanitizedMessageLength)
+            return false;
+
+        builder.Append(value);
+        return true;
     }
 
     public async Task WriteLogAsync(

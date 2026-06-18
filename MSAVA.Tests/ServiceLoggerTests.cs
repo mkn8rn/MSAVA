@@ -45,6 +45,31 @@ public class ServiceLoggerTests
     }
 
     [Test]
+    public void SanitizeString_BoundsExpandedEscapedOutput()
+    {
+        using var context = CreateContext();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+
+        string sanitized = logger.SanitizeString(new string('<', 1_000));
+
+        sanitized.Should().HaveLength(ServiceLogger.MaximumSanitizedMessageLength);
+        sanitized.Should().Be(string.Concat(Enumerable.Repeat("&lt;", ServiceLogger.MaximumSanitizedMessageLength / 4)));
+    }
+
+    [Test]
+    public void SanitizeString_DoesNotEmitPartialEscapedEntityAtLengthLimit()
+    {
+        using var context = CreateContext();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        string input = new string('a', ServiceLogger.MaximumSanitizedMessageLength - 1) + "<";
+
+        string sanitized = logger.SanitizeString(input);
+
+        sanitized.Should().Be(new string('a', ServiceLogger.MaximumSanitizedMessageLength - 1));
+        sanitized.Should().NotContain("&");
+    }
+
+    [Test]
     public async Task WriteLogAsync_PersistsUserLogWithAsyncSave()
     {
         using var context = CreateContext();
