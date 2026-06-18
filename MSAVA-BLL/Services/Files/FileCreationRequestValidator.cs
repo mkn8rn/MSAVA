@@ -33,8 +33,8 @@ internal static class FileCreationRequestValidator
             dto.Categories,
             dto.Description));
 
-        if (string.IsNullOrWhiteSpace(dto.TempFilePath))
-            throw new ArgumentException("TempFilePath must be provided.", nameof(dto));
+        dto.TempFilePath = TempFilePathPolicy.RequireSystemTempFilePath(dto.TempFilePath);
+
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
     }

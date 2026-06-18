@@ -836,6 +836,55 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromTempFileAsync_RejectsNonTempPathBeforeDeletingOrReadingFile()
+    {
+        var content = Encoding.UTF8.GetBytes($"outside-temp-fetch-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var outsideTempDirectory = Path.Combine(
+            AppContext.BaseDirectory,
+            "non-temp-msava-tests",
+            Guid.NewGuid().ToString("N"));
+        var outsideTempPath = Path.Combine(outsideTempDirectory, "outside-fetch.txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            FileContentUtils.IsPathUnderDirectory(Path.GetTempPath(), outsideTempPath)
+                .Should()
+                .BeFalse("the test source file must be outside the system temp root");
+            Directory.CreateDirectory(outsideTempDirectory);
+            await File.WriteAllBytesAsync(outsideTempPath, content);
+
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateFetchDto(outsideTempPath, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromTempFileAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("TempFilePath must point to a file under the system temporary directory.*");
+
+            File.Exists(outsideTempPath).Should().BeTrue();
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(outsideTempPath);
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(outsideTempDirectory);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromTempFileAsync_DeletesTempFileWhenSessionIsMissing()
     {
         var content = Encoding.UTF8.GetBytes($"missing-session-temp-{Guid.NewGuid()}");

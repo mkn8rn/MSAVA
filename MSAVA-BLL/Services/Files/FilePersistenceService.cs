@@ -101,7 +101,8 @@ public class FilePersistenceService
     public async Task<Guid> CreateFileFromTempFileAsync(SaveFileFromFetchDTO dto, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dto);
-        string tempFilePath = dto.TempFilePath;
+        string tempFilePath = TempFilePathPolicy.RequireSystemTempFilePath(dto.TempFilePath);
+        dto.TempFilePath = tempFilePath;
 
         try
         {
