@@ -118,43 +118,6 @@ public static class SignatureEmbedder
         return embedder(inputStream, signature);
     }
 
-    /// <summary>
-    /// Tries to embed a signature, returns original stream if not supported.
-    /// </summary>
-    public static Stream TryEmbed(Stream inputStream, string extension, MsavaSignature signature)
-    {
-        if (!IsSupported(extension))
-            return inputStream;
-
-        try
-        {
-            return Embed(inputStream, extension, signature);
-        }
-        catch (Exception ex) when (IsRecoverableEmbeddingFailure(ex))
-        {
-            // If embedding fails, return original stream
-            if (inputStream.CanSeek)
-                inputStream.Position = 0;
-            return inputStream;
-        }
-    }
-
-    private static bool IsRecoverableEmbeddingFailure(Exception exception)
-    {
-        if (CriticalExceptionPolicy.ContainsCriticalException(exception))
-            return false;
-
-        return exception is IOException
-            or InvalidDataException
-            or FileTooLargeException
-            or XmlException
-            or ArgumentException
-            or InvalidOperationException
-            or NotSupportedException
-            || exception.GetType().Namespace?.StartsWith("TagLib", StringComparison.Ordinal) == true
-            || exception.GetType().Namespace?.StartsWith("SixLabors.ImageSharp", StringComparison.Ordinal) == true;
-    }
-
     private static void EnsureRemainingInputWithinMaximum(Stream input)
     {
         if (!input.CanSeek)

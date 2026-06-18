@@ -20,14 +20,14 @@ public sealed class SignatureService
     /// <param name="extension">File extension (with or without dot).</param>
     /// <param name="contentHash">The SHA-256 hash of the file content.</param>
     /// <param name="fileId">The database ID of the file.</param>
-    /// <returns>A stream with the signature embedded, or original if embedding not supported.</returns>
+    /// <returns>A stream with the signature embedded, or original if embedding is not supported.</returns>
     public Stream PrepareForDownload(Stream fileStream, string extension, string contentHash, long fileId)
     {
         if (!SignatureEmbedder.IsSupported(extension))
             return fileStream;
 
         var signature = MsavaSignature.Create(contentHash, fileId, _timeProvider.GetUtcNow());
-        return SignatureEmbedder.TryEmbed(fileStream, extension, signature);
+        return SignatureEmbedder.Embed(fileStream, extension, signature);
     }
 
     /// <summary>

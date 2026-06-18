@@ -1,5 +1,6 @@
 using System.Text;
 using System.IO.Compression;
+using System.Xml;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Utils;
 using MSAVA_BLL.Utils.Signature;
@@ -23,20 +24,7 @@ public class SignatureEmbedderTests
     }
 
     [Test]
-    public void TryEmbed_ReturnsOriginalStreamAndResetsPositionWhenTagLibCannotWriteSignature()
-    {
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("not an mp3"));
-        stream.Position = 3;
-        var signature = CreateSignature();
-
-        var result = SignatureEmbedder.TryEmbed(stream, "mp3", signature);
-
-        result.Should().BeSameAs(stream);
-        stream.Position.Should().Be(0);
-    }
-
-    [Test]
-    public void TryEmbed_ReturnsOriginalStreamAndResetsPositionWhenSvgContainsDtd()
+    public void Embed_ThrowsWhenSvgContainsDtd()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
             <!DOCTYPE svg [
@@ -46,35 +34,40 @@ public class SignatureEmbedderTests
               <text>&expansion;</text>
             </svg>
             """));
-        stream.Position = 12;
         var signature = CreateSignature();
 
-        var result = SignatureEmbedder.TryEmbed(stream, "svg", signature);
+        Action act = () =>
+        {
+            using var _ = SignatureEmbedder.Embed(stream, "svg", signature);
+        };
 
-        result.Should().BeSameAs(stream);
-        stream.Position.Should().Be(0);
+        act.Should().Throw<XmlException>();
     }
 
     [Test]
-    public void TryEmbed_ReturnsOriginalStreamAndResetsPositionWhenSvgzInflatesPastXmlLimit()
+    public void Embed_ThrowsWhenSvgzInflatesPastXmlLimit()
     {
         using var stream = CreateOversizedSvgz();
-        stream.Position = 12;
         var signature = CreateSignature();
 
-        var result = SignatureEmbedder.TryEmbed(stream, "svgz", signature);
+        Action act = () =>
+        {
+            using var _ = SignatureEmbedder.Embed(stream, "svgz", signature);
+        };
 
-        result.Should().BeSameAs(stream);
-        stream.Position.Should().Be(0);
+        act.Should().Throw<XmlException>();
     }
 
     [Test]
-    public void TryEmbed_PropagatesCriticalEmbeddingFailure()
+    public void Embed_PropagatesCriticalEmbeddingFailure()
     {
         using var stream = new ThrowingReadStream(new OutOfMemoryException("Critical embed failure."));
         var signature = CreateSignature();
 
-        Action act = () => SignatureEmbedder.TryEmbed(stream, "svg", signature);
+        Action act = () =>
+        {
+            using var _ = SignatureEmbedder.Embed(stream, "svg", signature);
+        };
 
         act.Should().Throw<OutOfMemoryException>()
             .WithMessage("Critical embed failure.");
@@ -93,20 +86,6 @@ public class SignatureEmbedderTests
 
         act.Should().Throw<FileTooLargeException>()
             .Which.FileSizeBytes.Should().Be(FileSizePolicy.MaximumFileSizeBytes + 1);
-        stream.ReadCount.Should().Be(0);
-    }
-
-    [Test]
-    public void TryEmbed_ReturnsOriginalStreamAndResetsPositionWhenInputExceedsBufferLimit()
-    {
-        using var stream = new OversizedSeekableReadStream(FileSizePolicy.MaximumFileSizeBytes + 1);
-        stream.Position = 7;
-        var signature = CreateSignature();
-
-        var result = SignatureEmbedder.TryEmbed(stream, "pdf", signature);
-
-        result.Should().BeSameAs(stream);
-        stream.Position.Should().Be(0);
         stream.ReadCount.Should().Be(0);
     }
 

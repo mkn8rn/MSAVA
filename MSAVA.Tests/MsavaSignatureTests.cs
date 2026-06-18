@@ -1,4 +1,5 @@
 using System.Text;
+using System.Xml;
 using MSAVA_BLL.Utils.Signature;
 
 namespace MSAVA_App.Tests;
@@ -46,6 +47,38 @@ public class MsavaSignatureTests
         result.Found.Should().BeTrue();
         result.Signature.Should().NotBeNull();
         result.Signature!.Timestamp.Should().Be(FixedNow.ToUnixTimeSeconds());
+    }
+
+    [Test]
+    public void SignatureService_PropagatesSupportedEmbeddingFailure()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
+            <!DOCTYPE svg [
+              <!ENTITY expansion "expanded">
+            ]>
+            <svg xmlns="http://www.w3.org/2000/svg">
+              <text>&expansion;</text>
+            </svg>
+            """));
+        var service = new SignatureService(new FixedTimeProvider(FixedNow));
+
+        Action act = () =>
+        {
+            using var _ = service.PrepareForDownload(stream, "svg", ContentHash, fileId: 42);
+        };
+
+        act.Should().Throw<XmlException>();
+    }
+
+    [Test]
+    public void SignatureService_ReturnsOriginalStreamWhenExtensionIsUnsupported()
+    {
+        using var stream = new MemoryStream([1, 2, 3]);
+        var service = new SignatureService(new FixedTimeProvider(FixedNow));
+
+        var prepared = service.PrepareForDownload(stream, "bin", ContentHash, fileId: 42);
+
+        prepared.Should().BeSameAs(stream);
     }
 
     [Test]
