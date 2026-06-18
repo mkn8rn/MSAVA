@@ -135,6 +135,24 @@ public class AccessGroupServiceTests
         context.AccessGroups.Should().BeEmpty();
     }
 
+    [TestCase("Editors\nAudit")]
+    [TestCase("Editors\u0000Audit")]
+    public async Task CreateAccessGroup_RejectsNameWithControlCharacterBeforeSessionLookup(string name)
+    {
+        using var context = CreateContext();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = new AccessGroupService(
+            context,
+            new ThrowingUserSessionService(),
+            logger);
+
+        Func<Task> act = () => service.CreateAccessGroupAsync(name);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Access group name contains invalid characters.*");
+        context.AccessGroups.Should().BeEmpty();
+    }
+
     [Test]
     public async Task CreateAccessGroup_RejectsOversizeNameBeforeSessionLookup()
     {

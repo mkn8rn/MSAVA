@@ -17,6 +17,9 @@ public static class AuthInputPolicy
         if (normalizedUsername.Length > MaximumUsernameLength)
             throw new ArgumentException($"Username must be {MaximumUsernameLength} characters or fewer.", nameof(username));
 
+        if (AuthTextInputPolicy.ContainsControlCharacter(normalizedUsername))
+            throw new ArgumentException("Username contains invalid characters.", nameof(username));
+
         return normalizedUsername;
     }
 

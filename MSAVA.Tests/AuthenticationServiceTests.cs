@@ -114,6 +114,24 @@ public class AuthenticationServiceTests
         context.Jwts.Should().BeEmpty();
     }
 
+    [TestCase("bad\nuser")]
+    [TestCase("bad\u0000user")]
+    public async Task LoginAsync_RejectsUsernameWithControlCharacterBeforeJwtIsPersisted(string username)
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
+        {
+            Username = username,
+            Password = "password"
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Username contains invalid characters.*");
+        context.Jwts.Should().BeEmpty();
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task LoginAsync_RejectsMissingPassword(string password)
@@ -452,6 +470,25 @@ public class AuthenticationServiceTests
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage($"Username must be {AuthInputPolicy.MaximumUsernameLength} characters or fewer.*");
+        context.Users.Should().BeEmpty();
+    }
+
+    [TestCase("bad\nuser")]
+    [TestCase("bad\u0000user")]
+    public async Task RegisterAsync_RejectsUsernameWithControlCharacterBeforeInviteValidation(string username)
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
+        {
+            Username = username,
+            Password = "password",
+            InviteCode = Guid.NewGuid()
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Username contains invalid characters.*");
         context.Users.Should().BeEmpty();
     }
 
