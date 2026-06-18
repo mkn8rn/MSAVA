@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
@@ -135,6 +136,27 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_ReturnsNullWhenLoginResponseTokenContainsControlCharacter()
+    {
+        var requests = new List<(HttpMethod Method, string PathAndQuery, string? Authorization)>();
+        var handler = new RecordingHttpMessageHandler((request, _) =>
+        {
+            requests.Add(RecordRequest(request));
+            return Task.FromResult(CreateLoginResponse("bad\ntoken"));
+        });
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        requests.Should().HaveCount(1);
+        requests[0].PathAndQuery.Should().Be("/api/auth/login");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
     public async Task LoginAsync_PropagatesWrappedCancellationWithoutChangingSessionState()
     {
         var handler = new RecordingHttpMessageHandler((_, _) =>
@@ -217,6 +239,36 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_NormalizesTokenBeforeSessionRequestAndState()
+    {
+        var userId = Guid.NewGuid();
+        const string token = "  opaque-login-token  ";
+        const string normalizedToken = "opaque-login-token";
+        var requests = new List<(HttpMethod Method, string PathAndQuery, string? Authorization)>();
+        var handler = new RecordingHttpMessageHandler((request, _) =>
+        {
+            requests.Add(RecordRequest(request));
+
+            return Task.FromResult(requests.Count switch
+            {
+                1 => CreateLoginResponse(token),
+                2 => CreateSessionResponse(userId, "database-alice", isAdmin: false, loggedIn: true),
+                _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            });
+        });
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        requests.Should().HaveCount(2);
+        requests[1].PathAndQuery.Should().Be("/api/users/session");
+        requests[1].Authorization.Should().Be($"Bearer {normalizedToken}");
+        result.Should().Be(normalizedToken);
+        service.AccessToken.Should().Be(normalizedToken);
+        service.IsLoggedIn.Should().BeTrue();
+    }
+
+    [Test]
     public async Task LoginAsync_ReturnsNullWhenCurrentSessionIsInactive()
     {
         var userId = Guid.NewGuid();
@@ -275,7 +327,7 @@ public class LocalSessionServiceTests
     }
 
     private static HttpResponseMessage CreateLoginResponse(string token) =>
-        CreateJsonResponse($$"""{ "token": "{{token}}" }""");
+        CreateJsonResponse(JsonSerializer.Serialize(new { token }));
 
     private static HttpResponseMessage CreateSessionResponse(
         Guid userId,

@@ -1,6 +1,5 @@
 using System;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,15 +62,26 @@ public class LocalSessionService
                 responseStream,
                 AppJsonSerializerContext.Default.LoginResponseDTO,
                 cancellationToken);
-            var token = payload?.Token;
-            if (string.IsNullOrWhiteSpace(token))
+            string? normalizedToken;
+            try
+            {
+                normalizedToken = ApiService.NormalizeAccessToken(payload?.Token);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Login response contained an invalid token");
+                ClearSessionState();
+                return null;
+            }
+
+            if (normalizedToken is null)
             {
                 _logger.LogWarning("Login response did not contain a token");
                 ClearSessionState();
                 return null;
             }
 
-            var session = await LoadCurrentSessionAsync(token, cancellationToken);
+            var session = await LoadCurrentSessionAsync(normalizedToken, cancellationToken);
             if (session?.LoggedIn != true)
             {
                 _logger.LogWarning("Login response token did not resolve to an active current session");
@@ -79,10 +89,10 @@ public class LocalSessionService
                 return null;
             }
 
-            _accessToken = token;
-            _api.SetAccessToken(token);
+            _accessToken = normalizedToken;
+            _api.SetAccessToken(normalizedToken);
             _session = session;
-            return token;
+            return normalizedToken;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -100,11 +110,10 @@ public class LocalSessionService
         string accessToken,
         CancellationToken cancellationToken)
     {
-        using var msg = _api.CreateJsonRequest(
+        using var msg = _api.CreateJsonRequestWithAccessToken(
             HttpMethod.Get,
             ApiService.Routes.UsersSession,
-            anonymous: true);
-        msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            accessToken);
 
         using var resp = await _api.SendAsync(msg, cancellationToken);
         if (!resp.IsSuccessStatusCode)

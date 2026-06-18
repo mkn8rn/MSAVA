@@ -124,6 +124,53 @@ public class ApiServiceTests
     }
 
     [Test]
+    public void CreateJsonRequestWithAccessToken_AttachesTrimmedExplicitBearerToken()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("cached-token");
+
+        using var request = api.CreateJsonRequestWithAccessToken(
+            HttpMethod.Get,
+            "api/users/session",
+            "  login-token  ");
+
+        request.Headers.Authorization.Should().NotBeNull();
+        request.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        request.Headers.Authorization.Parameter.Should().Be("login-token");
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase(" ")]
+    public void CreateJsonRequestWithAccessToken_RejectsMissingExplicitBearerToken(string? token)
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+
+        Action act = () =>
+        {
+            using var _ = api.CreateJsonRequestWithAccessToken(HttpMethod.Get, "api/users/session", token);
+        };
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Access token is required.*");
+    }
+
+    [TestCase("bad\ntoken")]
+    [TestCase("bad\u0000token")]
+    public void CreateJsonRequestWithAccessToken_RejectsControlCharacters(string token)
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+
+        Action act = () =>
+        {
+            using var _ = api.CreateJsonRequestWithAccessToken(HttpMethod.Get, "api/users/session", token);
+        };
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Access token contains invalid characters.*");
+    }
+
+    [Test]
     public void CreateJsonRequest_DoesNotAttachBearerTokenForAnonymousRequest()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));

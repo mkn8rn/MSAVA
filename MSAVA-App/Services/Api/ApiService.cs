@@ -44,20 +44,8 @@ public class ApiService
         public const string FilesStoreFormFile = "api/files/store/formfile";
     }
 
-    public void SetAccessToken(string? token)
-    {
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            _accessToken = null;
-            return;
-        }
-
-        string normalizedToken = token.Trim();
-        if (ContainsControlCharacter(normalizedToken))
-            throw new ArgumentException("Access token contains invalid characters.", nameof(token));
-
-        _accessToken = normalizedToken;
-    }
+    public void SetAccessToken(string? token) =>
+        _accessToken = NormalizeAccessToken(token, nameof(token));
 
     public void ClearAccessToken() => _accessToken = null;
 
@@ -80,6 +68,17 @@ public class ApiService
     {
         var request = new HttpRequestMessage(method, CreateRelativeApiUri(relativeUrl));
         AttachAuthorizationHeader(request, anonymous);
+        return request;
+    }
+
+    public HttpRequestMessage CreateJsonRequestWithAccessToken(
+        HttpMethod method,
+        string relativeUrl,
+        string? accessToken)
+    {
+        string normalizedToken = NormalizeRequiredAccessToken(accessToken, nameof(accessToken));
+        var request = new HttpRequestMessage(method, CreateRelativeApiUri(relativeUrl));
+        AttachBearerToken(request, normalizedToken);
         return request;
     }
 
@@ -235,10 +234,36 @@ public class ApiService
 
     private void AttachAuthorizationHeader(HttpRequestMessage request, bool anonymous)
     {
-        if (!anonymous && !string.IsNullOrWhiteSpace(_accessToken))
+        if (!anonymous && _accessToken is not null)
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+            AttachBearerToken(request, _accessToken);
         }
+    }
+
+    private static void AttachBearerToken(HttpRequestMessage request, string accessToken)
+    {
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+    }
+
+    internal static string? NormalizeAccessToken(string? token, string parameterName = "token")
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        string normalizedToken = token.Trim();
+        if (ContainsControlCharacter(normalizedToken))
+            throw new ArgumentException("Access token contains invalid characters.", parameterName);
+
+        return normalizedToken;
+    }
+
+    private static string NormalizeRequiredAccessToken(string? token, string parameterName)
+    {
+        string? normalizedToken = NormalizeAccessToken(token, parameterName);
+        if (normalizedToken is null)
+            throw new ArgumentException("Access token is required.", parameterName);
+
+        return normalizedToken;
     }
 
     private static bool ContainsControlCharacter(string value)
