@@ -84,15 +84,15 @@ public static partial class DocumentMetadataExtractor
             var doc = SafeXmlDocumentLoader.Load(xmlStream);
 
             var pagesNode = doc.GetElementsByTagName("Pages");
-            if (pagesNode.Count > 0 && int.TryParse(pagesNode[0]?.InnerText, out var pages))
+            if (pagesNode.Count > 0 && TryParseNonNegativeMetadataCount(pagesNode[0]?.InnerText, out var pages))
                 pageCount = pages;
 
             var slidesNode = doc.GetElementsByTagName("Slides");
-            if (slidesNode.Count > 0 && int.TryParse(slidesNode[0]?.InnerText, out var slides))
+            if (slidesNode.Count > 0 && TryParseNonNegativeMetadataCount(slidesNode[0]?.InnerText, out var slides))
                 slideCount = slides;
 
             var wordsNode = doc.GetElementsByTagName("Words");
-            if (wordsNode.Count > 0 && int.TryParse(wordsNode[0]?.InnerText, out var words))
+            if (wordsNode.Count > 0 && TryParseNonNegativeMetadataCount(wordsNode[0]?.InnerText, out var words))
                 wordCount = words;
         }
 
@@ -168,6 +168,18 @@ public static partial class DocumentMetadataExtractor
 
     #endregion
 
+    private static bool TryParseNonNegativeMetadataCount(string? value, out int count)
+    {
+        count = 0;
+
+        return !string.IsNullOrWhiteSpace(value) &&
+            int.TryParse(
+                value.Trim(),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out count);
+    }
+
     #region OpenDocument (ODT, ODS, ODP)
 
     private static JsonDocument ExtractOpenDocument(Stream stream, long size)
@@ -204,10 +216,10 @@ public static partial class DocumentMetadataExtractor
                 foreach (XmlAttribute attr in statsNode.Attributes)
                 {
                     var localName = attr.LocalName;
-                    if (localName == "page-count" && int.TryParse(attr.Value, out var p)) pageCount = p;
-                    if (localName == "table-count" && int.TryParse(attr.Value, out var t)) tableCount = t;
-                    if (localName == "image-count" && int.TryParse(attr.Value, out var i)) imageCount = i;
-                    if (localName == "object-count" && int.TryParse(attr.Value, out var o)) objectCount = o;
+                    if (localName == "page-count" && TryParseNonNegativeMetadataCount(attr.Value, out var p)) pageCount = p;
+                    if (localName == "table-count" && TryParseNonNegativeMetadataCount(attr.Value, out var t)) tableCount = t;
+                    if (localName == "image-count" && TryParseNonNegativeMetadataCount(attr.Value, out var i)) imageCount = i;
+                    if (localName == "object-count" && TryParseNonNegativeMetadataCount(attr.Value, out var o)) objectCount = o;
                 }
             }
         }
