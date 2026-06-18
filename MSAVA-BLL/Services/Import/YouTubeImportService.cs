@@ -49,7 +49,8 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
 
         var downloadManifest = await _youtubeClient.GetDownloadManifestAsync(dto.YouTubeUrl, cancellationToken);
-        string fileName = string.IsNullOrWhiteSpace(downloadManifest.Title) ? "YouTube Video" : downloadManifest.Title;
+        string fileName = FileCreationRequestValidator.NormalizeFileName(
+            string.IsNullOrWhiteSpace(downloadManifest.Title) ? "YouTube Video" : downloadManifest.Title);
         string fileExtension = "mp4";
         string tempFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
 

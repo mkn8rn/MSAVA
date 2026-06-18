@@ -75,6 +75,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
             }
         }
 
+        finalFileName = FileCreationRequestValidator.NormalizeFileName(finalFileName);
         string finalExtension = ProviderFileType.RequireSupportedExtension("OneDrive", inferredExtension);
         EnsureDeclaredContentLengthWithinMaximum(resp.Content);
 

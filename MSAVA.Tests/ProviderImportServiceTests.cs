@@ -1185,6 +1185,56 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task OneDriveImportAsync_RejectsOversizedResponseFileNameBeforeCopyingContent()
+    {
+        string oversizedFileName = new('o', FileMetadataPolicy.MaximumFileNameLength + 1);
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            var response = CreateStreamResponse(HttpStatusCode.OK, "text/plain", new ThrowingReadStream());
+            response.Content.Headers.ContentDisposition = new("attachment")
+            {
+                FileName = $"\"{oversizedFileName}.txt\""
+            };
+            return response;
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage($"FileName must be {FileMetadataPolicy.MaximumFileNameLength} characters or fewer.");
+
+            logger.Messages.Should().NotContain(message =>
+                message.Contains("temp path ", StringComparison.Ordinal));
+            handler.Requests.Should().ContainSingle();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task OneDriveImportAsync_UsesProviderFallbackNameWhenResponseHasNoFileName()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -1344,6 +1394,49 @@ public class ProviderImportServiceTests
             await act.Should().ThrowAsync<FileMetadataValidationException>()
                 .WithMessage("Tags values must be provided.");
             youTubeClient.ManifestCalls.Should().Be(0);
+            youTubeClient.CopyCalls.Should().Be(0);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task YouTubeImportAsync_RejectsOversizedManifestTitleBeforeCopyingStream()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+        var youTubeClient = new OversizedTitleYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
+                new ServiceLogger(logger, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345",
+                AccessGroupId = accessGroup.Id,
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage($"FileName must be {FileMetadataPolicy.MaximumFileNameLength} characters or fewer.");
+
+            logger.Messages.Should().NotContain(message =>
+                message.Contains("temp path ", StringComparison.Ordinal));
+            youTubeClient.ManifestCalls.Should().Be(1);
             youTubeClient.CopyCalls.Should().Be(0);
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
@@ -2057,6 +2150,33 @@ public class ProviderImportServiceTests
         {
             CopyCalls++;
             await destination.WriteAsync(OversizeContent, cancellationToken);
+        }
+    }
+
+    private sealed class OversizedTitleYouTubeDownloadClient : IYouTubeDownloadClient
+    {
+        public int ManifestCalls { get; private set; }
+        public int CopyCalls { get; private set; }
+
+        public Task<YouTubeDownloadManifest> GetDownloadManifestAsync(
+            string youtubeUrl,
+            CancellationToken cancellationToken)
+        {
+            ManifestCalls++;
+            return Task.FromResult(new YouTubeDownloadManifest(
+                new string('y', FileMetadataPolicy.MaximumFileNameLength + 1),
+                [new YouTubeStreamInfo(new object(), "mp4", "720p", 720, 1_500)],
+                [],
+                []));
+        }
+
+        public Task CopyToAsync(
+            YouTubeStreamInfo streamInfo,
+            Stream destination,
+            CancellationToken cancellationToken)
+        {
+            CopyCalls++;
+            return Task.CompletedTask;
         }
     }
 

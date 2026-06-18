@@ -123,6 +123,11 @@ internal static class FileCreationRequestValidator
             dto.Description));
     }
 
+    public static string NormalizeFileName(string? fileName)
+    {
+        return FileMetadataPolicy.NormalizeFileName(fileName);
+    }
+
     private static FileCreationMetadata NormalizeMetadata(
         string? fileName,
         string? fileExtension,
