@@ -183,36 +183,12 @@ public class FilePersistenceService
 
     private static void NormalizeAndValidateStreamDto(SaveFileFromStreamDTO dto)
     {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        dto.FileName = FileMetadataPolicy.NormalizeFileName(dto.FileName);
-        dto.Description = FileMetadataPolicy.NormalizeDescription(dto.Description);
-        dto.Tags = FileMetadataPolicy.NormalizeMetadataValues(dto.Tags, nameof(dto.Tags));
-        dto.Categories = FileMetadataPolicy.NormalizeMetadataValues(dto.Categories, nameof(dto.Categories));
-
-        if (string.IsNullOrWhiteSpace(dto.FileExtension))
-            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
-        MappingUtils.ParseSupportedFileExtension(dto.FileExtension);
-        if (dto.Stream is null)
-            throw new ArgumentException("File content must be provided as a stream.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
     }
 
     private static void NormalizeAndValidateFetchDto(SaveFileFromFetchDTO dto)
     {
-        dto.FileName = FileMetadataPolicy.NormalizeFileName(dto.FileName);
-        dto.Description = FileMetadataPolicy.NormalizeDescription(dto.Description);
-        dto.Tags = FileMetadataPolicy.NormalizeMetadataValues(dto.Tags, nameof(dto.Tags));
-        dto.Categories = FileMetadataPolicy.NormalizeMetadataValues(dto.Categories, nameof(dto.Categories));
-
-        if (string.IsNullOrWhiteSpace(dto.FileExtension))
-            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
-        MappingUtils.ParseSupportedFileExtension(dto.FileExtension);
-        if (string.IsNullOrWhiteSpace(dto.TempFilePath))
-            throw new ArgumentException("TempFilePath must be provided.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
     }
 
     private static async Task<(byte[] FileHash, long FileLength)> CopyStreamToTempFileAndHashAsync(

@@ -270,6 +270,84 @@ public class FileIngestionServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromUrlAsync_RejectsInvalidMetadataBeforeSessionHostOrClientWork()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        bool resolverCalled = false;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                hostAddressResolver: (_, _) =>
+                {
+                    resolverCalled = true;
+                    return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+                });
+            var dto = CreateUrlDto("https://files.example.test/sample.txt");
+            dto.Tags = ["valid", " "];
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage("Tags values must be provided.");
+
+            resolverCalled.Should().BeFalse();
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromUrlAsync_RejectsUnsupportedExtensionBeforeResolvingHostOrCreatingHttpClient()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        bool resolverCalled = false;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                hostAddressResolver: (_, _) =>
+                {
+                    resolverCalled = true;
+                    return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+                });
+            var dto = CreateUrlDto("https://files.example.test/sample.exe");
+            dto.FileExtension = "exe";
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileExtension 'exe' is not supported.*");
+
+            resolverCalled.Should().BeFalse();
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromUrlAsync_ThrowsHttpRequestExceptionWhenRemoteDownloadFails()
     {
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -414,6 +492,51 @@ public class FileIngestionServiceTests
                 .WithMessage("File size 5 bytes exceeds the maximum allowed size of 4 bytes.");
 
             responseContent.SerializeWasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_RejectsInvalidMetadataBeforeOpeningFile()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                session: CreateSession(user.Id));
+            var formFile = new RecordingFormFile(4);
+            var dto = new SaveFileFromFormFileDTO
+            {
+                FileName = "upload",
+                FileExtension = "txt",
+                FormFile = formFile,
+                AccessGroupId = accessGroup.Id,
+                Tags = ["valid", " "],
+                Categories = [],
+                Description = string.Empty,
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            Func<Task> act = () => service.CreateFileFromFormFileAsync(dto);
+
+            await act.Should().ThrowAsync<FileMetadataValidationException>()
+                .WithMessage("Tags values must be provided.");
+
+            formFile.OpenReadStreamWasCalled.Should().BeFalse();
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
         }

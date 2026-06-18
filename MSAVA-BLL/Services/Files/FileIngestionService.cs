@@ -31,36 +31,14 @@ public class FileIngestionService : IFileIngestionService
 
     public async Task<Guid> CreateFileFromStreamAsync(SaveFileFromStreamDTO dto, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        if (string.IsNullOrWhiteSpace(dto.FileName))
-            throw new ArgumentException("FileName must be provided.", nameof(dto));
-        if (string.IsNullOrWhiteSpace(dto.FileExtension))
-            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
-        if (dto.Stream == null)
-            throw new ArgumentException("File content must be provided as a stream.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
-
-        dto.Tags ??= [];
-        dto.Categories ??= [];
-        dto.Description ??= string.Empty;
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
 
         return await _persistenceService.CreateFileFromStreamAsync(dto, cancellationToken);
     }
 
     public async Task<Guid> CreateFileFromUrlAsync(SaveFileFromUrlDTO dto, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        if (string.IsNullOrWhiteSpace(dto.FileUrl))
-            throw new ArgumentException("FileUrl must be provided.", nameof(dto));
-        if (string.IsNullOrWhiteSpace(dto.FileName))
-            throw new ArgumentException("FileName must be provided.", nameof(dto));
-        if (string.IsNullOrWhiteSpace(dto.FileExtension))
-            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
 
         Uri fileUri = RemoteFileHostPolicy.ParseHttpUri(dto.FileUrl, nameof(dto.FileUrl));
         await _persistenceService.AuthorizeCreateInAccessGroupAsync(dto.AccessGroupId, cancellationToken);
@@ -117,16 +95,7 @@ public class FileIngestionService : IFileIngestionService
 
     public async Task<Guid> CreateFileFromFormFileAsync(SaveFileFromFormFileDTO dto, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        if (string.IsNullOrWhiteSpace(dto.FileName))
-            throw new ArgumentException("FileName must be provided.", nameof(dto));
-        if (string.IsNullOrWhiteSpace(dto.FileExtension))
-            throw new ArgumentException("FileExtension must be provided.", nameof(dto));
-        if (dto.FormFile == null)
-            throw new ArgumentException("FormFile must be provided.", nameof(dto));
-        if (dto.AccessGroupId == Guid.Empty)
-            throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
+        FileCreationRequestValidator.NormalizeAndValidate(dto);
 
         FileSizePolicy.EnsureWithinMaximum(dto.FormFile.Length, _persistenceService.MaximumFileSizeBytes);
         await using var stream = dto.FormFile.OpenReadStream();
