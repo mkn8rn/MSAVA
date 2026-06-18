@@ -67,6 +67,26 @@ public class SignatureDetectorTests
     }
 
     [Test]
+    public void Detect_FindsPdfSignatureFromNonSeekableStreamWithoutLargeReadBuffer()
+    {
+        using var stream = new BufferLimitedReadStream(
+            Encoding.ASCII.GetBytes($"""
+                %PDF-1.7
+                {new string('x', 12_000)}
+                % {ValidSignature}
+                """),
+            maximumReadSize: 4096);
+
+        var signature = SignatureDetector.Detect(stream, "pdf");
+
+        signature.Should().NotBeNull();
+        signature!.ContentHash.Should().Be("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+        signature.FileId.Should().Be(42);
+        signature.Timestamp.Should().Be(1700000000);
+        stream.LargestRequestedReadSize.Should().BeLessThanOrEqualTo(4096);
+    }
+
+    [Test]
     public void Detect_PropagatesCriticalDetectorFailure()
     {
         using var stream = new ThrowingReadStream(new OutOfMemoryException("Critical detector failure."));
@@ -105,6 +125,75 @@ public class SignatureDetectorTests
         public override int Read(Span<byte> buffer)
         {
             throw exception;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class BufferLimitedReadStream(byte[] content, int maximumReadSize) : Stream
+    {
+        private int _position;
+
+        public int LargestRequestedReadSize { get; private set; }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            LargestRequestedReadSize = Math.Max(LargestRequestedReadSize, count);
+
+            if (count > maximumReadSize)
+                throw new InvalidOperationException("Read buffer is larger than the stream boundary allows.");
+
+            if (_position >= content.Length)
+                return 0;
+
+            var bytesToRead = Math.Min(count, content.Length - _position);
+            Array.Copy(content, _position, buffer, offset, bytesToRead);
+            _position += bytesToRead;
+            return bytesToRead;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            LargestRequestedReadSize = Math.Max(LargestRequestedReadSize, buffer.Length);
+
+            if (buffer.Length > maximumReadSize)
+                throw new InvalidOperationException("Read buffer is larger than the stream boundary allows.");
+
+            if (_position >= content.Length)
+                return 0;
+
+            var bytesToRead = Math.Min(buffer.Length, content.Length - _position);
+            content.AsSpan(_position, bytesToRead).CopyTo(buffer);
+            _position += bytesToRead;
+            return bytesToRead;
         }
 
         public override long Seek(long offset, SeekOrigin origin)

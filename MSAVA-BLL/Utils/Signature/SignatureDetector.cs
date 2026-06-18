@@ -14,6 +14,8 @@ namespace MSAVA_BLL.Utils.Signature;
 /// </summary>
 public static class SignatureDetector
 {
+    private const int PdfSignatureTailBytes = 4096;
+
     private static readonly Dictionary<string, Func<Stream, MsavaSignature?>> Detectors =
         new(StringComparer.OrdinalIgnoreCase)
     {
@@ -318,27 +320,91 @@ public static class SignatureDetector
 
     private static MsavaSignature? DetectInPdf(Stream input)
     {
-        // Read the last few KB to find our appended signature
-        if (!input.CanSeek)
-        {
-            var ms = new MemoryStream();
-            input.CopyTo(ms);
-            ms.Position = 0;
-            input = ms;
-        }
+        var buffer = input.CanSeek
+            ? ReadSeekablePdfTail(input)
+            : ReadNonSeekablePdfTail(input);
 
-        var tailSize = Math.Min(4096, input.Length);
-        var buffer = new byte[tailSize];
-        
-        input.Position = input.Length - tailSize;
-        var bytesRead = input.Read(buffer, 0, buffer.Length);
-        
-        var tail = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+        var tail = Encoding.ASCII.GetString(buffer);
         
         if (MsavaSignature.TryParse(tail, out var sig))
             return sig;
 
         return null;
+    }
+
+    private static byte[] ReadSeekablePdfTail(Stream input)
+    {
+        var tailSize = (int)Math.Min(PdfSignatureTailBytes, input.Length);
+        var buffer = new byte[tailSize];
+
+        input.Position = input.Length - tailSize;
+        var bytesRead = input.Read(buffer, 0, buffer.Length);
+
+        if (bytesRead == buffer.Length)
+            return buffer;
+
+        return buffer[..bytesRead];
+    }
+
+    private static byte[] ReadNonSeekablePdfTail(Stream input)
+    {
+        var tail = new byte[PdfSignatureTailBytes];
+        var readBuffer = new byte[PdfSignatureTailBytes];
+        var tailStart = 0;
+        var tailCount = 0;
+
+        int bytesRead;
+        while ((bytesRead = input.Read(readBuffer, 0, readBuffer.Length)) > 0)
+            AppendToTail(tail, ref tailStart, ref tailCount, readBuffer, bytesRead);
+
+        return CopyOrderedTail(tail, tailStart, tailCount);
+    }
+
+    private static void AppendToTail(
+        byte[] tail,
+        ref int tailStart,
+        ref int tailCount,
+        byte[] source,
+        int count)
+    {
+        if (count >= tail.Length)
+        {
+            Array.Copy(source, count - tail.Length, tail, 0, tail.Length);
+            tailStart = 0;
+            tailCount = tail.Length;
+            return;
+        }
+
+        var writeIndex = (tailStart + tailCount) % tail.Length;
+        var overflow = Math.Max(0, tailCount + count - tail.Length);
+        if (overflow > 0)
+        {
+            tailStart = (tailStart + overflow) % tail.Length;
+            tailCount -= overflow;
+        }
+
+        var firstCopyLength = Math.Min(count, tail.Length - writeIndex);
+        Array.Copy(source, 0, tail, writeIndex, firstCopyLength);
+
+        if (count > firstCopyLength)
+            Array.Copy(source, firstCopyLength, tail, 0, count - firstCopyLength);
+
+        tailCount += count;
+    }
+
+    private static byte[] CopyOrderedTail(byte[] tail, int tailStart, int tailCount)
+    {
+        if (tailCount == 0)
+            return [];
+
+        var result = new byte[tailCount];
+        var firstCopyLength = Math.Min(tailCount, tail.Length - tailStart);
+        Array.Copy(tail, tailStart, result, 0, firstCopyLength);
+
+        if (tailCount > firstCopyLength)
+            Array.Copy(tail, 0, result, firstCopyLength, tailCount - firstCopyLength);
+
+        return result;
     }
 
     #endregion
