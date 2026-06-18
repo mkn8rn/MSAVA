@@ -156,6 +156,7 @@ else
     app.UseHsts();
 }
 
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseHttpsRedirection();
 
 app.UseSerilogRequestLogging(options =>

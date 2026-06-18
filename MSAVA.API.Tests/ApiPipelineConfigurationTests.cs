@@ -96,6 +96,27 @@ public class ApiPipelineConfigurationTests
     }
 
     [Test]
+    public void Program_RegistersSecurityHeadersBeforeRedirectsAndExceptionHandling()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+        string normalizedProgramText = programText.Replace("\r\n", "\n");
+
+        int hstsIndex = normalizedProgramText.IndexOf("app.UseHsts();", StringComparison.Ordinal);
+        int securityHeadersIndex = normalizedProgramText.IndexOf(
+            "app.UseMiddleware<SecurityHeadersMiddleware>();",
+            StringComparison.Ordinal);
+        int httpsRedirectionIndex = normalizedProgramText.IndexOf("app.UseHttpsRedirection();", StringComparison.Ordinal);
+        int exceptionMiddlewareIndex = normalizedProgramText.IndexOf(
+            "app.UseMiddleware<ExceptionCatcherMiddleware>();",
+            StringComparison.Ordinal);
+
+        securityHeadersIndex.Should().BeGreaterThanOrEqualTo(0);
+        securityHeadersIndex.Should().BeGreaterThan(hstsIndex);
+        httpsRedirectionIndex.Should().BeGreaterThan(securityHeadersIndex);
+        exceptionMiddlewareIndex.Should().BeGreaterThan(securityHeadersIndex);
+    }
+
+    [Test]
     public void Program_BuildsRequestContextAfterAuthenticationBeforeAuthorization()
     {
         string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
