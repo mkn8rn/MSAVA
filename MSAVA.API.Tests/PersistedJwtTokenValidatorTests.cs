@@ -96,6 +96,34 @@ public class PersistedJwtTokenValidatorTests
         tokenContext.Result?.Failure?.Message.Should().Be(PersistedJwtTokenValidator.MissingBearerTokenFailure);
     }
 
+    [Test]
+    public async Task ValidateAsync_FailsWhenTokenStoreLookupFailsRecoverably()
+    {
+        var tokenContext = CreateTokenValidatedContext($"Bearer {TokenString}");
+        var validator = new PersistedJwtTokenValidator(
+            (_, _, _) => throw new InvalidOperationException("Simulated recoverable token lookup failure."),
+            new FixedTimeProvider(FixedNow));
+
+        await validator.TokenValidated(tokenContext);
+
+        tokenContext.Result?.Failure?.Message.Should().Be(PersistedJwtTokenValidator.TokenStoreLookupFailure);
+    }
+
+    [Test]
+    public async Task ValidateAsync_PropagatesNonRecoverableTokenLookupFault()
+    {
+        var tokenContext = CreateTokenValidatedContext($"Bearer {TokenString}");
+        var validator = new PersistedJwtTokenValidator(
+            (_, _, _) => throw new InvalidCastException("Token lookup projection is invalid."),
+            new FixedTimeProvider(FixedNow));
+
+        var act = async () => await validator.TokenValidated(tokenContext);
+
+        await act.Should().ThrowAsync<InvalidCastException>()
+            .WithMessage("Token lookup projection is invalid.");
+        tokenContext.Result.Should().BeNull();
+    }
+
     private static TokenValidatedContext CreateTokenValidatedContext(string? authorizationHeader)
     {
         var httpContext = new DefaultHttpContext();

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
-using MSAVA_Shared.Diagnostics;
 
 namespace MSAVA_API.Authentication;
 
@@ -11,12 +11,19 @@ internal sealed class PersistedJwtTokenValidator : JwtBearerEvents
     internal const string InactiveTokenFailure = "Bearer token is not active.";
     internal const string TokenStoreLookupFailure = "Failed to validate persisted bearer token.";
 
-    private readonly BaseDataContext _dataContext;
+    private readonly Func<string, DateTime, CancellationToken, Task<bool>> _tokenLookup;
     private readonly TimeProvider _timeProvider;
 
     public PersistedJwtTokenValidator(BaseDataContext dataContext, TimeProvider timeProvider)
+        : this(CreateTokenLookup(dataContext), timeProvider)
     {
-        _dataContext = dataContext ?? throw new ArgumentNullException(nameof(dataContext));
+    }
+
+    internal PersistedJwtTokenValidator(
+        Func<string, DateTime, CancellationToken, Task<bool>> tokenLookup,
+        TimeProvider timeProvider)
+    {
+        _tokenLookup = tokenLookup ?? throw new ArgumentNullException(nameof(tokenLookup));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -36,18 +43,13 @@ internal sealed class PersistedJwtTokenValidator : JwtBearerEvents
         bool tokenIsActive;
         try
         {
-            tokenIsActive = await _dataContext.Jwts
-                .AsNoTracking()
-                .AnyAsync(
-                    token => token.TokenString == tokenString &&
-                        token.ExpiresAt > utcNow,
-                    cancellationToken);
+            tokenIsActive = await _tokenLookup(tokenString, utcNow, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex) when (!CriticalExceptionPolicy.ContainsCriticalException(ex))
+        catch (Exception ex) when (RecoverableLookupFailurePolicy.IsRecoverable(ex))
         {
             context.Fail(TokenStoreLookupFailure);
             return;
@@ -55,5 +57,17 @@ internal sealed class PersistedJwtTokenValidator : JwtBearerEvents
 
         if (!tokenIsActive)
             context.Fail(InactiveTokenFailure);
+    }
+
+    private static Func<string, DateTime, CancellationToken, Task<bool>> CreateTokenLookup(BaseDataContext dataContext)
+    {
+        ArgumentNullException.ThrowIfNull(dataContext);
+
+        return (tokenString, utcNow, cancellationToken) => dataContext.Jwts
+            .AsNoTracking()
+            .AnyAsync(
+                token => token.TokenString == tokenString &&
+                    token.ExpiresAt > utcNow,
+                cancellationToken);
     }
 }
