@@ -29,6 +29,46 @@ public class LocalEnvironmentTests
     }
 
     [Test]
+    public void Constructor_AllowsNullSerilogRetainedFileCountLimit()
+    {
+        var values = CreateValidEnvironmentValues();
+        values["serilog_retained_file_count_limit"] = "null";
+
+        using var restore = new EnvironmentVariableRestore(values.Keys);
+        SetUpperCaseEnvironmentValues(values);
+
+        var env = new LocalEnvironment();
+
+        env.Values.SerilogRetainedFileCountLimit.Should().BeNull();
+    }
+
+    [TestCase("postgres_basedb_port", "0", "Environment variable 'postgres_basedb_port' must be a positive integer: '0'")]
+    [TestCase("postgres_basedb_port", "+5432", "Environment variable 'postgres_basedb_port' must be a positive integer: '+5432'")]
+    [TestCase("postgres_basedb_port", "-5432", "Environment variable 'postgres_basedb_port' must be a positive integer: '-5432'")]
+    [TestCase("serilog_retained_file_count_limit", "0", "Environment variable 'serilog_retained_file_count_limit' must be null or a positive integer: '0'")]
+    [TestCase("serilog_retained_file_count_limit", "-1", "Environment variable 'serilog_retained_file_count_limit' must be null or a positive integer: '-1'")]
+    [TestCase("serilog_retained_file_count_limit", "1.5", "Environment variable 'serilog_retained_file_count_limit' must be null or a positive integer: '1.5'")]
+    [TestCase("serilog_file_size_limit_bytes", "0", "Environment variable 'serilog_file_size_limit_bytes' must be a positive long integer: '0'")]
+    [TestCase("serilog_file_size_limit_bytes", "+2048", "Environment variable 'serilog_file_size_limit_bytes' must be a positive long integer: '+2048'")]
+    [TestCase("serilog_file_size_limit_bytes", "-2048", "Environment variable 'serilog_file_size_limit_bytes' must be a positive long integer: '-2048'")]
+    public void Constructor_RejectsInvalidPositiveNumericValues(
+        string key,
+        string invalidValue,
+        string expectedMessage)
+    {
+        var values = CreateValidEnvironmentValues();
+        values[key] = invalidValue;
+
+        using var restore = new EnvironmentVariableRestore(values.Keys);
+        SetUpperCaseEnvironmentValues(values);
+
+        Action act = () => _ = new LocalEnvironment();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage(expectedMessage);
+    }
+
+    [Test]
     public void Constructor_ReadsDevelopmentEnvFileFromRepositoryInfrastructureDirectory()
     {
         var values = CreateValidEnvironmentValues();

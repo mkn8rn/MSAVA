@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using MSAVA_INF.Models;
@@ -35,13 +36,13 @@ namespace MSAVA_INF.Environment
                 PostgresBaseDbUser = GetRequiredValue("postgres_basedb_user"),
                 PostgresBaseDbPassword = GetRequiredValue("postgres_basedb_password"),
                 PostgresBaseDbHost = GetRequiredValue("postgres_basedb_host"),
-                PostgresBaseDbPort = ParseRequiredInt("postgres_basedb_port"),
+                PostgresBaseDbPort = ParseRequiredPositiveInt("postgres_basedb_port"),
                 PostgresBaseDbDbName = GetRequiredValue("postgres_basedb_dbname"),
                 PostgresBaseDbSslMode = GetRequiredValue("postgres_basedb_ssl_mode"),
                 SerilogInformationLevel = ParseRequiredEnum<LogEventLevel>("serilog_information_level"),
                 SerilogRollingInterval = ParseRequiredEnum<RollingInterval>("serilog_rolling_interval"),
-                SerilogRetainedFileCountLimit = ParseNullableInt(GetRequiredValue("serilog_retained_file_count_limit")),
-                SerilogFileSizeLimitBytes = ParseRequiredLong("serilog_file_size_limit_bytes"),
+                SerilogRetainedFileCountLimit = ParseNullablePositiveInt("serilog_retained_file_count_limit"),
+                SerilogFileSizeLimitBytes = ParseRequiredPositiveLong("serilog_file_size_limit_bytes"),
                 SerilogRollOnFileSizeLimit = ParseRequiredBool("serilog_roll_on_file_size_limit")
             };
         }
@@ -79,20 +80,22 @@ namespace MSAVA_INF.Environment
                 normalizedValue.Equals("changeme", StringComparison.OrdinalIgnoreCase);
         }
 
-        private int ParseRequiredInt(string key)
+        private int ParseRequiredPositiveInt(string key)
         {
             var value = GetRequiredValue(key);
-            if (int.TryParse(value, out var result))
+            if (TryParseUnsignedInt(value, out var result) && result > 0)
                 return result;
-            throw new InvalidOperationException($"Environment variable '{key}' could not be parsed as int: '{value}'");
+
+            throw new InvalidOperationException($"Environment variable '{key}' must be a positive integer: '{value}'");
         }
 
-        private long ParseRequiredLong(string key)
+        private long ParseRequiredPositiveLong(string key)
         {
             var value = GetRequiredValue(key);
-            if (long.TryParse(value, out var result))
+            if (TryParseUnsignedLong(value, out var result) && result > 0)
                 return result;
-            throw new InvalidOperationException($"Environment variable '{key}' could not be parsed as long: '{value}'");
+
+            throw new InvalidOperationException($"Environment variable '{key}' must be a positive long integer: '{value}'");
         }
 
         private bool ParseRequiredBool(string key)
@@ -111,13 +114,36 @@ namespace MSAVA_INF.Environment
             throw new InvalidOperationException($"Environment variable '{key}' could not be parsed as {typeof(TEnum).Name}: '{value}'");
         }
 
-        private static int? ParseNullableInt(string value)
+        private int? ParseNullablePositiveInt(string key)
         {
-            if (string.IsNullOrWhiteSpace(value) || value.ToLowerInvariant() == "null")
+            var value = GetRequiredValue(key);
+            string normalizedValue = value.Trim();
+
+            if (normalizedValue.Equals("null", StringComparison.OrdinalIgnoreCase))
                 return null;
-            if (int.TryParse(value, out var i))
+
+            if (TryParseUnsignedInt(normalizedValue, out var i) && i > 0)
                 return i;
-            throw new InvalidOperationException($"Environment variable for nullable int could not be parsed: '{value}'");
+
+            throw new InvalidOperationException($"Environment variable '{key}' must be null or a positive integer: '{value}'");
+        }
+
+        private static bool TryParseUnsignedInt(string value, out int result)
+        {
+            return int.TryParse(
+                value.Trim(),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out result);
+        }
+
+        private static bool TryParseUnsignedLong(string value, out long result)
+        {
+            return long.TryParse(
+                value.Trim(),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out result);
         }
 
         public static bool IsDevelopment()
