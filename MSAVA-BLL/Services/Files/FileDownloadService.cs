@@ -107,24 +107,25 @@ public class FileDownloadService : IFileDownloadService
         cancellationToken.ThrowIfCancellationRequested();
         FilePathAccess access = await CanSessionUserAccessFileAsync(fileNameWithExtension, cancellationToken);
 
-        string fileName = Path.GetFileName(fileNameWithExtension);
-        string extension = Path.GetExtension(fileName).TrimStart('.');
+        string fileName = MappingUtils.GetFileName(access.FileReference);
+        string extension = FileExtensionUtils.GetFileExtension(access.FileReference);
+        string storedFileName = $"{fileName}.{extension}";
         string contentType = MetadataExtractor.GetContentType(extension);
-        string fullPath = FileContentUtils.GetFullPathIfSafe(fileNameWithExtension);
+        string fullPath = FileContentUtils.GetFullPathIfSafe(storedFileName);
 
         await IncrementDownloadCountAsync(access.RefId, cancellationToken);
         await _serviceLogger.WriteLogAsync(
             AccessLogActions.AccessViaPhysicalFile,
-            $"User accessed physical file by path: {fileNameWithExtension}",
+            $"User accessed physical file by path: {storedFileName}",
             access.Session.UserId,
-            fileNameWithExtension,
+            storedFileName,
             access.RefId,
             cancellationToken);
 
         return new PhysicalReturnFileDTO
         {
             FilePath = fullPath,
-            FileName = fileName,
+            FileName = storedFileName,
             ContentType = contentType
         };
     }
@@ -136,23 +137,25 @@ public class FileDownloadService : IFileDownloadService
         cancellationToken.ThrowIfCancellationRequested();
         FilePathAccess access = await CanSessionUserAccessFileAsync(fileNameWithExtension, cancellationToken);
 
-        string fileName = Path.GetFileNameWithoutExtension(fileNameWithExtension);
-        string extension = Path.GetExtension(fileNameWithExtension).TrimStart('.');
-        FileStream? fileStream = _fileManager.GetFileStream(fileNameWithExtension);
+        string fileName = MappingUtils.GetFileName(access.FileReference);
+        string extension = FileExtensionUtils.GetFileExtension(access.FileReference);
+        string storedFileName = $"{fileName}.{extension}";
+        FileStream? fileStream = _fileManager.GetFileStream(access.FileReference.FileHash, extension);
 
         try
         {
             await IncrementDownloadCountAsync(access.RefId, cancellationToken);
             await _serviceLogger.WriteLogAsync(
                 AccessLogActions.AccessViaFileStream,
-                $"User accessed file stream by path: {fileNameWithExtension}",
+                $"User accessed file stream by path: {storedFileName}",
                 access.Session.UserId,
-                fileNameWithExtension,
+                storedFileName,
                 access.RefId,
                 cancellationToken);
 
             var result = new StreamReturnFileDTO
             {
+                Id = access.RefId,
                 FileName = fileName,
                 FileExtension = extension,
                 FileStream = fileStream
@@ -171,7 +174,7 @@ public class FileDownloadService : IFileDownloadService
     {
         SessionDTO session = await GetActiveSessionAsync(cancellationToken);
         SavedFileReferenceDB fileReference = await GetFileReferenceByPathAsync(fileNameWithExtension, session, cancellationToken);
-        return new FilePathAccess(fileReference.Id, session);
+        return new FilePathAccess(fileReference, session);
     }
 
     private async Task<SavedFileReferenceDB> GetFileReferenceByPathAsync(
@@ -269,5 +272,8 @@ public class FileDownloadService : IFileDownloadService
             "Users must be whitelisted before downloading files.");
     }
 
-    private readonly record struct FilePathAccess(Guid RefId, SessionDTO Session);
+    private readonly record struct FilePathAccess(SavedFileReferenceDB FileReference, SessionDTO Session)
+    {
+        public Guid RefId => FileReference.Id;
+    }
 }

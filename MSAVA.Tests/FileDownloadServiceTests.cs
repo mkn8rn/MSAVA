@@ -545,6 +545,7 @@ public class FileDownloadServiceTests
 
             var result = await service.GetFileStreamByPathAsync(fileNameWithExtension);
 
+            result.Id.Should().Be(fileReference.Id);
             result.FileName.Should().Be(Path.GetFileNameWithoutExtension(fileNameWithExtension));
             result.FileExtension.Should().Be("txt");
             using var fileStream = result.FileStream;
@@ -599,10 +600,66 @@ public class FileDownloadServiceTests
             var result = await service.GetPhysicalFileReturnDataByPathAsync(requestedFileName);
 
             result.FilePath.Should().Be(contentPath);
+            result.FileName.Should().Be(Path.GetFileName(contentPath));
+            result.ContentType.Should().Be("text/plain");
             context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
                 .DownloadCount
                 .Should()
                 .Be(1);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByPathAsync_ReturnsCanonicalMetadataForMixedCaseStoredFileName()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        byte[] fileHash = Guid.NewGuid().ToByteArray().Concat(Guid.NewGuid().ToByteArray()).Take(32).ToArray();
+        string requestedFileName = $"{Convert.ToHexString(fileHash).ToUpperInvariant()}.TXT";
+        string contentPath = FileContentUtils.GetFullPath(fileHash, "txt");
+        var fileReference = new SavedFileReferenceDB
+        {
+            Id = Guid.NewGuid(),
+            FileHash = fileHash,
+            FileExtension = FileExtensionType._TXT,
+            AccessGroupId = Guid.NewGuid(),
+            PublicDownload = true
+        };
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "canonical-stream-metadata");
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(CreateFileData(fileReference));
+            await context.SaveChangesAsync();
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false,
+                IsWhitelisted = true
+            });
+
+            var result = await service.GetFileStreamByPathAsync(requestedFileName);
+
+            result.Id.Should().Be(fileReference.Id);
+            result.FileName.Should().Be(Path.GetFileNameWithoutExtension(contentPath));
+            result.FileExtension.Should().Be("txt");
+            using var fileStream = result.FileStream;
+            using var reader = new StreamReader(fileStream);
+            reader.ReadToEnd().Should().Be("canonical-stream-metadata");
         }
         finally
         {
