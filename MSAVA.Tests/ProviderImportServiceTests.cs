@@ -1291,6 +1291,36 @@ public class ProviderImportServiceTests
             outputPath);
     }
 
+    [Test]
+    public async Task ReadBoundedFfmpegErrorOutputAsync_DrainsReaderButCapturesBoundedPrefix()
+    {
+        string capturedPrefix = new('a', YouTubeImportService.FfmpegErrorOutputCaptureLimitChars);
+        string extraOutput = new('b', YouTubeImportService.FfmpegErrorOutputCaptureLimitChars);
+        var reader = new CountingTextReader(capturedPrefix + extraOutput);
+
+        string result = await YouTubeImportService.ReadBoundedFfmpegErrorOutputAsync(
+            reader,
+            CancellationToken.None);
+
+        result.Should().Be(capturedPrefix);
+        reader.CharactersRead.Should().Be(capturedPrefix.Length + extraOutput.Length);
+    }
+
+    [Test]
+    public async Task ReadBoundedFfmpegErrorOutputAsync_HonorsCancellation()
+    {
+        var reader = new CountingTextReader("ffmpeg diagnostic output");
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        Func<Task> act = () => YouTubeImportService.ReadBoundedFfmpegErrorOutputAsync(
+            reader,
+            cancellationTokenSource.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        reader.CharactersRead.Should().Be(0);
+    }
+
     private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, string contentType, string body)
     {
         var response = new HttpResponseMessage(statusCode)
@@ -1476,6 +1506,36 @@ public class ProviderImportServiceTests
             Func<TState, Exception?, string> formatter)
         {
             Messages.Add(formatter(state, exception));
+        }
+    }
+
+    private sealed class CountingTextReader : TextReader
+    {
+        private readonly string _content;
+        private int _position;
+
+        public CountingTextReader(string content)
+        {
+            _content = content;
+        }
+
+        public int CharactersRead { get; private set; }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<char> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return ValueTask.FromCanceled<int>(cancellationToken);
+
+            if (_position >= _content.Length)
+                return ValueTask.FromResult(0);
+
+            int charsToRead = Math.Min(buffer.Length, _content.Length - _position);
+            _content.AsMemory(_position, charsToRead).CopyTo(buffer);
+            _position += charsToRead;
+            CharactersRead += charsToRead;
+            return ValueTask.FromResult(charsToRead);
         }
     }
 

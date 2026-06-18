@@ -8,11 +8,14 @@ using MSAVA_Shared.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 
 namespace MSAVA_BLL.Services.Import;
 
 public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 {
+    internal const int FfmpegErrorOutputCaptureLimitChars = 4096;
+
     private readonly FilePersistenceService _persistenceService;
     private readonly ServiceLogger _serviceLogger;
     private readonly IYouTubeDownloadClient _youtubeClient;
@@ -167,7 +170,9 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             using var process = Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start FFmpeg process.");
 
-            var stderrTask = process.StandardError.ReadToEndAsync();
+            var stderrTask = ReadBoundedFfmpegErrorOutputAsync(
+                process.StandardError,
+                cancellationToken);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
@@ -240,6 +245,31 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         processStartInfo.ArgumentList.Add(outputPath);
 
         return processStartInfo;
+    }
+
+    internal static async Task<string> ReadBoundedFfmpegErrorOutputAsync(
+        TextReader errorReader,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(errorReader);
+
+        char[] buffer = new char[1024];
+        var capturedError = new StringBuilder(FfmpegErrorOutputCaptureLimitChars);
+
+        while (true)
+        {
+            int charsRead = await errorReader.ReadAsync(
+                buffer.AsMemory(0, buffer.Length),
+                cancellationToken);
+            if (charsRead == 0)
+                return capturedError.ToString();
+
+            int remainingCaptureCapacity = FfmpegErrorOutputCaptureLimitChars - capturedError.Length;
+            if (remainingCaptureCapacity <= 0)
+                continue;
+
+            capturedError.Append(buffer, 0, Math.Min(charsRead, remainingCaptureCapacity));
+        }
     }
 
     private static YouTubeStreamInfo GetBestVideoStream(IEnumerable<YouTubeStreamInfo> streams, string? preferredQuality)
