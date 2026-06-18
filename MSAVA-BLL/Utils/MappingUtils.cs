@@ -60,36 +60,16 @@ public static class MappingUtils
         normalizedExtension = string.Empty;
         error = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(extension))
+        try
         {
-            error = "FileExtension must be provided.";
+            normalizedExtension = FileMetadataPolicy.NormalizeFileExtensionSyntax(extension);
+            return true;
+        }
+        catch (FileMetadataValidationException ex)
+        {
+            error = ex.Message;
             return false;
         }
-
-        var normalized = extension.AsSpan().Trim();
-
-        while (normalized.Length > 0 && (normalized[0] == '.' || normalized[0] == '_'))
-        {
-            normalized = normalized[1..];
-        }
-
-        if (normalized.Length == 0 || normalized.IsWhiteSpace())
-        {
-            error = "FileExtension must be provided.";
-            return false;
-        }
-
-        normalizedExtension = normalized.ToString().ToLowerInvariant();
-
-        if (normalizedExtension.Contains('/') ||
-            normalizedExtension.Contains('\\') ||
-            normalizedExtension.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-        {
-            error = "FileExtension contains invalid characters.";
-            return false;
-        }
-
-        return true;
     }
 
     public static UserDTO MapUserDTOWithRelationships(UserDB db)

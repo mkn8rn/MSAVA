@@ -1,3 +1,5 @@
+using MSAVA_Shared.Models;
+
 namespace MSAVA_BLL.Services.Files;
 
 public static class FileQuerySearchPolicy

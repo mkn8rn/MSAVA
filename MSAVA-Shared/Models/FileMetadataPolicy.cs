@@ -1,4 +1,4 @@
-namespace MSAVA_BLL.Services.Files;
+namespace MSAVA_Shared.Models;
 
 public static class FileMetadataPolicy
 {
@@ -21,6 +21,33 @@ public static class FileMetadataPolicy
             throw new FileMetadataValidationException("FileName contains invalid characters.");
 
         return normalizedFileName;
+    }
+
+    public static string NormalizeFileExtensionSyntax(string? fileExtension)
+    {
+        if (string.IsNullOrWhiteSpace(fileExtension))
+            throw new FileMetadataValidationException("FileExtension must be provided.");
+
+        ReadOnlySpan<char> normalized = fileExtension.AsSpan().Trim();
+
+        while (normalized.Length > 0 && (normalized[0] == '.' || normalized[0] == '_'))
+        {
+            normalized = normalized[1..];
+        }
+
+        if (normalized.Length == 0 || normalized.IsWhiteSpace())
+            throw new FileMetadataValidationException("FileExtension must be provided.");
+
+        string normalizedFileExtension = normalized.ToString().ToLowerInvariant();
+
+        if (normalizedFileExtension.Contains('/') ||
+            normalizedFileExtension.Contains('\\') ||
+            normalizedFileExtension.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new FileMetadataValidationException("FileExtension contains invalid characters.");
+        }
+
+        return normalizedFileExtension;
     }
 
     public static string NormalizeDescription(string? description)

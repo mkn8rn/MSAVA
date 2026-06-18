@@ -41,47 +41,40 @@ public class FileUploadClientService
         bool publicDownload = false,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(fileName)) throw new ArgumentException("fileName is required", nameof(fileName));
-        if (string.IsNullOrWhiteSpace(fileExtension)) throw new ArgumentException("fileExtension is required", nameof(fileExtension));
         if (fileStream is null) throw new ArgumentNullException(nameof(fileStream));
         if (accessGroupId == Guid.Empty) throw new ArgumentException("accessGroupId is required", nameof(accessGroupId));
+
+        string normalizedFileName = FileMetadataPolicy.NormalizeFileName(fileName);
+        string normalizedFileExtension = FileMetadataPolicy.NormalizeFileExtensionSyntax(fileExtension);
+        string normalizedDescription = FileMetadataPolicy.NormalizeDescription(description);
+        List<string> normalizedTags = FileMetadataPolicy.NormalizeMetadataValues(tags, FileUploadFormFields.Tags);
+        List<string> normalizedCategories = FileMetadataPolicy.NormalizeMetadataValues(categories, FileUploadFormFields.Categories);
 
         var content = new MultipartFormDataContent();
 
         // Required simple fields
-        content.Add(new StringContent(fileName), FileUploadFormFields.FileName);
-        content.Add(new StringContent(fileExtension), FileUploadFormFields.FileExtension);
+        content.Add(new StringContent(normalizedFileName), FileUploadFormFields.FileName);
+        content.Add(new StringContent(normalizedFileExtension), FileUploadFormFields.FileExtension);
         content.Add(new StringContent(accessGroupId.ToString()), FileUploadFormFields.AccessGroupId);
-        content.Add(new StringContent((description ?? string.Empty)), FileUploadFormFields.Description);
+        content.Add(new StringContent(normalizedDescription), FileUploadFormFields.Description);
         content.Add(new StringContent(publicViewing.ToString()), FileUploadFormFields.PublicViewing);
         content.Add(new StringContent(publicDownload.ToString()), FileUploadFormFields.PublicDownload);
 
         // Collections: send as repeated form keys: Tags=value
-        if (tags != null)
+        foreach (var tag in normalizedTags)
         {
-            foreach (var t in tags)
-            {
-                if (!string.IsNullOrWhiteSpace(t))
-                {
-                    content.Add(new StringContent(t), FileUploadFormFields.Tags);
-                }
-            }
+            content.Add(new StringContent(tag), FileUploadFormFields.Tags);
         }
-        if (categories != null)
+
+        foreach (var category in normalizedCategories)
         {
-            foreach (var c in categories)
-            {
-                if (!string.IsNullOrWhiteSpace(c))
-                {
-                    content.Add(new StringContent(c), FileUploadFormFields.Categories);
-                }
-            }
+            content.Add(new StringContent(category), FileUploadFormFields.Categories);
         }
 
         // File content as StreamContent named "FormFile"
         var fileContent = new StreamContent(fileStream);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        content.Add(fileContent, FileUploadFormFields.FormFile, fileName + "." + fileExtension.TrimStart('.'));
+        content.Add(fileContent, FileUploadFormFields.FormFile, $"upload.{normalizedFileExtension}");
 
         using var msg = _api.CreateMultipartRequest(HttpMethod.Post, ApiService.Routes.FilesStoreFormFile, content);
         using var resp = await _api.SendAsync(msg, ct);

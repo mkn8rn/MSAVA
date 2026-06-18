@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
 using MSAVA_App.Services.Files;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
 
@@ -184,6 +185,94 @@ public class FileUploadClientServiceTests
         outcome.Error.Should().Be("Bad Request");
     }
 
+    [Test]
+    public async Task CreateFileFromFormFileAsync_NormalizesMultipartMetadataBeforeSending()
+    {
+        var fileId = Guid.NewGuid();
+        MultipartRequestSnapshot? snapshot = null;
+        var service = CreateService(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(fileId), Encoding.UTF8, "application/json")
+            },
+            async (request, cancellationToken) =>
+            {
+                snapshot = await ReadMultipartRequestAsync(request, cancellationToken);
+            });
+
+        var outcome = await service.CreateFileFromFormFileAsync(
+            fileName: "  quarterly/report  ",
+            fileExtension: " .TXT ",
+            fileStream: new MemoryStream(Encoding.UTF8.GetBytes("content")),
+            accessGroupId: Guid.Parse("f1e4c22b-0dd8-4aa4-b9a2-640b6e241552"),
+            tags: ["  alpha  ", "beta  "],
+            categories: [" finance "],
+            description: "  first line\nsecond line\t  ",
+            publicViewing: true,
+            publicDownload: true);
+
+        outcome.Success.Should().BeTrue();
+        snapshot.Should().NotBeNull();
+        snapshot!.PathAndQuery.Should().Be("/api/files/store/formfile");
+        snapshot.Fields[FileUploadFormFields.FileName].Should().Equal("quarterly/report");
+        snapshot.Fields[FileUploadFormFields.FileExtension].Should().Equal("txt");
+        snapshot.Fields[FileUploadFormFields.AccessGroupId].Should().Equal("f1e4c22b-0dd8-4aa4-b9a2-640b6e241552");
+        snapshot.Fields[FileUploadFormFields.Description].Should().Equal("first line\nsecond line");
+        snapshot.Fields[FileUploadFormFields.PublicViewing].Should().Equal("True");
+        snapshot.Fields[FileUploadFormFields.PublicDownload].Should().Equal("True");
+        snapshot.Fields[FileUploadFormFields.Tags].Should().Equal("alpha", "beta");
+        snapshot.Fields[FileUploadFormFields.Categories].Should().Equal("finance");
+        snapshot.FilePartFileName.Should().Be("upload.txt");
+        snapshot.FilePartContentType.Should().Be("application/octet-stream");
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_RejectsPathLikeExtensionBeforeSending()
+    {
+        bool requestWasSent = false;
+        var service = CreateService(
+            new HttpResponseMessage(HttpStatusCode.OK),
+            (_, _) =>
+            {
+                requestWasSent = true;
+                return Task.CompletedTask;
+            });
+
+        Func<Task> act = () => service.CreateFileFromFormFileAsync(
+            fileName: "sample",
+            fileExtension: "../txt",
+            fileStream: new MemoryStream(Encoding.UTF8.GetBytes("content")),
+            accessGroupId: Guid.NewGuid());
+
+        await act.Should().ThrowAsync<FileMetadataValidationException>()
+            .WithMessage("FileExtension contains invalid characters.");
+        requestWasSent.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_RejectsBlankMetadataValueBeforeSending()
+    {
+        bool requestWasSent = false;
+        var service = CreateService(
+            new HttpResponseMessage(HttpStatusCode.OK),
+            (_, _) =>
+            {
+                requestWasSent = true;
+                return Task.CompletedTask;
+            });
+
+        Func<Task> act = () => service.CreateFileFromFormFileAsync(
+            fileName: "sample",
+            fileExtension: "txt",
+            fileStream: new MemoryStream(Encoding.UTF8.GetBytes("content")),
+            accessGroupId: Guid.NewGuid(),
+            tags: ["valid", " "]);
+
+        await act.Should().ThrowAsync<FileMetadataValidationException>()
+            .WithMessage("Tags values must be provided.");
+        requestWasSent.Should().BeFalse();
+    }
+
     private static Task<UploadOutcome> CreateUploadAsync(FileUploadClientService service)
     {
         return service.CreateFileFromFormFileAsync(
@@ -195,12 +284,62 @@ public class FileUploadClientServiceTests
 
     private static FileUploadClientService CreateService(HttpResponseMessage response)
     {
+        return CreateService(response, inspectRequest: null);
+    }
+
+    private static FileUploadClientService CreateService(
+        HttpResponseMessage response,
+        Func<HttpRequestMessage, CancellationToken, Task>? inspectRequest)
+    {
         var api = new ApiService(
-            new StaticHttpClientFactory(new HttpClient(new StaticHttpMessageHandler(response))),
+            new StaticHttpClientFactory(new HttpClient(new StaticHttpMessageHandler(response, inspectRequest))),
             new ApiClientOptions { Url = "https://api.msava.test/" },
             NullLogger<ApiService>.Instance);
 
         return new FileUploadClientService(api, NullLogger<FileUploadClientService>.Instance);
+    }
+
+    private static async Task<MultipartRequestSnapshot> ReadMultipartRequestAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        request.Content.Should().BeOfType<MultipartFormDataContent>();
+        var content = (MultipartFormDataContent)request.Content!;
+        var fields = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        string? filePartFileName = null;
+        string? filePartContentType = null;
+
+        foreach (var part in content)
+        {
+            string name = Unquote(part.Headers.ContentDisposition?.Name) ?? string.Empty;
+            if (name == FileUploadFormFields.FormFile)
+            {
+                filePartFileName = Unquote(
+                    part.Headers.ContentDisposition?.FileNameStar ??
+                    part.Headers.ContentDisposition?.FileName);
+                filePartContentType = part.Headers.ContentType?.MediaType;
+                continue;
+            }
+
+            if (!fields.TryGetValue(name, out var values))
+            {
+                values = [];
+                fields.Add(name, values);
+            }
+
+            values.Add(await part.ReadAsStringAsync(cancellationToken));
+        }
+
+        return new MultipartRequestSnapshot(
+            request.RequestUri?.PathAndQuery ?? string.Empty,
+            fields,
+            filePartFileName,
+            filePartContentType);
+    }
+
+    private static string? Unquote(string? value)
+    {
+        return value?.Trim('"');
     }
 
     private sealed class StaticHttpClientFactory : IHttpClientFactory
@@ -218,19 +357,32 @@ public class FileUploadClientServiceTests
     private sealed class StaticHttpMessageHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;
+        private readonly Func<HttpRequestMessage, CancellationToken, Task>? _inspectRequest;
 
-        public StaticHttpMessageHandler(HttpResponseMessage response)
+        public StaticHttpMessageHandler(
+            HttpResponseMessage response,
+            Func<HttpRequestMessage, CancellationToken, Task>? inspectRequest)
         {
             _response = response;
+            _inspectRequest = inspectRequest;
         }
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(_response);
+            if (_inspectRequest is not null)
+                await _inspectRequest(request, cancellationToken);
+
+            return _response;
         }
     }
+
+    private sealed record MultipartRequestSnapshot(
+        string PathAndQuery,
+        Dictionary<string, List<string>> Fields,
+        string? FilePartFileName,
+        string? FilePartContentType);
 
     private sealed class CancelledContent : HttpContent
     {

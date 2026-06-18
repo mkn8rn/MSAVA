@@ -87,7 +87,7 @@ public class MappingUtilsTests
 
         parsed.Should().BeFalse();
         result.Should().Be(FileExtensionType.Unknown);
-        normalizedExtension.Should().Be("folder/txt");
+        normalizedExtension.Should().BeEmpty();
         error.Should().Be("FileExtension contains invalid characters.");
     }
 
