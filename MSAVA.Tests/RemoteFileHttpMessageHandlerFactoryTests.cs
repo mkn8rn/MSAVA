@@ -46,6 +46,36 @@ public class RemoteFileHttpMessageHandlerFactoryTests
         connectorCalled.Should().BeFalse();
     }
 
+    [Test]
+    public async Task SendAsync_RejectsInvalidDnsHostBeforeResolvingOrOpeningConnection()
+    {
+        bool resolverCalled = false;
+        bool connectorCalled = false;
+        using var handler = RemoteFileHttpMessageHandlerFactory.Create(
+            (_, _) =>
+            {
+                resolverCalled = true;
+                return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+            },
+            (_, _) =>
+            {
+                connectorCalled = true;
+                throw new InvalidOperationException("Connection should not be opened.");
+            });
+        using var client = new HttpClient(handler);
+
+        Func<Task> act = async () => await client.GetAsync("http://-/sample.txt");
+
+        Exception exception = (await act.Should().ThrowAsync<Exception>()).Which;
+        ArgumentException? argumentException = exception as ArgumentException
+            ?? exception.InnerException as ArgumentException;
+
+        argumentException.Should().NotBeNull();
+        argumentException!.Message.Should().Contain("FileUrl host is not allowed for server-side ingestion.");
+        resolverCalled.Should().BeFalse();
+        connectorCalled.Should().BeFalse();
+    }
+
     [TestCase("http://127.0.0.1/sample.txt")]
     [TestCase("http://2130706433/sample.txt")]
     [TestCase("http://[::ffff:127.0.0.1]/sample.txt")]

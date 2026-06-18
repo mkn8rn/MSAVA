@@ -6,6 +6,9 @@ internal delegate Task<IPAddress[]> HostAddressResolver(string host, Cancellatio
 
 internal static class RemoteFileHostPolicy
 {
+    private const int MaximumDnsHostLength = 253;
+    private const int MaximumDnsLabelLength = 63;
+
     internal static Uri ParseHttpUri(string fileUrl, string parameterName)
     {
         if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri) ||
@@ -16,10 +19,12 @@ internal static class RemoteFileHostPolicy
 
         FileUrlInputPolicy.EnsureNoEmbeddedCredentials(uri, parameterName);
 
-        string host = GetNormalizedHost(uri);
+        string host = GetNormalizedHost(uri, parameterName);
 
         if (IsUnsafeHost(host))
             throw new ArgumentException("FileUrl host is not allowed for server-side ingestion.", parameterName);
+
+        EnsureDnsHostSyntaxIsAllowed(host, parameterName);
 
         return uri;
     }
@@ -30,7 +35,7 @@ internal static class RemoteFileHostPolicy
         string parameterName,
         CancellationToken cancellationToken)
     {
-        string host = GetNormalizedHost(uri);
+        string host = GetNormalizedHost(uri, parameterName);
 
         if (IPAddress.TryParse(host, out var literalAddress))
         {
@@ -43,6 +48,8 @@ internal static class RemoteFileHostPolicy
 
             return;
         }
+
+        EnsureDnsHostSyntaxIsAllowed(host, parameterName);
 
         IPAddress[] addresses = await resolver(host, cancellationToken);
         EnsureResolvedAddressesAreAllowed(host, addresses, parameterName);
@@ -66,6 +73,8 @@ internal static class RemoteFileHostPolicy
 
         if (IsUnsafeHost(normalizedHost))
             throw new ArgumentException("FileUrl host is not allowed for server-side ingestion.", parameterName);
+
+        EnsureDnsHostSyntaxIsAllowed(normalizedHost, parameterName);
 
         IPAddress[] addresses = await resolver(normalizedHost, cancellationToken);
         EnsureResolvedAddressesAreAllowed(normalizedHost, addresses, parameterName);
@@ -107,14 +116,56 @@ internal static class RemoteFileHostPolicy
         return IPAddress.TryParse(host, out var address) && IsPrivateOrReservedAddress(address);
     }
 
-    private static string GetNormalizedHost(Uri uri)
+    private static string GetNormalizedHost(Uri uri, string parameterName)
     {
-        return NormalizeHost(uri.IdnHost);
+        string host = NormalizeHost(uri.IdnHost);
+        if (host.Length == 0)
+            throw new ArgumentException("FileUrl host is not allowed for server-side ingestion.", parameterName);
+
+        return host;
     }
 
     private static string NormalizeHost(string host)
     {
         return host.TrimEnd('.').ToLowerInvariant();
+    }
+
+    private static void EnsureDnsHostSyntaxIsAllowed(string host, string parameterName)
+    {
+        if (IPAddress.TryParse(host, out _))
+            return;
+
+        if (!IsValidDnsHostName(host))
+            throw new ArgumentException("FileUrl host is not allowed for server-side ingestion.", parameterName);
+    }
+
+    private static bool IsValidDnsHostName(string host)
+    {
+        if (host.Length == 0 || host.Length > MaximumDnsHostLength)
+            return false;
+
+        foreach (var range in host.AsSpan().Split('.'))
+        {
+            ReadOnlySpan<char> label = host.AsSpan()[range];
+            if (label.Length == 0 || label.Length > MaximumDnsLabelLength)
+                return false;
+
+            if (label[0] == '-' || label[^1] == '-')
+                return false;
+
+            foreach (char character in label)
+            {
+                if (!IsDnsLabelCharacter(character))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsDnsLabelCharacter(char character)
+    {
+        return character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-';
     }
 
     private static bool IsPrivateOrReservedAddress(IPAddress address)

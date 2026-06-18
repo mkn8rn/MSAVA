@@ -145,6 +145,49 @@ public class FileIngestionServiceTests
         }
     }
 
+    [TestCase("https://-/sample.txt")]
+    [TestCase("https://example-.test/sample.txt")]
+    [TestCase("https://-example.test/sample.txt")]
+    [TestCase("https://files_example.test/sample.txt")]
+    public async Task CreateFileFromUrlAsync_RejectsInvalidDnsHostBeforeResolvingOrCreatingHttpClient(string fileUrl)
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        bool resolverCalled = false;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                session: CreateSession(user.Id),
+                hostAddressResolver: (_, _) =>
+                {
+                    resolverCalled = true;
+                    return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+                });
+            var dto = CreateUrlDto(fileUrl, accessGroup.Id);
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl host is not allowed for server-side ingestion.*");
+
+            resolverCalled.Should().BeFalse();
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     [Test]
     public async Task CreateFileFromUrlAsync_RejectsHostResolvedToUnsafeAddressBeforeCreatingHttpClient()
     {
