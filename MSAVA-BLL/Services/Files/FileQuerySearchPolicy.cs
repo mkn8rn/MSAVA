@@ -32,6 +32,20 @@ public static class FileQuerySearchPolicy
                 parameterName);
         }
 
+        if (ContainsControlCharacter(normalizedValue))
+            throw new ArgumentException($"{fieldName} search text contains invalid characters.", parameterName);
+
         return normalizedValue;
+    }
+
+    private static bool ContainsControlCharacter(string value)
+    {
+        foreach (char character in value)
+        {
+            if (char.IsControl(character))
+                return true;
+        }
+
+        return false;
     }
 }

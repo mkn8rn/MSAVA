@@ -44,6 +44,20 @@ public class FileQueryServiceTests
         normalized.Should().Be(expected);
     }
 
+    [TestCase("bad\nvalue")]
+    [TestCase("bad\u0000value")]
+    public void NormalizeSearchText_RejectsControlCharacters(string value)
+    {
+        Action act = () => FileQuerySearchPolicy.NormalizeSearchText(
+            value,
+            "value",
+            "Value",
+            maximumLength: 16);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Value search text contains invalid characters.*");
+    }
+
     [TestCase("tag", FileQuerySearchPolicy.MaximumTagSearchLength, "Tag")]
     [TestCase("category", FileQuerySearchPolicy.MaximumCategorySearchLength, "Category")]
     [TestCase("name", FileQuerySearchPolicy.MaximumNameSearchLength, "Name")]
@@ -74,6 +88,37 @@ public class FileQueryServiceTests
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage($"{messageFieldName} search text must be {maximumLength} characters or fewer.*");
+    }
+
+    [TestCase("tag", "Tag")]
+    [TestCase("category", "Category")]
+    [TestCase("name", "Name")]
+    [TestCase("description", "Description")]
+    public async Task GetFileGuidsByAllFieldsAsync_RejectsControlCharacterSearchText(
+        string fieldName,
+        string messageFieldName)
+    {
+        using var context = CreateContext();
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [],
+            IsAdmin = true,
+            IsWhitelisted = true
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+        const string value = "bad\nsearch";
+
+        Func<Task> act = () => service.GetFileGuidsByAllFieldsAsync(
+            tag: fieldName == "tag" ? value : null,
+            category: fieldName == "category" ? value : null,
+            name: fieldName == "name" ? value : null,
+            description: fieldName == "description" ? value : null);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{messageFieldName} search text contains invalid characters.*");
     }
 
     [Test]
