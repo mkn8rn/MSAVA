@@ -149,6 +149,25 @@ public class FileUploadClientServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromFormFileAsync_BoundsLargeErrorBodyWithoutReadingEntireBody()
+    {
+        var errorStream = new CountingRepeatingReadStream((byte)'x', 100_000);
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            ReasonPhrase = "Bad Request",
+            Content = new StreamContent(errorStream)
+        });
+
+        var outcome = await CreateUploadAsync(service);
+
+        outcome.Success.Should().BeFalse();
+        outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);
+        outcome.Id.Should().BeNull();
+        outcome.Error.Should().Be(new string('x', FileUploadClientService.MaximumErrorBodyLength));
+        errorStream.BytesRead.Should().BeLessThan(errorStream.TotalLength);
+    }
+
+    [Test]
     public async Task CreateFileFromFormFileAsync_ReturnsReasonPhraseWhenErrorBodyCannotBeRead()
     {
         var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
@@ -311,6 +330,71 @@ public class FileUploadClientServiceTests
         {
             length = 0;
             return false;
+        }
+    }
+
+    private sealed class CountingRepeatingReadStream : Stream
+    {
+        private readonly byte _value;
+
+        public CountingRepeatingReadStream(byte value, long totalLength)
+        {
+            _value = value;
+            TotalLength = totalLength;
+        }
+
+        public long TotalLength { get; }
+
+        public long BytesRead { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return ReadCore(buffer.AsSpan(offset, count));
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return ValueTask.FromCanceled<int>(cancellationToken);
+
+            return ValueTask.FromResult(ReadCore(buffer.Span));
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        private int ReadCore(Span<byte> buffer)
+        {
+            if (BytesRead >= TotalLength)
+                return 0;
+
+            int bytesToRead = (int)Math.Min(buffer.Length, TotalLength - BytesRead);
+            buffer[..bytesToRead].Fill(_value);
+            BytesRead += bytesToRead;
+            return bytesToRead;
         }
     }
 }

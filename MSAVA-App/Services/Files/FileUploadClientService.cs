@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ namespace MSAVA_App.Services.Files;
 public class FileUploadClientService
 {
     public const string InvalidSuccessResponseMessage = "Upload response did not contain a valid file id.";
+    internal const int MaximumErrorBodyLength = 2048;
 
     private readonly ApiService _api;
     private readonly ILogger<FileUploadClientService> _logger;
@@ -136,7 +138,10 @@ public class FileUploadClientService
     {
         try
         {
-            return await response.Content.ReadAsStringAsync(cancellationToken);
+            string error = await ReadTrimmedErrorBodyAsync(response.Content, cancellationToken);
+            return string.IsNullOrWhiteSpace(error)
+                ? response.ReasonPhrase ?? "Unknown error"
+                : error;
         }
         catch (OperationCanceledException)
         {
@@ -147,6 +152,58 @@ public class FileUploadClientService
             _logger.LogWarning(ex, "Failed to read upload error response body");
             return response.ReasonPhrase ?? "Unknown error";
         }
+    }
+
+    private static async Task<string> ReadTrimmedErrorBodyAsync(
+        HttpContent? content,
+        CancellationToken cancellationToken)
+    {
+        if (content is null)
+            return string.Empty;
+
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(
+            stream,
+            ResolveEncoding(content),
+            detectEncodingFromByteOrderMarks: true,
+            bufferSize: Math.Min(1024, MaximumErrorBodyLength + 1),
+            leaveOpen: false);
+
+        var buffer = new char[MaximumErrorBodyLength + 1];
+        int totalRead = 0;
+
+        while (totalRead < buffer.Length)
+        {
+            int read = await reader.ReadAsync(
+                buffer.AsMemory(totalRead, buffer.Length - totalRead),
+                cancellationToken);
+
+            if (read == 0)
+                break;
+
+            totalRead += read;
+        }
+
+        int responseLength = Math.Min(totalRead, MaximumErrorBodyLength);
+        return new string(buffer, 0, responseLength).Trim();
+    }
+
+    private static Encoding ResolveEncoding(HttpContent content)
+    {
+        string? charset = content.Headers.ContentType?.CharSet?.Trim('"');
+
+        if (!string.IsNullOrWhiteSpace(charset))
+        {
+            try
+            {
+                return Encoding.GetEncoding(charset);
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        return Encoding.UTF8;
     }
 
     private static bool IsRecoverableResponseBodyFailure(Exception exception)
