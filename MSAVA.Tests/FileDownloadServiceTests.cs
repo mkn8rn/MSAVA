@@ -279,6 +279,48 @@ public class FileDownloadServiceTests
     }
 
     [Test]
+    public async Task GetFileStreamByIdAsync_RejectsUnknownReferenceExtensionBeforeOpeningContent()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var fileReference = CreateFileReference(publicDownload: true);
+        var fileData = CreateFileData(fileReference, downloadCount: 6);
+        fileReference.FileExtension = FileExtensionType.Unknown;
+
+        try
+        {
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(fileData);
+            await context.SaveChangesAsync();
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false,
+                IsWhitelisted = true
+            });
+
+            Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage($"Saved file reference {fileReference.Id} has unsupported file extension 'Unknown'.");
+            context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
+                .DownloadCount
+                .Should()
+                .Be(6);
+            context.AccessLogs.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GetFileStreamByPathAsync_DeniesUnauthorizedSqlReferenceBeforeCheckingPhysicalFileExists()
     {
         using var context = CreateContext();

@@ -40,11 +40,10 @@ public class FileDownloadService : IFileDownloadService
         if (!CanSessionAccessFile(db, session))
             throw new UnauthorizedAccessException("User does not have permission to access this file.");
 
-        FileStream? fileStream = _fileManager.GetFileStream(db.FileHash, db.FileExtension.ToString());
-
         string fileName = MappingUtils.GetFileName(db);
         string extension = FileExtensionUtils.GetFileExtension(db);
         string fileNameWithExtension = $"{fileName}.{extension}";
+        FileStream? fileStream = _fileManager.GetFileStream(db.FileHash, extension);
 
         try
         {
