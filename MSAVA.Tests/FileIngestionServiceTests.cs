@@ -66,6 +66,44 @@ public class FileIngestionServiceTests
         }
     }
 
+    [Test]
+    public async Task CreateFileFromUrlAsync_RejectsEmbeddedCredentialsBeforeResolvingHostOrCreatingHttpClient()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        bool resolverCalled = false;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                hostAddressResolver: (_, _) =>
+                {
+                    resolverCalled = true;
+                    return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+                });
+            var dto = CreateUrlDto("https://user:secret@files.example.test/sample.txt");
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileUrl must not contain embedded credentials.*");
+
+            resolverCalled.Should().BeFalse();
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     [TestCase("http://localhost/file.txt")]
     [TestCase("http://api.localhost/file.txt")]
     [TestCase("http://127.0.0.1/file.txt")]
