@@ -3,6 +3,7 @@ namespace MSAVA_INF.Utils;
 public static class FileContentUtils
 {
     private const int Sha256HashByteLength = 32;
+    private const int ContentProbeByteLength = 512;
 
     public static readonly string BackupDirectory =
        Path.Combine(AppContext.BaseDirectory, "Data", "Backups");
@@ -185,7 +186,7 @@ public static class FileContentUtils
         if (contentStream.CanSeek)
             contentStream.Position = 0;
 
-        Span<byte> header = stackalloc byte[16];
+        Span<byte> header = stackalloc byte[ContentProbeByteLength];
         int read = contentStream.Read(header);
 
         if (contentStream.CanSeek)
@@ -230,7 +231,7 @@ public static class FileContentUtils
             "xbm" or "xpm" => true,
 
             // Vector images
-            "svg" => IsXmlDeclaration(header, read) || StartsWithAsciiIgnoreCase(header, read, "<svg"),
+            "svg" => IsSvgContent(header, read),
             "svgz" => read >= 2 && header[0] == 0x1F && header[1] == 0x8B,
             "eps" => read >= 4 && header[0] == 0x25 && header[1] == 0x21 && header[2] == 0x50 && header[3] == 0x53,
             "ai" => read >= 4 && header[0] == 0x25 && header[1] == 0x21 && header[2] == 0x50 && header[3] == 0x53,
@@ -278,14 +279,79 @@ public static class FileContentUtils
         };
     }
 
-    private static bool IsXmlDeclaration(ReadOnlySpan<byte> header, int read)
+    private static bool IsSvgContent(ReadOnlySpan<byte> header, int read)
     {
-        return StartsWithAsciiIgnoreCase(header, read, "<?xml");
+        ReadOnlySpan<byte> content = header[..read];
+
+        content = SkipUtf8ByteOrderMark(content);
+        content = TrimLeadingAsciiWhitespace(content);
+
+        if (StartsWithAsciiIgnoreCase(content, "<?xml"))
+        {
+            int declarationEnd = IndexOfXmlDeclarationEnd(content);
+            if (declarationEnd < 0)
+                return false;
+
+            content = content[(declarationEnd + 2)..];
+            content = TrimLeadingAsciiWhitespace(content);
+        }
+
+        return StartsWithSvgRoot(content);
+    }
+
+    private static ReadOnlySpan<byte> SkipUtf8ByteOrderMark(ReadOnlySpan<byte> content)
+    {
+        return content is [0xEF, 0xBB, 0xBF, ..]
+            ? content[3..]
+            : content;
+    }
+
+    private static ReadOnlySpan<byte> TrimLeadingAsciiWhitespace(ReadOnlySpan<byte> content)
+    {
+        int index = 0;
+        while (index < content.Length && IsAsciiWhitespace(content[index]))
+            index++;
+
+        return content[index..];
+    }
+
+    private static bool IsAsciiWhitespace(byte value)
+    {
+        return value is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
+    }
+
+    private static int IndexOfXmlDeclarationEnd(ReadOnlySpan<byte> content)
+    {
+        for (int i = 0; i < content.Length - 1; i++)
+        {
+            if (content[i] == (byte)'?' && content[i + 1] == (byte)'>')
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static bool StartsWithSvgRoot(ReadOnlySpan<byte> content)
+    {
+        if (!StartsWithAsciiIgnoreCase(content, "<svg"))
+            return false;
+
+        if (content.Length == 4)
+            return true;
+
+        byte rootTerminator = content[4];
+        return rootTerminator is (byte)'>' or (byte)'/' ||
+            IsAsciiWhitespace(rootTerminator);
     }
 
     private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> header, int read, string expected)
     {
-        if (read < expected.Length)
+        return StartsWithAsciiIgnoreCase(header[..read], expected);
+    }
+
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> header, string expected)
+    {
+        if (header.Length < expected.Length)
             return false;
 
         for (int i = 0; i < expected.Length; i++)

@@ -224,6 +224,25 @@ public class FileContentUtilsTests
     }
 
     [Test]
+    public void ValidateFileContent_AcceptsSvgXmlDeclarationAfterWhitespace()
+    {
+        using var stream = new MemoryStream(
+            " \r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg viewBox=\"0 0 1 1\"></svg>"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, "svg").Should().BeTrue();
+    }
+
+    [TestCase("<?xml version=\"1.0\"?><document></document>")]
+    [TestCase("<?xml version=\"1.0\"?>")]
+    [TestCase("<svgscript></svgscript>")]
+    public void ValidateFileContent_RejectsNonSvgXmlAsSvg(string content)
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+
+        FileContentUtils.ValidateFileContent(stream, "svg").Should().BeFalse();
+    }
+
+    [Test]
     public void ValidateFileContent_AcceptsSvgzGzipHeader()
     {
         using var stream = new MemoryStream([0x1F, 0x8B, 0x08, 0x00]);
