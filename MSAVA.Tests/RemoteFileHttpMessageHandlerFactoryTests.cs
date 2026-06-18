@@ -79,6 +79,9 @@ public class RemoteFileHttpMessageHandlerFactoryTests
     [TestCase("http://127.0.0.1/sample.txt")]
     [TestCase("http://2130706433/sample.txt")]
     [TestCase("http://[::ffff:127.0.0.1]/sample.txt")]
+    [TestCase("http://[::127.0.0.1]/sample.txt")]
+    [TestCase("http://[::10.0.0.1]/sample.txt")]
+    [TestCase("http://[64:ff9b::127.0.0.1]/sample.txt")]
     public async Task EnsureResolvedHostIsAllowedAsync_RejectsUnsafeLiteralWithoutResolvingDns(
         string fileUrl)
     {
@@ -98,6 +101,27 @@ public class RemoteFileHttpMessageHandlerFactoryTests
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("FileUrl host is not allowed for server-side ingestion.*");
         resolverCalled.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task EnsureResolvedHostIsAllowedAsync_RejectsDnsResolvedNat64PrivateAddress()
+    {
+        bool resolverCalled = false;
+        var uri = new Uri("http://files.example.test/sample.txt");
+
+        Func<Task> act = () => RemoteFileHostPolicy.EnsureResolvedHostIsAllowedAsync(
+            uri,
+            (_, _) =>
+            {
+                resolverCalled = true;
+                return Task.FromResult(new[] { IPAddress.Parse("64:ff9b::127.0.0.1") });
+            },
+            "FileUrl",
+            CancellationToken.None);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("FileUrl host resolves to an address that is not allowed for server-side ingestion.*");
+        resolverCalled.Should().BeTrue();
     }
 
     [Test]

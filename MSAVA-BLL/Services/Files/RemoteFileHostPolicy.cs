@@ -213,7 +213,65 @@ internal static class RemoteFileHostPolicy
         bool siteLocal = bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0xC0;
         bool multicast = bytes[0] == 0xFF;
         bool documentation = bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0D && bytes[3] == 0xB8;
+        bool deprecatedIPv4Compatible = IsDeprecatedIPv4CompatibleAddress(bytes);
+        bool nat64ToPrivateOrReservedIPv4 = IsWellKnownNat64Address(bytes) &&
+            EmbeddedIPv4AddressIsPrivateOrReserved(bytes);
 
-        return unspecified || uniqueLocal || linkLocal || siteLocal || multicast || documentation;
+        return unspecified ||
+            uniqueLocal ||
+            linkLocal ||
+            siteLocal ||
+            multicast ||
+            documentation ||
+            deprecatedIPv4Compatible ||
+            nat64ToPrivateOrReservedIPv4;
+    }
+
+    private static bool IsDeprecatedIPv4CompatibleAddress(byte[] bytes)
+    {
+        return PrefixIsZero(bytes, 12) && !SuffixIsZero(bytes, 12);
+    }
+
+    private static bool IsWellKnownNat64Address(byte[] bytes)
+    {
+        return bytes[0] == 0x00 &&
+            bytes[1] == 0x64 &&
+            bytes[2] == 0xFF &&
+            bytes[3] == 0x9B &&
+            RangeIsZero(bytes, start: 4, length: 8);
+    }
+
+    private static bool EmbeddedIPv4AddressIsPrivateOrReserved(byte[] bytes)
+    {
+        byte[] embeddedIPv4 =
+        [
+            bytes[12],
+            bytes[13],
+            bytes[14],
+            bytes[15]
+        ];
+
+        return IsPrivateOrReservedIPv4(embeddedIPv4);
+    }
+
+    private static bool PrefixIsZero(byte[] bytes, int length)
+    {
+        return RangeIsZero(bytes, start: 0, length);
+    }
+
+    private static bool SuffixIsZero(byte[] bytes, int start)
+    {
+        return RangeIsZero(bytes, start, bytes.Length - start);
+    }
+
+    private static bool RangeIsZero(byte[] bytes, int start, int length)
+    {
+        for (int index = start; index < start + length; index++)
+        {
+            if (bytes[index] != 0)
+                return false;
+        }
+
+        return true;
     }
 }
