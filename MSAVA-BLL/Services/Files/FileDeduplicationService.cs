@@ -99,6 +99,16 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.NotFound(hashHex);
         }
 
+        NewReferenceMetadata newReferenceMetadata;
+        try
+        {
+            newReferenceMetadata = NormalizeNewReferenceMetadata(request);
+        }
+        catch (FileMetadataValidationException ex)
+        {
+            return HashCheckResult.Failed(hashHex, ex.Message);
+        }
+
         var accessGroupResolution = await ResolveReferenceAccessGroupAsync(
             request.AccessGroupId,
             sessionUserId,
@@ -111,22 +121,15 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         // File exists but user has no access - create a new reference for them
-        SavedFileReferenceDB newReference;
-        try
-        {
-            newReference = await CreateNewReferenceAsync(
-                request,
-                fileHash,
-                extension,
-                anyExistingReference,
-                sessionUserId,
-                accessGroupResolution.AccessGroupId,
-                cancellationToken);
-        }
-        catch (FileMetadataValidationException ex)
-        {
-            return HashCheckResult.Failed(hashHex, ex.Message);
-        }
+        var newReference = await CreateNewReferenceAsync(
+            request,
+            fileHash,
+            extension,
+            anyExistingReference,
+            sessionUserId,
+            accessGroupResolution.AccessGroupId,
+            newReferenceMetadata,
+            cancellationToken);
 
         await _serviceLogger.WriteLogAsync(
             AccessLogActions.NewReferenceAddedToExistingFile,
@@ -246,6 +249,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         SavedFileReferenceDB existingReference,
         Guid userId,
         Guid accessGroupId,
+        NewReferenceMetadata newReferenceMetadata,
         CancellationToken cancellationToken)
     {
         var existingData = await GetRequiredFileDataAsync(existingReference.Id, cancellationToken);
@@ -260,12 +264,6 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             PublicDownload = request.PublicDownload
         };
 
-        string fileName = FileMetadataPolicy.NormalizeFileName(request.FileName ?? "Unnamed");
-        string description = FileMetadataPolicy.NormalizeDescription(request.Description);
-        IEnumerable<string>? tagValues = request.Tags;
-        IEnumerable<string>? categoryValues = request.Categories;
-        var tags = FileMetadataPolicy.NormalizeMetadataValues(tagValues, nameof(request.Tags));
-        var categories = FileMetadataPolicy.NormalizeMetadataValues(categoryValues, nameof(request.Categories));
         DateTime utcNow = GetUtcNow();
 
         // Create file data record
@@ -275,12 +273,12 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             FileReferenceId = newReference.Id,
             SizeInBytes = existingData.SizeInBytes,
             Checksum = Convert.ToHexString(fileHash),
-            Name = fileName,
-            Description = description,
+            Name = newReferenceMetadata.FileName,
+            Description = newReferenceMetadata.Description,
             MimeType = existingData.MimeType,
             FileExtension = extension,
-            Tags = tags.ToArray(),
-            Categories = categories.ToArray(),
+            Tags = newReferenceMetadata.Tags.ToArray(),
+            Categories = newReferenceMetadata.Categories.ToArray(),
             Metadata = JsonDocumentUtils.CreateEmpty(),
             PublicViewing = request.PublicViewing,
             OriginalCreator = userId,
@@ -319,6 +317,16 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         }
 
         return newReference;
+    }
+
+    private static NewReferenceMetadata NormalizeNewReferenceMetadata(HashCheckRequest request)
+    {
+        string fileName = FileMetadataPolicy.NormalizeFileName(request.FileName ?? "Unnamed");
+        string description = FileMetadataPolicy.NormalizeDescription(request.Description);
+        var tags = FileMetadataPolicy.NormalizeMetadataValues(request.Tags, nameof(request.Tags));
+        var categories = FileMetadataPolicy.NormalizeMetadataValues(request.Categories, nameof(request.Categories));
+
+        return new NewReferenceMetadata(fileName, description, tags, categories);
     }
 
     private async Task<SavedFileDataDB> GetRequiredFileDataAsync(
@@ -443,6 +451,12 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         public static ReferenceAccessGroupResolution Failed(string error) =>
             new(false, Guid.Empty, error);
     }
+
+    private sealed record NewReferenceMetadata(
+        string FileName,
+        string Description,
+        List<string> Tags,
+        List<string> Categories);
 
     [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.Compiled)]
     private static partial Regex Sha256HexRegex();
