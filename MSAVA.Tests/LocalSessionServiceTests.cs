@@ -91,6 +91,50 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_DoesNotBufferFailedLoginResponseBody()
+    {
+        var failedContent = new RecordingContent("login failure details");
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = failedContent
+            }));
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        failedContent.SerializeWasCalled.Should().BeFalse();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoginAsync_DoesNotBufferFailedCurrentSessionResponseBody()
+    {
+        const string token = "opaque-login-token";
+        var failedSessionContent = new RecordingContent("session failure details");
+        var responses = new Queue<HttpResponseMessage>([
+            CreateLoginResponse(token),
+            new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = failedSessionContent
+            }
+        ]);
+        var service = CreateService(
+            new RecordingHttpMessageHandler((_, _) => Task.FromResult(responses.Dequeue())));
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        failedSessionContent.SerializeWasCalled.Should().BeFalse();
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
     public async Task LoginAsync_PropagatesWrappedCancellationWithoutChangingSessionState()
     {
         var handler = new RecordingHttpMessageHandler((_, _) =>
@@ -291,6 +335,39 @@ public class LocalSessionServiceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return _responseFactory(request, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingContent : HttpContent
+    {
+        private readonly byte[] _body;
+
+        public RecordingContent(string body)
+        {
+            _body = Encoding.UTF8.GetBytes(body);
+        }
+
+        public bool SerializeWasCalled { get; private set; }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            SerializeWasCalled = true;
+            return stream.WriteAsync(_body, 0, _body.Length);
+        }
+
+        protected override async Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context,
+            CancellationToken cancellationToken)
+        {
+            SerializeWasCalled = true;
+            await stream.WriteAsync(_body, cancellationToken);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = _body.Length;
+            return true;
         }
     }
 }

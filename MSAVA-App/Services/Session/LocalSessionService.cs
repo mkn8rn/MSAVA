@@ -35,8 +35,6 @@ public class LocalSessionService
         if (string.IsNullOrWhiteSpace(username)) throw new ArgumentException("Username is required", nameof(username));
         if (string.IsNullOrWhiteSpace(password)) throw new ArgumentException("Password is required", nameof(password));
 
-        var http = _api.CreateClient();
-
         var requestBody = new LoginRequestDTO
         {
             Username = username,
@@ -52,7 +50,7 @@ public class LocalSessionService
 
         try
         {
-            using var resp = await http.SendAsync(msg, cancellationToken);
+            using var resp = await _api.SendAsync(msg, cancellationToken);
             if (!resp.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Login failed with status code {StatusCode}", resp.StatusCode);
@@ -73,7 +71,7 @@ public class LocalSessionService
                 return null;
             }
 
-            var session = await LoadCurrentSessionAsync(http, token, cancellationToken);
+            var session = await LoadCurrentSessionAsync(token, cancellationToken);
             if (session?.LoggedIn != true)
             {
                 _logger.LogWarning("Login response token did not resolve to an active current session");
@@ -99,7 +97,6 @@ public class LocalSessionService
     }
 
     private async Task<SessionDTO?> LoadCurrentSessionAsync(
-        HttpClient http,
         string accessToken,
         CancellationToken cancellationToken)
     {
@@ -109,7 +106,7 @@ public class LocalSessionService
             anonymous: true);
         msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-        using var resp = await http.SendAsync(msg, cancellationToken);
+        using var resp = await _api.SendAsync(msg, cancellationToken);
         if (!resp.IsSuccessStatusCode)
         {
             _logger.LogWarning("Current session request failed with status code {StatusCode}", resp.StatusCode);
