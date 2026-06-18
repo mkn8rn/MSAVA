@@ -69,43 +69,16 @@ public class InviteCodeService
     {
         await EnsureCurrentUserCanManageInviteCodesAsync(cancellationToken);
 
-        var result = await _context.InviteCodes
-            .AsNoTracking()
-            .Where(ic => ic.Id == inviteCodeId)
-            .Select(ic => new
-            {
-                ic.MaxUses,
-                ic.ExpiresAt,
-                UsedCount = _context.Users.Count(u => u.InviteCodeId == inviteCodeId)
-            })
-            .SingleOrDefaultAsync(cancellationToken)
+        var usage = await GetInviteCodeUsageAsync(inviteCodeId, cancellationToken)
             ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
 
-        if (result.ExpiresAt <= GetUtcNow())
-            return 0;
-
-        return Math.Max(0, result.MaxUses - result.UsedCount);
+        return usage.GetRemainingUses(GetUtcNow());
     }
 
     public async Task<bool> IsValidInviteCodeAsync(Guid inviteCodeId, CancellationToken cancellationToken = default)
     {
-        // Optimized: Single query instead of calling GetRemainingUses
-        var result = await _context.InviteCodes
-            .AsNoTracking()
-            .Where(ic => ic.Id == inviteCodeId)
-            .Select(ic => new
-            {
-                ic.MaxUses,
-                ic.ExpiresAt,
-                UsedCount = _context.Users.Count(u => u.InviteCodeId == inviteCodeId)
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (result is null)
-            return false;
-
-        // Check expiry and usage
-        return result.ExpiresAt > GetUtcNow() && (result.MaxUses - result.UsedCount) > 0;
+        var usage = await GetInviteCodeUsageAsync(inviteCodeId, cancellationToken);
+        return usage is not null && usage.HasRemainingUse(GetUtcNow());
     }
 
     public async Task<List<InviteCodeDTO>> GetAllInviteCodesAsync(CancellationToken cancellationToken = default)
@@ -156,8 +129,41 @@ public class InviteCodeService
         return session;
     }
 
+    private async Task<InviteCodeUsage?> GetInviteCodeUsageAsync(
+        Guid inviteCodeId,
+        CancellationToken cancellationToken)
+    {
+        return await _context.InviteCodes
+            .AsNoTracking()
+            .Where(inviteCode => inviteCode.Id == inviteCodeId)
+            .Select(inviteCode => new InviteCodeUsage(
+                inviteCode.MaxUses,
+                inviteCode.ExpiresAt,
+                _context.Users.Count(user => user.InviteCodeId == inviteCodeId)))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     private DateTime GetUtcNow()
     {
         return _timeProvider.GetUtcNow().UtcDateTime;
+    }
+
+    private sealed record InviteCodeUsage(
+        int MaxUses,
+        DateTime ExpiresAt,
+        int UsedCount)
+    {
+        public int GetRemainingUses(DateTime utcNow)
+        {
+            if (ExpiresAt <= utcNow)
+                return 0;
+
+            return Math.Max(0, MaxUses - UsedCount);
+        }
+
+        public bool HasRemainingUse(DateTime utcNow)
+        {
+            return ExpiresAt > utcNow && UsedCount < MaxUses;
+        }
     }
 }

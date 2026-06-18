@@ -295,6 +295,28 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task IsValidInviteCode_ReturnsFalseWhenUsageEqualsMaxUses()
+    {
+        using var context = CreateContext();
+        var inviteCode = CreateInviteCode(Guid.NewGuid());
+        inviteCode.ExpiresAt = FixedNow.UtcDateTime.AddMinutes(1);
+        inviteCode.MaxUses = 1;
+        var registeredUser = CreateUser("registered", isAdmin: false);
+        registeredUser.InviteCodeId = inviteCode.Id;
+        context.InviteCodes.Add(inviteCode);
+        context.Users.Add(registeredUser);
+        await context.SaveChangesAsync();
+
+        var service = new InviteCodeService(
+            context,
+            new ThrowingUserSessionService(),
+            new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+            new FixedTimeProvider(FixedNow));
+
+        (await service.IsValidInviteCodeAsync(inviteCode.Id)).Should().BeFalse();
+    }
+
+    [Test]
     public async Task IsValidInviteCode_ReturnsFalseWhenInviteCodeExpiresAtCurrentTime()
     {
         using var context = CreateContext();
