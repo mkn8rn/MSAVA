@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Authorization;
+using MSAVA_API.Authentication;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
 using System.ComponentModel.DataAnnotations;
@@ -11,8 +12,6 @@ namespace MSAVA_API.Controllers;
 [ApiController]
 public class AuthenticationController : ControllerBase
 {
-    private const string BearerPrefix = "Bearer ";
-
     private readonly IAuthenticationService _authService;
 
     public AuthenticationController(IAuthenticationService authService)
@@ -44,22 +43,10 @@ public class AuthenticationController : ControllerBase
     [Authorize(Policy = AuthorizationPolicies.CurrentUser)]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken = default)
     {
-        if (!TryGetBearerToken(out string tokenString))
+        if (!BearerTokenHeader.TryRead(Request, out string tokenString))
             return Unauthorized();
 
         await _authService.LogoutAsync(tokenString, cancellationToken);
         return NoContent();
-    }
-
-    private bool TryGetBearerToken(out string tokenString)
-    {
-        tokenString = string.Empty;
-        string authorizationHeader = Request.Headers.Authorization.ToString();
-
-        if (!authorizationHeader.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        tokenString = authorizationHeader[BearerPrefix.Length..].Trim();
-        return tokenString.Length > 0;
     }
 }

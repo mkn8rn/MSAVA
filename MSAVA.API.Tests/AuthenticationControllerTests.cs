@@ -97,6 +97,25 @@ public class AuthenticationControllerTests
         service.LogoutTokenString.Should().BeNull();
     }
 
+    [Test]
+    public async Task Logout_ReturnsUnauthorizedWhenBearerTokenIsBlank()
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+        controller.Request.Headers.Authorization = "Bearer   ";
+
+        var response = await controller.Logout();
+
+        response.Should().BeOfType<UnauthorizedResult>();
+        service.LogoutTokenString.Should().BeNull();
+    }
+
     private sealed class TestAuthenticationService : IAuthenticationService
     {
         public readonly Guid RegisteredUserId = Guid.NewGuid();

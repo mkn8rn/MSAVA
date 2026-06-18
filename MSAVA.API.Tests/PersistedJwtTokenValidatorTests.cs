@@ -67,6 +67,18 @@ public class PersistedJwtTokenValidatorTests
         tokenContext.Result?.Failure?.Message.Should().Be(PersistedJwtTokenValidator.MissingBearerTokenFailure);
     }
 
+    [Test]
+    public async Task ValidateAsync_FailsWhenBearerTokenIsBlank()
+    {
+        using var context = CreateContext();
+        var tokenContext = CreateTokenValidatedContext("Bearer   ");
+        var validator = new PersistedJwtTokenValidator(context, new FixedTimeProvider(FixedNow));
+
+        await validator.TokenValidated(tokenContext);
+
+        tokenContext.Result?.Failure?.Message.Should().Be(PersistedJwtTokenValidator.MissingBearerTokenFailure);
+    }
+
     private static TokenValidatedContext CreateTokenValidatedContext(string? authorizationHeader)
     {
         var httpContext = new DefaultHttpContext();

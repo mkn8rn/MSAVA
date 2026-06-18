@@ -7,8 +7,6 @@ namespace MSAVA_API.Authentication;
 
 internal sealed class PersistedJwtTokenValidator : JwtBearerEvents
 {
-    private const string BearerPrefix = "Bearer ";
-
     internal const string MissingBearerTokenFailure = "Authenticated request did not include a bearer token.";
     internal const string InactiveTokenFailure = "Bearer token is not active.";
     internal const string TokenStoreLookupFailure = "Failed to validate persisted bearer token.";
@@ -26,8 +24,7 @@ internal sealed class PersistedJwtTokenValidator : JwtBearerEvents
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        string? tokenString = GetBearerToken(context);
-        if (string.IsNullOrWhiteSpace(tokenString))
+        if (!BearerTokenHeader.TryRead(context.HttpContext.Request, out string tokenString))
         {
             context.Fail(MissingBearerTokenFailure);
             return;
@@ -58,14 +55,5 @@ internal sealed class PersistedJwtTokenValidator : JwtBearerEvents
 
         if (!tokenIsActive)
             context.Fail(InactiveTokenFailure);
-    }
-
-    private static string? GetBearerToken(TokenValidatedContext context)
-    {
-        string authorizationHeader = context.HttpContext.Request.Headers.Authorization.ToString();
-        if (!authorizationHeader.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return authorizationHeader[BearerPrefix.Length..].Trim();
     }
 }
