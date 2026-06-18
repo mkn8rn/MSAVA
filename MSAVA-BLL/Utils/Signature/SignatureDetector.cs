@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using MSAVA_BLL.Utils;
 using MSAVA_Shared.Diagnostics;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
@@ -200,8 +201,7 @@ public static class SignatureDetector
 
     private static MsavaSignature? DetectInSvg(Stream input)
     {
-        var doc = new XmlDocument();
-        doc.Load(input);
+        var doc = SafeXmlDocumentLoader.Load(input);
 
         // Look for signature in metadata comments
         var comments = FindXmlComments(doc.DocumentElement);
@@ -269,8 +269,7 @@ public static class SignatureDetector
         if (entry != null)
         {
             using var stream = entry.Open();
-            var doc = new XmlDocument();
-            doc.Load(stream);
+            var doc = SafeXmlDocumentLoader.Load(stream);
 
             // Look for our property
             var nodes = doc.GetElementsByTagName("property");
@@ -297,8 +296,7 @@ public static class SignatureDetector
         if (entry != null)
         {
             using var stream = entry.Open();
-            var doc = new XmlDocument();
-            doc.Load(stream);
+            var doc = SafeXmlDocumentLoader.Load(stream);
 
             var nsMgr = new XmlNamespaceManager(doc.NameTable);
             nsMgr.AddNamespace("meta", "urn:oasis:names:tc:opendocument:xmlns:meta:1.0");

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
+using MSAVA_BLL.Utils;
 using MSAVA_Shared.Diagnostics;
 using NPOI.HSSF.UserModel;
 
@@ -59,8 +60,7 @@ public static partial class DocumentMetadataExtractor
         if (coreEntry is not null)
         {
             using var xmlStream = coreEntry.Open();
-            var doc = new XmlDocument();
-            doc.Load(xmlStream);
+            var doc = SafeXmlDocumentLoader.Load(xmlStream);
 
             var nsMgr = new XmlNamespaceManager(doc.NameTable);
             nsMgr.AddNamespace("dc", "http://purl.org/dc/elements/1.1/");
@@ -81,8 +81,7 @@ public static partial class DocumentMetadataExtractor
         if (appEntry is not null)
         {
             using var xmlStream = appEntry.Open();
-            var doc = new XmlDocument();
-            doc.Load(xmlStream);
+            var doc = SafeXmlDocumentLoader.Load(xmlStream);
 
             var pagesNode = doc.GetElementsByTagName("Pages");
             if (pagesNode.Count > 0 && int.TryParse(pagesNode[0]?.InnerText, out var pages))
@@ -188,8 +187,7 @@ public static partial class DocumentMetadataExtractor
         if (metaEntry is not null)
         {
             using var xmlStream = metaEntry.Open();
-            var doc = new XmlDocument();
-            doc.Load(xmlStream);
+            var doc = SafeXmlDocumentLoader.Load(xmlStream);
 
             var nsMgr = new XmlNamespaceManager(doc.NameTable);
             nsMgr.AddNamespace("dc", "http://purl.org/dc/elements/1.1/");

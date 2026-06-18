@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MSAVA_BLL.Utils.Metadata;
 
@@ -42,6 +43,22 @@ public class MetadataExtractorTests
             .Should().Be(BoundedMetadataTextReader.MaximumAnalyzedCharacters);
         metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
         stream.Position.Should().BeLessThan(stream.Length);
+    }
+
+    [Test]
+    public void ExtractMetadata_RejectsXmlDtdAsInvalidMetadata()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
+            <!DOCTYPE root [
+              <!ENTITY expansion "expanded">
+            ]>
+            <root>&expansion;</root>
+            """));
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "xml", stream.Length);
+
+        metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeFalse();
+        metadata.RootElement.GetProperty("Reason").GetString().Should().Be("Extraction failed");
     }
 
     [Test]

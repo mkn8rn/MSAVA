@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
+using MSAVA_BLL.Utils;
 
 namespace MSAVA_BLL.Utils.Metadata;
 
@@ -28,8 +29,7 @@ public static partial class VectorMetadataExtractor
 
     private static JsonDocument ExtractSvg(Stream stream, long size)
     {
-        var doc = new XmlDocument();
-        doc.Load(stream);
+        var doc = SafeXmlDocumentLoader.Load(stream);
 
         var svgNode = doc.DocumentElement;
         var width = svgNode?.GetAttribute("width");

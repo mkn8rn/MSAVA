@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using MSAVA_BLL.Utils;
 using MSAVA_Shared.Diagnostics;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
@@ -178,9 +179,7 @@ public static class SignatureEmbedder
 
     private static Stream EmbedInSvg(Stream input, MsavaSignature signature)
     {
-        var doc = new XmlDocument();
-        doc.PreserveWhitespace = true;
-        doc.Load(input);
+        var doc = SafeXmlDocumentLoader.Load(input, preserveWhitespace: true);
 
         // Add metadata element to SVG
         var svgNs = "http://www.w3.org/2000/svg";
@@ -294,8 +293,7 @@ public static class SignatureEmbedder
             try
             {
                 using var stream = existingEntry.Open();
-                var doc = new XmlDocument();
-                doc.Load(stream);
+                var doc = SafeXmlDocumentLoader.Load(stream);
                 
                 var root = doc.DocumentElement;
                 if (root != null)
@@ -360,8 +358,7 @@ public static class SignatureEmbedder
                 string updatedXml;
                 using (var stream = entry.Open())
                 {
-                    var doc = new XmlDocument();
-                    doc.Load(stream);
+                    var doc = SafeXmlDocumentLoader.Load(stream);
                     
                     var nsMgr = new XmlNamespaceManager(doc.NameTable);
                     nsMgr.AddNamespace("office", "urn:oasis:names:tc:opendocument:xmlns:office:1.0");

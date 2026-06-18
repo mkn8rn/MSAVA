@@ -34,6 +34,26 @@ public class SignatureEmbedderTests
     }
 
     [Test]
+    public void TryEmbed_ReturnsOriginalStreamAndResetsPositionWhenSvgContainsDtd()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
+            <!DOCTYPE svg [
+              <!ENTITY expansion "expanded">
+            ]>
+            <svg xmlns="http://www.w3.org/2000/svg">
+              <text>&expansion;</text>
+            </svg>
+            """));
+        stream.Position = 12;
+        var signature = CreateSignature();
+
+        var result = SignatureEmbedder.TryEmbed(stream, "svg", signature);
+
+        result.Should().BeSameAs(stream);
+        stream.Position.Should().Be(0);
+    }
+
+    [Test]
     public void TryEmbed_PropagatesCriticalEmbeddingFailure()
     {
         using var stream = new ThrowingReadStream(new OutOfMemoryException("Critical embed failure."));

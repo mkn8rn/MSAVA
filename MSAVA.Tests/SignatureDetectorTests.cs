@@ -5,6 +5,9 @@ namespace MSAVA_App.Tests;
 
 public class SignatureDetectorTests
 {
+    private const string ValidSignature =
+        "MSAVA:v1:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f:42:1700000000";
+
     [Test]
     public void Detect_ReturnsNullAndResetsStreamWhenOfficeDetectorFails()
     {
@@ -24,6 +27,26 @@ public class SignatureDetectorTests
         stream.Position = 3;
 
         var signature = SignatureDetector.Detect(stream, "mp3");
+
+        signature.Should().BeNull();
+        stream.Position.Should().Be(0);
+    }
+
+    [Test]
+    public void Detect_ReturnsNullAndResetsStreamWhenSvgContainsDtd()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes($"""
+            <!DOCTYPE svg [
+              <!ENTITY expansion "expanded">
+            ]>
+            <svg xmlns="http://www.w3.org/2000/svg">
+              <metadata><!-- {ValidSignature} --></metadata>
+              <text>&expansion;</text>
+            </svg>
+            """));
+        stream.Position = 12;
+
+        var signature = SignatureDetector.Detect(stream, "svg");
 
         signature.Should().BeNull();
         stream.Position.Should().Be(0);
