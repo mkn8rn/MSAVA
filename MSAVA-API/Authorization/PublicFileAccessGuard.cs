@@ -19,7 +19,7 @@ public static class PublicFileAccessGuard
         if (string.IsNullOrWhiteSpace(physicalPath) ||
             !FileContentUtils.IsSafeFilePath(physicalPath))
         {
-            LogDeniedRequest(logger, physicalPath, "physical path is outside the data directory");
+            LogDeniedRequest(logger, "physical path is outside the data directory");
             return false;
         }
 
@@ -28,7 +28,7 @@ public static class PublicFileAccessGuard
 
         if (!IsCanonicalStoredFilePath(physicalPath, storedFileName))
         {
-            LogDeniedRequest(logger, physicalPath, "physical path is not the canonical stored file path");
+            LogDeniedRequest(logger, "physical path is not the canonical stored file path");
             return false;
         }
 
@@ -53,7 +53,7 @@ public static class PublicFileAccessGuard
         }
         catch (Exception ex) when (RecoverableLookupFailurePolicy.IsRecoverable(ex))
         {
-            LogDeniedRequest(logger, physicalPath, "public file database lookup failed", ex);
+            LogDeniedRequest(logger, "public file database lookup failed", ex);
             return false;
         }
     }
@@ -79,23 +79,20 @@ public static class PublicFileAccessGuard
 
     private static void LogDeniedRequest(
         ILogger logger,
-        string? physicalPath,
         string reason,
         Exception? exception = null)
     {
         if (exception is null)
         {
             logger.LogWarning(
-                "Denied public file request because {Reason}. Physical path: {PhysicalPath}",
-                reason,
-                physicalPath);
+                "Denied public file request because {Reason}. Physical path was redacted.",
+                reason);
             return;
         }
 
         logger.LogWarning(
-            exception,
-            "Denied public file request because {Reason}. Physical path: {PhysicalPath}",
+            "Denied public file request because {Reason} after {ExceptionType}. Physical path was redacted.",
             reason,
-            physicalPath);
+            exception.GetType().Name);
     }
 }

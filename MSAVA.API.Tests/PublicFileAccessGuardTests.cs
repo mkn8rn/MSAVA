@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
@@ -74,6 +75,33 @@ public class PublicFileAccessGuardTests
         bool result = CanServePublicFile(context, physicalPath);
 
         result.Should().BeFalse();
+    }
+
+    [Test]
+    public void CanServePublicFile_RedactsUnsafePhysicalPathFromDenialWarning()
+    {
+        using var context = CreateDataContext();
+        var logger = new CapturingLogger();
+        string physicalPath = Path.Combine(
+            $"{FileContentUtils.FilesDirectory}-secret",
+            "tenant-42",
+            $"{new string('a', 64)}.txt");
+
+        bool result = PublicFileAccessGuard.CanServePublicFile(
+            context,
+            logger,
+            physicalPath);
+
+        result.Should().BeFalse();
+        logger.Messages.Should().ContainSingle();
+        CapturedLogMessage message = logger.Messages[0];
+        message.Level.Should().Be(LogLevel.Warning);
+        message.Exception.Should().BeNull();
+        message.Message.Should()
+            .Contain("Denied public file request because physical path is outside the data directory.");
+        message.Message.Should().Contain("Physical path was redacted.");
+        message.Message.Should().NotContain(physicalPath);
+        message.Message.Should().NotContain("tenant-42");
     }
 
     [Test]
@@ -204,13 +232,25 @@ public class PublicFileAccessGuardTests
     public void CanServePublicFile_DeniesWhenDatabaseLookupFailsRecoverably()
     {
         var context = CreateDataContext();
+        var logger = new CapturingLogger();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
         string physicalPath = CreatePhysicalPath(hash);
         context.Dispose();
 
-        bool result = CanServePublicFile(context, physicalPath);
+        bool result = PublicFileAccessGuard.CanServePublicFile(
+            context,
+            logger,
+            physicalPath);
 
         result.Should().BeFalse();
+        logger.Messages.Should().ContainSingle();
+        CapturedLogMessage message = logger.Messages[0];
+        message.Level.Should().Be(LogLevel.Warning);
+        message.Exception.Should().BeNull();
+        message.Message.Should().Contain("Denied public file request because public file database lookup failed after ");
+        message.Message.Should().Contain("Physical path was redacted.");
+        message.Message.Should().NotContain(physicalPath);
+        message.Message.Should().NotContain(Path.GetFileName(physicalPath));
     }
 
     [Test]
@@ -407,6 +447,33 @@ public class PublicFileAccessGuardTests
             NullLogger.Instance,
             physicalPath);
     }
+
+    private sealed class CapturingLogger : ILogger
+    {
+        public List<CapturedLogMessage> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(new CapturedLogMessage(
+                logLevel,
+                exception,
+                formatter(state, exception)));
+        }
+    }
+
+    private sealed record CapturedLogMessage(
+        LogLevel Level,
+        Exception? Exception,
+        string Message);
 
     private static DefaultHttpContext CreatePublicFileRequest(string physicalPath)
     {
