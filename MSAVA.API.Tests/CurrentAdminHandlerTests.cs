@@ -89,6 +89,25 @@ public class CurrentAdminHandlerTests
     }
 
     [Test]
+    public async Task HandleAsync_DoesNotSucceedWhenAuthenticatedUserIdClaimsConflict()
+    {
+        using var context = CreateContext();
+        var user = CreateUser(isAdmin: true, isBanned: false);
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var authorizationContext = CreateAuthorizationContext(
+            subjectUserId: Guid.NewGuid(),
+            nameIdentifierUserId: user.Id,
+            includeStaleAdminRole: true);
+        var handler = new CurrentAdminHandler(context, NullLogger<CurrentAdminHandler>.Instance);
+
+        await handler.HandleAsync(authorizationContext);
+
+        authorizationContext.HasSucceeded.Should().BeFalse();
+    }
+
+    [Test]
     public async Task HandleAsync_PropagatesRequestCancellationWithoutSucceeding()
     {
         using var context = CreateContext();
@@ -127,10 +146,26 @@ public class CurrentAdminHandlerTests
         bool includeStaleAdminRole = false,
         CancellationToken requestAborted = default)
     {
+        return CreateAuthorizationContext(
+            subjectUserId: userId,
+            nameIdentifierUserId: null,
+            includeStaleAdminRole,
+            requestAborted);
+    }
+
+    private static AuthorizationHandlerContext CreateAuthorizationContext(
+        Guid subjectUserId,
+        Guid? nameIdentifierUserId,
+        bool includeStaleAdminRole = false,
+        CancellationToken requestAborted = default)
+    {
         var claims = new List<Claim>
         {
-            new(SessionClaimNames.Subject, userId.ToString())
+            new(SessionClaimNames.Subject, subjectUserId.ToString())
         };
+
+        if (nameIdentifierUserId is Guid userId)
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
 
         if (includeStaleAdminRole)
             claims.Add(new Claim(ClaimTypes.Role, SessionRoles.Admin));

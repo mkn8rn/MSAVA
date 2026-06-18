@@ -10,11 +10,32 @@ internal static class AuthorizationUser
         if (user.Identity?.IsAuthenticated != true)
             return null;
 
-        string? userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? user.FindFirstValue(SessionClaimNames.Subject);
+        Guid? authenticatedUserId = null;
 
-        return Guid.TryParse(userIdClaim, out var userId) && userId != Guid.Empty
-            ? userId
-            : null;
+        foreach (Claim claim in GetUserIdClaims(user))
+        {
+            if (!Guid.TryParse(claim.Value, out Guid claimUserId) ||
+                claimUserId == Guid.Empty)
+            {
+                return null;
+            }
+
+            if (authenticatedUserId is null)
+            {
+                authenticatedUserId = claimUserId;
+                continue;
+            }
+
+            if (authenticatedUserId.Value != claimUserId)
+                return null;
+        }
+
+        return authenticatedUserId;
+    }
+
+    private static IEnumerable<Claim> GetUserIdClaims(ClaimsPrincipal user)
+    {
+        return user.FindAll(ClaimTypes.NameIdentifier)
+            .Concat(user.FindAll(SessionClaimNames.Subject));
     }
 }
