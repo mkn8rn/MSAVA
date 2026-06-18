@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +17,9 @@ public class PublicFileAccessGuardTests
     {
         await using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        var reference = CreateReference(hash, publicDownload: true);
+        context.FileRefs.Add(reference);
+        context.FileData.Add(CreateFileData(reference));
         await context.SaveChangesAsync();
         string physicalPath = CreatePhysicalPath(hash);
 
@@ -26,11 +29,27 @@ public class PublicFileAccessGuardTests
     }
 
     [Test]
+    public async Task CanServePublicFile_DeniesPublicSqlReferenceWithoutFileData()
+    {
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        await context.SaveChangesAsync();
+        string physicalPath = CreatePhysicalPath(hash);
+
+        bool result = CanServePublicFile(context, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
+    [Test]
     public async Task CanServePublicFile_DeniesFileWithoutPublicDownloadSqlReference()
     {
         await using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        context.FileRefs.Add(CreateReference(hash, publicDownload: false));
+        var reference = CreateReference(hash, publicDownload: false);
+        context.FileRefs.Add(reference);
+        context.FileData.Add(CreateFileData(reference));
         await context.SaveChangesAsync();
         string physicalPath = CreatePhysicalPath(hash);
 
@@ -44,7 +63,9 @@ public class PublicFileAccessGuardTests
     {
         await using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        var reference = CreateReference(hash, publicDownload: true);
+        context.FileRefs.Add(reference);
+        context.FileData.Add(CreateFileData(reference));
         await context.SaveChangesAsync();
         string physicalPath = Path.Combine(
             $"{FileContentUtils.FilesDirectory}-outside",
@@ -66,6 +87,7 @@ public class PublicFileAccessGuardTests
         try
         {
             context.FileRefs.Add(privateReference);
+            context.FileData.Add(CreateFileData(privateReference));
             await context.SaveChangesAsync();
 
             using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
@@ -177,7 +199,9 @@ public class PublicFileAccessGuardTests
     {
         await using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        context.FileRefs.Add(CreateReference(hash, publicDownload: false));
+        var reference = CreateReference(hash, publicDownload: false);
+        context.FileRefs.Add(reference);
+        context.FileData.Add(CreateFileData(reference));
         await context.SaveChangesAsync();
         string physicalPath = CreatePhysicalPath(hash);
         CreateFile(physicalPath);
@@ -213,7 +237,9 @@ public class PublicFileAccessGuardTests
     {
         await using var context = CreateDataContext();
         byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
-        context.FileRefs.Add(CreateReference(hash, publicDownload: true));
+        var reference = CreateReference(hash, publicDownload: true);
+        context.FileRefs.Add(reference);
+        context.FileData.Add(CreateFileData(reference));
         await context.SaveChangesAsync();
         string physicalPath = CreatePhysicalPath(hash);
         CreateFile(physicalPath);
@@ -311,6 +337,31 @@ public class PublicFileAccessGuardTests
             FileExtension = FileExtensionType._TXT,
             PublicDownload = publicDownload,
             AccessGroupId = Guid.NewGuid()
+        };
+    }
+
+    private static SavedFileDataDB CreateFileData(SavedFileReferenceDB reference)
+    {
+        return new SavedFileDataDB
+        {
+            Id = Guid.NewGuid(),
+            FileReference = reference,
+            FileReferenceId = reference.Id,
+            SizeInBytes = 1,
+            Checksum = Convert.ToHexString(reference.FileHash),
+            Name = "public-file",
+            Description = "public file guard test",
+            MimeType = "text/plain",
+            FileExtension = "txt",
+            Tags = [],
+            Categories = [],
+            Metadata = JsonDocument.Parse("{}"),
+            PublicViewing = false,
+            DownloadCount = 0,
+            SavedAt = DateTime.UtcNow,
+            OriginalCreator = Guid.NewGuid(),
+            LastModifiedAt = DateTime.UtcNow,
+            LastModifiedById = Guid.NewGuid()
         };
     }
 

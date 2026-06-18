@@ -41,7 +41,8 @@ public static class PublicFileAccessGuard
                 .Any(fileReference =>
                     fileReference.PublicDownload &&
                     fileReference.FileHash == storedFileName.FileHash &&
-                    fileReference.FileExtension == extensionType);
+                    fileReference.FileExtension == extensionType &&
+                    dbContext.FileData.Any(fileData => fileData.FileReferenceId == fileReference.Id));
         }
         catch (Exception ex) when (RecoverableLookupFailurePolicy.IsRecoverable(ex))
         {
