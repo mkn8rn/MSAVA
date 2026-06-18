@@ -34,6 +34,10 @@ public class ProviderImportServiceTests
     [TestCase("application/zip", "zip")]
     [TestCase("application/octet-stream", "bin")]
     [TestCase("text/plain", "txt")]
+    [TestCase("text/plain; charset=utf-8", "txt")]
+    [TestCase("application/x-mp4-manifest", "")]
+    [TestCase("application/vnd.example.png-metadata", "")]
+    [TestCase("application/notjpeg", "")]
     [TestCase("application/x-unknown", "")]
     public void ProviderContentType_InferExtension_UsesSharedProviderMapping(
         string? contentType,
@@ -749,6 +753,55 @@ public class ProviderImportServiceTests
 
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("Google Drive response file extension is not supported: FileExtension 'bin' is not supported.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GoogleDriveImportAsync_RejectsMisleadingVendorContentTypeBeforeCopyingDownloadContent()
+    {
+        var responseIndex = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateResponse(HttpStatusCode.OK, "application/octet-stream", "initial ok");
+
+            return CreateStreamResponse(HttpStatusCode.OK, "application/x-mp4-manifest", new ThrowingReadStream());
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Google Drive response did not include a supported file extension.");
 
             var tempFilePath = GetLoggedTempFilePath(logger);
             File.Exists(tempFilePath).Should().BeFalse();
