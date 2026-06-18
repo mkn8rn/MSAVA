@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
+using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Utils;
 using MSAVA_Shared.Diagnostics;
 using SixLabors.ImageSharp;
@@ -14,6 +15,9 @@ namespace MSAVA_BLL.Utils.Signature;
 /// </summary>
 public static class SignatureEmbedder
 {
+    private const int CopyBufferSize = 81920;
+    private const long MaximumBufferedStreamBytes = FileSizePolicy.MaximumFileSizeBytes;
+
     private static readonly Dictionary<string, Func<Stream, MsavaSignature, Stream>> Embedders =
         new(StringComparer.OrdinalIgnoreCase)
     {
@@ -106,6 +110,7 @@ public static class SignatureEmbedder
         if (inputStream.CanSeek)
             inputStream.Position = 0;
 
+        EnsureRemainingInputWithinMaximum(inputStream);
         return embedder(inputStream, signature);
     }
 
@@ -137,12 +142,58 @@ public static class SignatureEmbedder
 
         return exception is IOException
             or InvalidDataException
+            or FileTooLargeException
             or XmlException
             or ArgumentException
             or InvalidOperationException
             or NotSupportedException
             || exception.GetType().Namespace?.StartsWith("TagLib", StringComparison.Ordinal) == true
             || exception.GetType().Namespace?.StartsWith("SixLabors.ImageSharp", StringComparison.Ordinal) == true;
+    }
+
+    private static void EnsureRemainingInputWithinMaximum(Stream input)
+    {
+        if (!input.CanSeek)
+            return;
+
+        long remainingBytes = input.Length - input.Position;
+        if (remainingBytes < 0)
+            throw new InvalidDataException("Input stream position is beyond the declared stream length.");
+
+        FileSizePolicy.EnsureWithinMaximum(remainingBytes, MaximumBufferedStreamBytes);
+    }
+
+    private static MemoryStream CopyInputToMemory(Stream input)
+    {
+        EnsureRemainingInputWithinMaximum(input);
+
+        var output = new MemoryStream();
+        CopyToBoundedOutput(input, output);
+        output.Position = 0;
+        return output;
+    }
+
+    private static void CopyToBoundedOutput(Stream source, Stream destination)
+    {
+        using var boundedOutput = new FileSizeLimitedWriteStream(destination, MaximumBufferedStreamBytes);
+        source.CopyTo(boundedOutput, CopyBufferSize);
+    }
+
+    private static void SaveXmlToBoundedOutput(XmlDocument doc, MemoryStream output)
+    {
+        using var boundedOutput = new FileSizeLimitedWriteStream(output, MaximumBufferedStreamBytes);
+        doc.Save(boundedOutput);
+    }
+
+    private static void EnsureBufferedOutputWithinMaximum(MemoryStream output)
+    {
+        FileSizePolicy.EnsureWithinMaximum(output.Length, MaximumBufferedStreamBytes);
+    }
+
+    private static void AppendToBoundedOutput(MemoryStream output, ReadOnlySpan<byte> bytes)
+    {
+        FileSizePolicy.EnsureChunkWithinMaximum(output.Length, bytes.Length, MaximumBufferedStreamBytes);
+        output.Write(bytes);
     }
 
     #region Image Embedders
@@ -159,7 +210,10 @@ public static class SignatureEmbedder
             ?? throw new InvalidDataException("Image format could not be decoded.");
 
         var output = new MemoryStream();
-        image.Save(output, imageFormat);
+        using (var boundedOutput = new FileSizeLimitedWriteStream(output, MaximumBufferedStreamBytes))
+        {
+            image.Save(boundedOutput, imageFormat);
+        }
         output.Position = 0;
         return output;
     }
@@ -167,10 +221,7 @@ public static class SignatureEmbedder
     private static Stream EmbedPassthrough(Stream input, MsavaSignature signature)
     {
         // Format doesn't support metadata, return copy of original
-        var output = new MemoryStream();
-        input.CopyTo(output);
-        output.Position = 0;
-        return output;
+        return CopyInputToMemory(input);
     }
 
     #endregion
@@ -203,7 +254,7 @@ public static class SignatureEmbedder
         }
 
         var output = new MemoryStream();
-        doc.Save(output);
+        SaveXmlToBoundedOutput(doc, output);
         output.Position = 0;
         return output;
     }
@@ -222,9 +273,10 @@ public static class SignatureEmbedder
         using var embedded = EmbedInSvg(gzipIn, signature);
         
         var output = new MemoryStream();
-        using (var gzipOut = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))
+        using (var boundedOutput = new FileSizeLimitedWriteStream(output, MaximumBufferedStreamBytes))
+        using (var gzipOut = new GZipStream(boundedOutput, CompressionLevel.Optimal, leaveOpen: true))
         {
-            embedded.CopyTo(gzipOut);
+            embedded.CopyTo(gzipOut, CopyBufferSize);
         }
         output.Position = 0;
         return output;
@@ -236,13 +288,12 @@ public static class SignatureEmbedder
 
     private static Stream EmbedInTagLib(Stream input, MsavaSignature signature)
     {
-        var memoryStream = new MemoryStream();
-        input.CopyTo(memoryStream);
-        memoryStream.Position = 0;
+        var memoryStream = CopyInputToMemory(input);
 
         using var tagFile = TagLib.File.Create(new StreamFileAbstraction("media", memoryStream));
         tagFile.Tag.Comment = signature.ToString();
         tagFile.Save();
+        EnsureBufferedOutputWithinMaximum(memoryStream);
 
         memoryStream.Position = 0;
         return memoryStream;
@@ -254,9 +305,7 @@ public static class SignatureEmbedder
 
     private static Stream EmbedInOfficeXml(Stream input, MsavaSignature signature)
     {
-        var output = new MemoryStream();
-        input.CopyTo(output);
-        output.Position = 0;
+        var output = CopyInputToMemory(input);
 
         using (var archive = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -274,6 +323,7 @@ public static class SignatureEmbedder
             writer.Write(customXml);
         }
 
+        EnsureBufferedOutputWithinMaximum(output);
         output.Position = 0;
         return output;
     }
@@ -340,9 +390,7 @@ public static class SignatureEmbedder
 
     private static Stream EmbedInOpenDocument(Stream input, MsavaSignature signature)
     {
-        var output = new MemoryStream();
-        input.CopyTo(output);
-        output.Position = 0;
+        var output = CopyInputToMemory(input);
 
         using (var archive = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -385,6 +433,7 @@ public static class SignatureEmbedder
             }
         }
 
+        EnsureBufferedOutputWithinMaximum(output);
         output.Position = 0;
         return output;
     }
@@ -395,12 +444,11 @@ public static class SignatureEmbedder
         // We'll add a comment at the end of the PDF (after %%EOF)
         // This is a simple approach that preserves the PDF
         
-        var output = new MemoryStream();
-        input.CopyTo(output);
+        var output = CopyInputToMemory(input);
         
         // Append signature as PDF comment
         var signatureBytes = Encoding.ASCII.GetBytes($"\n% {signature}\n");
-        output.Write(signatureBytes);
+        AppendToBoundedOutput(output, signatureBytes);
         
         output.Position = 0;
         return output;

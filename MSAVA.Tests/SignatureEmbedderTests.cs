@@ -1,5 +1,6 @@
 using System.Text;
 using System.IO.Compression;
+using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Utils;
 using MSAVA_BLL.Utils.Signature;
 
@@ -77,6 +78,36 @@ public class SignatureEmbedderTests
 
         act.Should().Throw<OutOfMemoryException>()
             .WithMessage("Critical embed failure.");
+    }
+
+    [Test]
+    public void Embed_RejectsOversizedSeekableInputBeforeReading()
+    {
+        using var stream = new OversizedSeekableReadStream(FileSizePolicy.MaximumFileSizeBytes + 1);
+        var signature = CreateSignature();
+
+        Action act = () =>
+        {
+            using var _ = SignatureEmbedder.Embed(stream, "pdf", signature);
+        };
+
+        act.Should().Throw<FileTooLargeException>()
+            .Which.FileSizeBytes.Should().Be(FileSizePolicy.MaximumFileSizeBytes + 1);
+        stream.ReadCount.Should().Be(0);
+    }
+
+    [Test]
+    public void TryEmbed_ReturnsOriginalStreamAndResetsPositionWhenInputExceedsBufferLimit()
+    {
+        using var stream = new OversizedSeekableReadStream(FileSizePolicy.MaximumFileSizeBytes + 1);
+        stream.Position = 7;
+        var signature = CreateSignature();
+
+        var result = SignatureEmbedder.TryEmbed(stream, "pdf", signature);
+
+        result.Should().BeSameAs(stream);
+        stream.Position.Should().Be(0);
+        stream.ReadCount.Should().Be(0);
     }
 
     [Test]
@@ -174,6 +205,65 @@ public class SignatureEmbedderTests
         public override long Seek(long offset, SeekOrigin origin)
         {
             throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class OversizedSeekableReadStream(long length) : Stream
+    {
+        private long _position;
+
+        public int ReadCount { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => true;
+
+        public override bool CanWrite => false;
+
+        public override long Length => length;
+
+        public override long Position
+        {
+            get => _position;
+            set => _position = value;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ReadCount++;
+            throw new InvalidOperationException("Oversized stream should be rejected before reading.");
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            ReadCount++;
+            throw new InvalidOperationException("Oversized stream should be rejected before reading.");
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            Position = origin switch
+            {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => Position + offset,
+                SeekOrigin.End => Length + offset,
+                _ => throw new ArgumentOutOfRangeException(nameof(origin))
+            };
+            return Position;
         }
 
         public override void SetLength(long value)
