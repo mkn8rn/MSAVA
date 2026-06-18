@@ -59,8 +59,8 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
             await ProviderHttpFailure.ThrowAsync("OneDrive download", resp, cancellationToken);
         }
 
-        var respMediaType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-        if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+        var respMediaType = resp.Content.Headers.ContentType?.MediaType;
+        if (ProviderContentType.IsHtml(respMediaType))
             throw new InvalidOperationException("OneDrive returned HTML instead of file content.");
 
         string finalFileName = "OneDrive File";

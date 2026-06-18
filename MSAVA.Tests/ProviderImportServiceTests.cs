@@ -46,6 +46,22 @@ public class ProviderImportServiceTests
         ProviderContentType.InferExtension(contentType).Should().Be(expectedExtension);
     }
 
+    [TestCase(null, false)]
+    [TestCase("", false)]
+    [TestCase(" ", false)]
+    [TestCase("text/html", true)]
+    [TestCase("Text/Html", true)]
+    [TestCase("text/html; charset=utf-8", true)]
+    [TestCase("text/html+xml", false)]
+    [TestCase("application/xhtml+xml", false)]
+    [TestCase("application/vnd.text-html", false)]
+    public void ProviderContentType_IsHtml_OnlyMatchesExactHtmlMediaType(
+        string? contentType,
+        bool expected)
+    {
+        ProviderContentType.IsHtml(contentType).Should().Be(expected);
+    }
+
     [Test]
     public async Task ProviderHttpFailure_UsesReasonPhraseWhenBodyIsMissing()
     {
@@ -816,6 +832,55 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsHtmlLikeDownloadContentTypeAsUnsupportedBeforeCopyingContent()
+    {
+        var responseIndex = 0;
+        var handler = new RecordingHttpMessageHandler(_ =>
+        {
+            responseIndex++;
+            if (responseIndex == 1)
+                return CreateResponse(HttpStatusCode.OK, "application/octet-stream", "initial ok");
+
+            return CreateStreamResponse(HttpStatusCode.OK, "text/html+xml", new ThrowingReadStream());
+        });
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        var logger = new CapturingLogger<ServiceLogger>();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore, logger, CreateSession(user.Id)),
+                new ServiceLogger(logger, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = "abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Google Drive response did not include a supported file extension.");
+
+            var tempFilePath = GetLoggedTempFilePath(logger);
+            File.Exists(tempFilePath).Should().BeFalse();
+            handler.Requests.Should().HaveCount(2);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GoogleDriveImportAsync_RejectsOversizeDeclaredDownloadBeforeReadingContent()
     {
         var responseIndex = 0;
@@ -993,6 +1058,45 @@ public class ProviderImportServiceTests
 
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("OneDrive response file extension is not supported: FileExtension 'bin' is not supported.");
+
+            handler.Requests.Should().ContainSingle();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_RejectsHtmlLikeContentTypeAsUnsupportedBeforeCopyingContent()
+    {
+        var handler = new RecordingHttpMessageHandler(_ =>
+            CreateStreamResponse(HttpStatusCode.OK, "text/html+xml", new ThrowingReadStream()));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (user, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore, session: CreateSession(user.Id)),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = "https://1drv.ms/u/s!abcDEF12345",
+                AccessGroupId = accessGroup.Id
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("OneDrive response did not include a supported file extension.");
 
             handler.Requests.Should().ContainSingle();
             context.FileRefs.Should().BeEmpty();

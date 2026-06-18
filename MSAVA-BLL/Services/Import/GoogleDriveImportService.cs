@@ -61,10 +61,10 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
             await ProviderHttpFailure.ThrowAsync("Google Drive initial request", initialResp, cancellationToken);
         }
 
-        var contentType = initialResp.Content.Headers.ContentType?.MediaType ?? string.Empty;
+        var contentType = initialResp.Content.Headers.ContentType?.MediaType;
         string? downloadUrl = baseDownloadUrl;
 
-        if (contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+        if (ProviderContentType.IsHtml(contentType))
         {
             var html = await ReadConfirmationPageHtmlAsync(initialResp.Content, cancellationToken);
 
@@ -107,8 +107,8 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
                 if (!downloadResp.IsSuccessStatusCode)
                     await ProviderHttpFailure.ThrowAsync("Google Drive download", downloadResp, cancellationToken);
 
-                var respMediaType = downloadResp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-                if (respMediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+                var respMediaType = downloadResp.Content.Headers.ContentType?.MediaType;
+                if (ProviderContentType.IsHtml(respMediaType))
                     throw new InvalidOperationException("Google Drive returned HTML instead of file content.");
 
                 var inferredExtension = ProviderContentType.InferExtension(downloadResp.Content.Headers.ContentType?.MediaType);

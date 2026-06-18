@@ -2,6 +2,8 @@ namespace MSAVA_BLL.Services.Import;
 
 internal static class ProviderContentType
 {
+    private const string HtmlMediaType = "text/html";
+
     private static readonly Dictionary<string, string> ExtensionByMediaType = new(StringComparer.OrdinalIgnoreCase)
     {
         ["video/mp4"] = "mp4",
@@ -24,7 +26,23 @@ internal static class ProviderContentType
         if (string.IsNullOrWhiteSpace(contentType))
             return string.Empty;
 
-        string normalizedContentType = contentType.Split(';', 2)[0].Trim();
+        string normalizedContentType = NormalizeMediaType(contentType);
         return ExtensionByMediaType.GetValueOrDefault(normalizedContentType, string.Empty);
+    }
+
+    public static bool IsHtml(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+            return false;
+
+        return string.Equals(
+            NormalizeMediaType(contentType),
+            HtmlMediaType,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeMediaType(string contentType)
+    {
+        return contentType.Split(';', 2)[0].Trim();
     }
 }
