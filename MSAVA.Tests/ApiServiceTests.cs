@@ -110,6 +110,68 @@ public class ApiServiceTests
         body.Should().Be("""{"value":"alpha"}""");
     }
 
+    [Test]
+    public void CreateJsonRequest_AttachesTrimmedBearerToken()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("  sensitive-token  ");
+
+        using var request = api.CreateJsonRequest(HttpMethod.Get, "api/test");
+
+        request.Headers.Authorization.Should().NotBeNull();
+        request.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        request.Headers.Authorization.Parameter.Should().Be("sensitive-token");
+    }
+
+    [Test]
+    public void CreateJsonRequest_DoesNotAttachBearerTokenForAnonymousRequest()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("sensitive-token");
+
+        using var request = api.CreateJsonRequest(HttpMethod.Get, "api/auth/login", anonymous: true);
+
+        request.Headers.Authorization.Should().BeNull();
+    }
+
+    [Test]
+    public void ClearAccessToken_RemovesBearerTokenFromLaterRequests()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("sensitive-token");
+
+        api.ClearAccessToken();
+
+        using var request = api.CreateJsonRequest(HttpMethod.Get, "api/test");
+        request.Headers.Authorization.Should().BeNull();
+    }
+
+    [TestCase("bad\ntoken")]
+    [TestCase("bad\u0000token")]
+    public void SetAccessToken_RejectsControlCharacters(string token)
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+
+        Action act = () => api.SetAccessToken(token);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Access token contains invalid characters.*");
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase(" ")]
+    public void SetAccessToken_ClearsMissingToken(string? token)
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        api.SetAccessToken("sensitive-token");
+
+        api.SetAccessToken(token);
+
+        using var request = api.CreateJsonRequest(HttpMethod.Get, "api/test");
+        request.Headers.Authorization.Should().BeNull();
+    }
+
     [TestCase("https://evil.example/api")]
     [TestCase("http://evil.example/api")]
     [TestCase("//evil.example/api")]

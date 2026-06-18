@@ -46,7 +46,17 @@ public class ApiService
 
     public void SetAccessToken(string? token)
     {
-        _accessToken = string.IsNullOrWhiteSpace(token) ? null : token;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            _accessToken = null;
+            return;
+        }
+
+        string normalizedToken = token.Trim();
+        if (ContainsControlCharacter(normalizedToken))
+            throw new ArgumentException("Access token contains invalid characters.", nameof(token));
+
+        _accessToken = normalizedToken;
     }
 
     public void ClearAccessToken() => _accessToken = null;
@@ -229,6 +239,17 @@ public class ApiService
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         }
+    }
+
+    private static bool ContainsControlCharacter(string value)
+    {
+        foreach (char character in value)
+        {
+            if (char.IsControl(character))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsRecoverableDeserializationFailure(Exception exception)
