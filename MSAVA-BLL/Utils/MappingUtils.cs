@@ -341,7 +341,7 @@ public static class MappingUtils
         {
             RefId = db.Id,
             FileHash = db.FileHash,
-            FileExtension = db.FileExtension.ToString().TrimStart('_').ToLowerInvariant(),
+            FileExtension = FileExtensionUtils.GetFileExtension(db),
             PublicDownload = db.PublicDownload,
             AccessGroupId = db.AccessGroupId,
             CreatedAt = utcNow

@@ -134,6 +134,18 @@ public class MappingUtilsTests
     }
 
     [Test]
+    public void MapReturnFileDTO_RejectsUnknownReferenceExtension()
+    {
+        var fileReference = CreateFileReference(SHA256.HashData([]));
+        fileReference.FileExtension = FileExtensionType.Unknown;
+
+        Action act = () => MappingUtils.MapReturnFileDTO(fileReference, fileBytes: []);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"Saved file reference {fileReference.Id} has unsupported file extension 'Unknown'.");
+    }
+
+    [Test]
     public void MapAccessGroupDTO_MapsSubGroupsAsCollection()
     {
         var child = CreateAccessGroup("Child");
@@ -270,6 +282,18 @@ public class MappingUtilsTests
         metaRecord.AccessGroupId.Should().Be(fileReference.AccessGroupId);
         metaRecord.PublicDownload.Should().Be(fileReference.PublicDownload);
         metaRecord.CreatedAt.Should().Be(FixedNow);
+    }
+
+    [Test]
+    public void MapSavedFileMetaRecord_RejectsUndefinedReferenceExtension()
+    {
+        var fileReference = CreateFileReference(SHA256.HashData(Encoding.UTF8.GetBytes("metadata-record")));
+        fileReference.FileExtension = (FileExtensionType)short.MaxValue;
+
+        Action act = () => MappingUtils.MapSavedFileMetaRecord(fileReference, FixedNow);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"Saved file reference {fileReference.Id} has unsupported file extension '{short.MaxValue}'.");
     }
 
     private static SavedFileReferenceDB CreateFileReference(byte[] hash)
