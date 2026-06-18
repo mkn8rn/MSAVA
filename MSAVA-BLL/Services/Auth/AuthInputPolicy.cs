@@ -6,6 +6,8 @@ public static class AuthInputPolicy
 {
     public const int MaximumUsernameLength = UserDB.MaximumUsernameLength;
     public const int MaximumPasswordLength = 1024;
+    public const string MissingTokenStringMessage = "Token string must be provided.";
+    public const string InvalidTokenStringMessage = "Token string contains invalid characters.";
 
     public static string NormalizeUsername(string username)
     {
@@ -37,5 +39,37 @@ public static class AuthInputPolicy
 
         if (password.Length > MaximumPasswordLength)
             throw new ArgumentException($"Password must be {MaximumPasswordLength} characters or fewer.", nameof(password));
+    }
+
+    public static string RequireTokenString(string? tokenString)
+    {
+        if (string.IsNullOrWhiteSpace(tokenString))
+            throw new ArgumentException(MissingTokenStringMessage, nameof(tokenString));
+
+        if (ContainsInvalidTokenCharacter(tokenString))
+            throw new ArgumentException(InvalidTokenStringMessage, nameof(tokenString));
+
+        return tokenString;
+    }
+
+    public static bool IsTokenStringAllowed(string? tokenString)
+    {
+        return !string.IsNullOrWhiteSpace(tokenString) &&
+            !ContainsInvalidTokenCharacter(tokenString);
+    }
+
+    private static bool ContainsInvalidTokenCharacter(string tokenString)
+    {
+        foreach (char character in tokenString)
+        {
+            if (char.IsWhiteSpace(character) ||
+                char.IsControl(character) ||
+                character == ',')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

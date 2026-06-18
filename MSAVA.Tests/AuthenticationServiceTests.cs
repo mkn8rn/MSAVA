@@ -367,7 +367,7 @@ public class AuthenticationServiceTests
         await context.SaveChangesAsync();
         var service = CreateService(context, new FixedTimeProvider(FixedNow));
 
-        await service.LogoutAsync(" target-token ");
+        await service.LogoutAsync("target-token");
 
         context.Jwts.Should().NotContain(jwt => jwt.TokenString == "target-token");
         context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "other-token");
@@ -390,6 +390,28 @@ public class AuthenticationServiceTests
         context.UserLogs.Should().BeEmpty();
     }
 
+    [TestCase(" target-token")]
+    [TestCase("target-token ")]
+    [TestCase("target-token\t")]
+    [TestCase("target-token,other-token")]
+    public async Task LogoutAsync_RejectsTokenStringWithInvalidCharactersBeforeLookup(string tokenString)
+    {
+        using var context = CreateContext();
+        var user = CreateUser("logout-user", "password", isBanned: false);
+        var targetJwt = CreateJwt(user, "target-token");
+        context.Users.Add(user);
+        context.Jwts.Add(targetJwt);
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LogoutAsync(tokenString);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthInputPolicy.InvalidTokenStringMessage}*");
+        context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "target-token");
+        context.UserLogs.Should().BeEmpty();
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task LogoutAsync_RejectsMissingTokenString(string tokenString)
@@ -400,7 +422,7 @@ public class AuthenticationServiceTests
         Func<Task> act = () => service.LogoutAsync(tokenString);
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Token string must be provided.*");
+            .WithMessage($"{AuthInputPolicy.MissingTokenStringMessage}*");
         context.Jwts.Should().BeEmpty();
         context.UserLogs.Should().BeEmpty();
     }

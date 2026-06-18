@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using MSAVA_BLL.Services.Auth;
 
 namespace MSAVA_API.Authentication;
 
@@ -26,25 +27,10 @@ internal static class BearerTokenHeader
         if (candidate.Length == 0)
             return false;
 
-        if (ContainsInvalidTokenCharacter(candidate))
+        if (!AuthInputPolicy.IsTokenStringAllowed(candidate))
             return false;
 
         tokenString = candidate;
         return true;
-    }
-
-    private static bool ContainsInvalidTokenCharacter(string tokenString)
-    {
-        foreach (char character in tokenString)
-        {
-            if (char.IsWhiteSpace(character) ||
-                char.IsControl(character) ||
-                character == ',')
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

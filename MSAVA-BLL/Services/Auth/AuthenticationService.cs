@@ -71,12 +71,10 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task LogoutAsync(string tokenString, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(tokenString))
-            throw new ArgumentException("Token string must be provided.", nameof(tokenString));
+        string requiredTokenString = AuthInputPolicy.RequireTokenString(tokenString);
 
-        string normalizedTokenString = tokenString.Trim();
         JwtDB? jwt = await _context.Jwts
-            .FirstOrDefaultAsync(token => token.TokenString == normalizedTokenString, cancellationToken);
+            .FirstOrDefaultAsync(token => token.TokenString == requiredTokenString, cancellationToken);
 
         if (jwt is null)
             return;
