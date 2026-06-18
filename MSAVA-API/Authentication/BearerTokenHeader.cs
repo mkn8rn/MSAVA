@@ -22,7 +22,29 @@ internal static class BearerTokenHeader
         if (!authorizationHeader.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        tokenString = authorizationHeader[BearerPrefix.Length..].Trim();
-        return tokenString.Length > 0;
+        string candidate = authorizationHeader[BearerPrefix.Length..];
+        if (candidate.Length == 0)
+            return false;
+
+        if (ContainsInvalidTokenCharacter(candidate))
+            return false;
+
+        tokenString = candidate;
+        return true;
+    }
+
+    private static bool ContainsInvalidTokenCharacter(string tokenString)
+    {
+        foreach (char character in tokenString)
+        {
+            if (char.IsWhiteSpace(character) ||
+                char.IsControl(character) ||
+                character == ',')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

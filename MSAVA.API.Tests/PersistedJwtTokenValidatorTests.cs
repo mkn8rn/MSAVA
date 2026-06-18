@@ -79,6 +79,23 @@ public class PersistedJwtTokenValidatorTests
         tokenContext.Result?.Failure?.Message.Should().Be(PersistedJwtTokenValidator.MissingBearerTokenFailure);
     }
 
+    [TestCase("Bearer header.payload.signature extra")]
+    [TestCase("Bearer header.payload.signature\t")]
+    [TestCase("Bearer header.payload.signature, Bearer other")]
+    public async Task ValidateAsync_FailsWhenBearerTokenHeaderContainsInvalidTokenText(string authorizationHeader)
+    {
+        using var context = CreateContext();
+        context.Users.Add(CreateUser());
+        context.Jwts.Add(CreateJwt(TokenString, FixedNow.AddMinutes(30)));
+        await context.SaveChangesAsync();
+        var tokenContext = CreateTokenValidatedContext(authorizationHeader);
+        var validator = new PersistedJwtTokenValidator(context, new FixedTimeProvider(FixedNow));
+
+        await validator.TokenValidated(tokenContext);
+
+        tokenContext.Result?.Failure?.Message.Should().Be(PersistedJwtTokenValidator.MissingBearerTokenFailure);
+    }
+
     private static TokenValidatedContext CreateTokenValidatedContext(string? authorizationHeader)
     {
         var httpContext = new DefaultHttpContext();

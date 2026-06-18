@@ -116,6 +116,27 @@ public class AuthenticationControllerTests
         service.LogoutTokenString.Should().BeNull();
     }
 
+    [TestCase("Bearer logout-token extra")]
+    [TestCase("Bearer logout-token\t")]
+    [TestCase("Bearer logout-token, Bearer other")]
+    public async Task Logout_ReturnsUnauthorizedWhenBearerTokenHeaderContainsInvalidTokenText(string authorizationHeader)
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+        controller.Request.Headers.Authorization = authorizationHeader;
+
+        var response = await controller.Logout();
+
+        response.Should().BeOfType<UnauthorizedResult>();
+        service.LogoutTokenString.Should().BeNull();
+    }
+
     private sealed class TestAuthenticationService : IAuthenticationService
     {
         public readonly Guid RegisteredUserId = Guid.NewGuid();
