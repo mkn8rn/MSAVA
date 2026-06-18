@@ -236,8 +236,8 @@ public static partial class DocumentMetadataExtractor
 
     private static JsonDocument ExtractPdf(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, Encoding.Latin1, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream, Encoding.Latin1, detectEncodingFromByteOrderMarks: false);
+        var content = text.Content;
 
         // Count pages
         var pageMatches = PageCountRegex().Matches(content);
@@ -271,6 +271,7 @@ public static partial class DocumentMetadataExtractor
             Producer = InvalidMetadata.OrInvalid(producer),
             CreationDate = InvalidMetadata.OrInvalid(ParsePdfDate(creationDate)),
             IsEncrypted = isEncrypted,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
@@ -332,8 +333,8 @@ public static partial class DocumentMetadataExtractor
 
     private static JsonDocument ExtractRtf(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false);
+        var content = text.Content;
 
         var title = ExtractRtfInfo(content, "title");
         var author = ExtractRtfInfo(content, "author");
@@ -359,6 +360,7 @@ public static partial class DocumentMetadataExtractor
             Manager = InvalidMetadata.OrInvalid(manager),
             ApproximatePages = InvalidMetadata.OrInvalid(pageBreaks > 0 ? pageBreaks + 1 : (int?)null),
             ApproximateWordCount = InvalidMetadata.OrInvalid(wordCount > 0 ? wordCount : (int?)null),
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }

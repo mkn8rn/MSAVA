@@ -14,6 +14,7 @@ public class DocumentMetadataExtractorTests
 
         metadata.RootElement.GetProperty("CreationDate").GetString()
             .Should().Be("2024-06-13");
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeFalse();
     }
 
     [Test]
@@ -25,6 +26,19 @@ public class DocumentMetadataExtractorTests
 
         metadata.RootElement.GetProperty("CreationDate").GetString()
             .Should().Be("D:20241340");
+    }
+
+    [Test]
+    public void ExtractMetadata_BoundsLargePdfAnalysis()
+    {
+        using var stream = CreateLargePdfWithCreationDate("D:20240613091522");
+
+        using var metadata = MetadataExtractor.ExtractMetadata(stream, "pdf", stream.Length);
+
+        metadata.RootElement.GetProperty("CreationDate").GetString()
+            .Should().Be("2024-06-13");
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
+        stream.Position.Should().BeLessThan(stream.Length);
     }
 
     [Test]
@@ -64,6 +78,21 @@ public class DocumentMetadataExtractorTests
             """;
 
         return new MemoryStream(Encoding.Latin1.GetBytes(content));
+    }
+
+    private static MemoryStream CreateLargePdfWithCreationDate(string creationDate)
+    {
+        var builder = new StringBuilder(BoundedMetadataTextReader.MaximumAnalyzedCharacters + 50_000);
+        builder.AppendLine("%PDF-1.7");
+        builder.AppendLine("1 0 obj");
+        builder.AppendLine("<< /Type /Page >>");
+        builder.AppendLine("endobj");
+        builder.AppendLine("2 0 obj");
+        builder.AppendLine($"<< /CreationDate ({creationDate}) >>");
+        builder.AppendLine("endobj");
+        builder.Append('x', BoundedMetadataTextReader.MaximumAnalyzedCharacters + 50_000);
+
+        return new MemoryStream(Encoding.Latin1.GetBytes(builder.ToString()));
     }
 
     private sealed class ThrowingReadStream(Exception exception) : Stream

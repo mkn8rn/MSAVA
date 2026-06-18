@@ -18,6 +18,33 @@ public class MetadataExtractorTests
     }
 
     [Test]
+    public void ExtractMetadata_ReportsExactTextAnalysisForSmallTextFile()
+    {
+        using var stream = new MemoryStream("one two three"u8.ToArray());
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "txt", stream.Length);
+
+        metadata.RootElement.GetProperty("CharacterCount").GetInt32().Should().Be(13);
+        metadata.RootElement.GetProperty("WordCount").GetInt32().Should().Be(3);
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeFalse();
+    }
+
+    [Test]
+    public void ExtractMetadata_BoundsTextAnalysisForLargeTextFile()
+    {
+        using var stream = new RepeatingByteStream(
+            (byte)'a',
+            BoundedMetadataTextReader.MaximumAnalyzedCharacters + 50_000);
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "txt", stream.Length);
+
+        metadata.RootElement.GetProperty("CharacterCount").GetInt32()
+            .Should().Be(BoundedMetadataTextReader.MaximumAnalyzedCharacters);
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
+        stream.Position.Should().BeLessThan(stream.Length);
+    }
+
+    [Test]
     public void ExtractMetadata_PropagatesOperationCanceledException()
     {
         using var stream = new ThrowingReadStream(new OperationCanceledException("cancelled"));
@@ -86,6 +113,63 @@ public class MetadataExtractorTests
         public override int Read(Span<byte> buffer)
         {
             throw exception;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class RepeatingByteStream(byte value, long length) : Stream
+    {
+        private long _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => length;
+
+        public override long Position
+        {
+            get => _position;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_position >= length)
+                return 0;
+
+            int bytesToRead = (int)Math.Min(count, length - _position);
+            Array.Fill(buffer, value, offset, bytesToRead);
+            _position += bytesToRead;
+            return bytesToRead;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            if (_position >= length)
+                return 0;
+
+            int bytesToRead = (int)Math.Min(buffer.Length, length - _position);
+            buffer[..bytesToRead].Fill(value);
+            _position += bytesToRead;
+            return bytesToRead;
         }
 
         public override long Seek(long offset, SeekOrigin origin)

@@ -37,13 +37,13 @@ public static partial class TextMetadataExtractor
 
     private static JsonDocument ExtractText(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream);
+        var content = text.Content;
 
         var lines = content.Split('\n');
         var words = content.Split([' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
 
-        var encoding = reader.CurrentEncoding.WebName;
+        var encoding = text.Encoding.WebName;
 
         return MetadataExtractor.ToJsonDocument(new
         {
@@ -53,15 +53,16 @@ public static partial class TextMetadataExtractor
             WordCount = words.Length,
             CharacterCount = content.Length,
             Encoding = encoding,
-            HasBom = reader.CurrentEncoding.GetPreamble().Length > 0,
+            HasBom = text.Encoding.GetPreamble().Length > 0,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
 
     private static JsonDocument ExtractLog(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream);
+        var content = text.Content;
         var lines = content.Split('\n');
 
         var hasTimestamps = lines.Take(10).Count(l => TimestampRegex().IsMatch(l)) > 3;
@@ -81,6 +82,7 @@ public static partial class TextMetadataExtractor
             ErrorCount = errorCount,
             WarningCount = warnCount,
             InfoCount = infoCount,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
@@ -93,8 +95,8 @@ public static partial class TextMetadataExtractor
 
     private static JsonDocument ExtractIni(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream);
+        var content = text.Content;
         var lines = content.Split('\n');
 
         var sections = new List<string>();
@@ -119,14 +121,15 @@ public static partial class TextMetadataExtractor
             Sections = sections.Take(20).ToList(),
             KeyCount = keyCount,
             CommentCount = commentCount,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
 
     private static JsonDocument ExtractYaml(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream);
+        var content = text.Content;
         var lines = content.Split('\n');
 
         var documentCount = lines.Count(l => l.Trim() == "---");
@@ -142,6 +145,7 @@ public static partial class TextMetadataExtractor
             ListItemCount = listItemCount,
             CommentCount = commentCount,
             LineCount = lines.Length,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
@@ -302,8 +306,8 @@ public static partial class TextMetadataExtractor
 
     private static JsonDocument ExtractHtml(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream);
+        var content = text.Content;
 
         // Extract title
         var titleMatch = TitleRegex().Match(content);
@@ -334,6 +338,7 @@ public static partial class TextMetadataExtractor
             ScriptCount = scriptCount,
             StyleCount = styleCount,
             FormCount = formCount,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
@@ -346,8 +351,8 @@ public static partial class TextMetadataExtractor
 
     private static JsonDocument ExtractMarkdown(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
-        var content = reader.ReadToEnd();
+        var text = BoundedMetadataTextReader.Read(stream);
+        var content = text.Content;
         var lines = content.Split('\n');
 
         // Count headings by level
@@ -379,6 +384,7 @@ public static partial class TextMetadataExtractor
             InlineCodeCount = inlineCodeCount,
             ListItemCount = listItemCount,
             BlockquoteCount = blockquoteCount,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
