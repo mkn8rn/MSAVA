@@ -44,6 +44,27 @@ public class TemporaryFileCleanupTests
     }
 
     [Test]
+    public void DeleteIfPresent_LogsWarningWhenExistenceCheckFails()
+    {
+        var logger = new CapturingLogger();
+        var existsException = new UnauthorizedAccessException("Simulated existence check failure.");
+        bool deleteCalled = false;
+
+        TemporaryFileCleanup.DeleteIfPresent(
+            "C:\\temp\\hidden.tmp",
+            logger,
+            _ => throw existsException,
+            _ => deleteCalled = true);
+
+        deleteCalled.Should().BeFalse();
+        logger.Messages.Should().ContainSingle(message =>
+            message.Level == LogLevel.Warning &&
+            message.Exception == existsException &&
+            message.Text.Contains("Failed to delete temporary file", StringComparison.Ordinal) &&
+            message.Text.Contains("C:\\temp\\hidden.tmp", StringComparison.Ordinal));
+    }
+
+    [Test]
     public void DeleteIfPresent_PropagatesCriticalDeleteFailure()
     {
         var deleteException = new OutOfMemoryException("Critical cleanup failure.");
@@ -56,6 +77,21 @@ public class TemporaryFileCleanupTests
 
         act.Should().Throw<OutOfMemoryException>()
             .WithMessage("Critical cleanup failure.");
+    }
+
+    [Test]
+    public void DeleteIfPresent_PropagatesCriticalExistenceCheckFailure()
+    {
+        var existsException = new OutOfMemoryException("Critical cleanup inspection failure.");
+
+        Action act = () => TemporaryFileCleanup.DeleteIfPresent(
+            "C:\\temp\\hidden.tmp",
+            NullLogger.Instance,
+            _ => throw existsException,
+            _ => throw new InvalidOperationException("Delete should not be reached."));
+
+        act.Should().Throw<OutOfMemoryException>()
+            .WithMessage("Critical cleanup inspection failure.");
     }
 
     [Test]

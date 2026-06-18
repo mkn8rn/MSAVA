@@ -24,11 +24,11 @@ public static class TemporaryFileCleanup
         if (string.IsNullOrWhiteSpace(tempFilePath))
             return;
 
-        if (!fileExists(tempFilePath))
-            return;
-
         try
         {
+            if (!fileExists(tempFilePath))
+                return;
+
             deleteFile(tempFilePath);
         }
         catch (Exception ex) when (IsRecoverableDeleteFailure(ex))
