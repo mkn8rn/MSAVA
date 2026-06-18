@@ -1,4 +1,5 @@
 using MSAVA_API.Authorization;
+using MSAVA_API.Authentication;
 using MSAVA_API.Filters;
 using MSAVA_API.Handlers;
 using MSAVA_API.Middleware;
@@ -121,6 +122,7 @@ builder.Services.AddScoped<ServiceLogger>();
 // Register authorization handlers
 builder.Services.AddScoped<IAuthorizationHandler, CurrentUserAccessHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, CurrentAdminHandler>();
+builder.Services.AddScoped<PersistedJwtTokenValidator>();
 
 // Register managers
 builder.Services.AddSingleton<MetadataStore>();
@@ -141,6 +143,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(env.GetSigningKeyBytes())
         };
+        options.EventsType = typeof(PersistedJwtTokenValidator);
     });
 
 WebApplication app = builder.Build();

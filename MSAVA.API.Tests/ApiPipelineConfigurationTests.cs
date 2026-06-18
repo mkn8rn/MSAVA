@@ -142,6 +142,17 @@ public class ApiPipelineConfigurationTests
         controllersIndex.Should().BeGreaterThan(authorizationIndex);
     }
 
+    [Test]
+    public void Program_ValidatesJwtAgainstPersistedTokenStore()
+    {
+        string programText = File.ReadAllText(Path.Combine(FindRepositoryRoot().FullName, "MSAVA-API", "Program.cs"));
+        string normalizedProgramText = programText.Replace("\r\n", "\n");
+
+        normalizedProgramText.Should().Contain("using MSAVA_API.Authentication;");
+        normalizedProgramText.Should().Contain("builder.Services.AddScoped<PersistedJwtTokenValidator>();");
+        normalizedProgramText.Should().Contain("options.EventsType = typeof(PersistedJwtTokenValidator);");
+    }
+
     private static DirectoryInfo FindRepositoryRoot()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);
