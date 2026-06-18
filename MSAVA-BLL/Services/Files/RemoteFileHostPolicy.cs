@@ -14,8 +14,7 @@ internal static class RemoteFileHostPolicy
             throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", parameterName);
         }
 
-        if (!string.IsNullOrEmpty(uri.UserInfo))
-            throw new ArgumentException("FileUrl must not contain embedded credentials.", parameterName);
+        FileUrlInputPolicy.EnsureNoEmbeddedCredentials(uri, parameterName);
 
         string host = GetNormalizedHost(uri);
 

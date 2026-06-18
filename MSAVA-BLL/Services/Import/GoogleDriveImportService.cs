@@ -148,11 +148,13 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         if (Regex.IsMatch(urlOrId, @"^[A-Za-z0-9_\-]{10,100}$"))
             return urlOrId;
 
-        if (!Uri.TryCreate(urlOrId, UriKind.Absolute, out var uri) ||
-            !IsSupportedFileIdUri(uri))
-        {
+        if (!Uri.TryCreate(urlOrId, UriKind.Absolute, out var uri))
             return null;
-        }
+
+        FileUrlInputPolicy.EnsureNoEmbeddedCredentials(uri, nameof(FetchFileGoogleDriveDTO.FileUrl));
+
+        if (!IsSupportedFileIdUri(uri))
+            return null;
 
         var s = uri.AbsoluteUri;
 
