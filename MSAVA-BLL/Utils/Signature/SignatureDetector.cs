@@ -233,11 +233,7 @@ public static class SignatureDetector
     private static MsavaSignature? DetectInSvgz(Stream input)
     {
         using var gzipIn = new GZipStream(input, CompressionMode.Decompress, leaveOpen: true);
-        using var decompressed = new MemoryStream();
-        gzipIn.CopyTo(decompressed);
-        decompressed.Position = 0;
-
-        return DetectInSvg(decompressed);
+        return DetectInSvg(gzipIn);
     }
 
     #endregion

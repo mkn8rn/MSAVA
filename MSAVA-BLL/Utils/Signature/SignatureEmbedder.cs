@@ -219,11 +219,7 @@ public static class SignatureEmbedder
     {
         // Decompress, embed, recompress
         using var gzipIn = new GZipStream(input, CompressionMode.Decompress, leaveOpen: true);
-        using var decompressed = new MemoryStream();
-        gzipIn.CopyTo(decompressed);
-        decompressed.Position = 0;
-
-        using var embedded = EmbedInSvg(decompressed, signature);
+        using var embedded = EmbedInSvg(gzipIn, signature);
         
         var output = new MemoryStream();
         using (var gzipOut = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true))

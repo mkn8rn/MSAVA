@@ -1,5 +1,7 @@
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using MSAVA_BLL.Utils;
 using MSAVA_BLL.Utils.Metadata;
 
 namespace MSAVA_App.Tests;
@@ -56,6 +58,17 @@ public class MetadataExtractorTests
             """));
 
         using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "xml", stream.Length);
+
+        metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeFalse();
+        metadata.RootElement.GetProperty("Reason").GetString().Should().Be("Extraction failed");
+    }
+
+    [Test]
+    public void ExtractMetadata_RejectsOversizedSvgzAsInvalidMetadata()
+    {
+        using var stream = CreateOversizedSvgz();
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "svgz", stream.Length);
 
         metadata.RootElement.GetProperty("Valid").GetBoolean().Should().BeFalse();
         metadata.RootElement.GetProperty("Reason").GetString().Should().Be("Extraction failed");
@@ -203,5 +216,23 @@ public class MetadataExtractorTests
         {
             throw new NotSupportedException();
         }
+    }
+
+    private static MemoryStream CreateOversizedSvgz()
+    {
+        var builder = new StringBuilder((int)SafeXmlDocumentLoader.MaximumXmlCharacters + 4096);
+        builder.Append("""<svg xmlns="http://www.w3.org/2000/svg"><text>""");
+        builder.Append('x', (int)SafeXmlDocumentLoader.MaximumXmlCharacters);
+        builder.Append("</text></svg>");
+
+        var output = new MemoryStream();
+        using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
+        using (var writer = new StreamWriter(gzip, Encoding.UTF8))
+        {
+            writer.Write(builder.ToString());
+        }
+
+        output.Position = 0;
+        return output;
     }
 }

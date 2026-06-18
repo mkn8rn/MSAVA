@@ -75,11 +75,7 @@ public static partial class VectorMetadataExtractor
     private static JsonDocument ExtractSvgz(Stream stream, long size)
     {
         using var gzipStream = new GZipStream(stream, CompressionMode.Decompress, leaveOpen: true);
-        using var memoryStream = new MemoryStream();
-        gzipStream.CopyTo(memoryStream);
-        memoryStream.Position = 0;
-
-        return ExtractSvg(memoryStream, size);
+        return ExtractSvg(gzipStream, size);
     }
 
     private static JsonDocument ExtractEps(Stream stream, long size)

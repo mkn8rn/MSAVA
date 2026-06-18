@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Text;
+using MSAVA_BLL.Utils;
 using MSAVA_BLL.Utils.Signature;
 
 namespace MSAVA_App.Tests;
@@ -47,6 +49,18 @@ public class SignatureDetectorTests
         stream.Position = 12;
 
         var signature = SignatureDetector.Detect(stream, "svg");
+
+        signature.Should().BeNull();
+        stream.Position.Should().Be(0);
+    }
+
+    [Test]
+    public void Detect_ReturnsNullAndResetsStreamWhenSvgzInflatesPastXmlLimit()
+    {
+        using var stream = CreateOversizedSvgz();
+        stream.Position = 12;
+
+        var signature = SignatureDetector.Detect(stream, "svgz");
 
         signature.Should().BeNull();
         stream.Position.Should().Be(0);
@@ -107,5 +121,25 @@ public class SignatureDetectorTests
         {
             throw new NotSupportedException();
         }
+    }
+
+    private static MemoryStream CreateOversizedSvgz()
+    {
+        var builder = new StringBuilder((int)SafeXmlDocumentLoader.MaximumXmlCharacters + 4096);
+        builder.Append("""<svg xmlns="http://www.w3.org/2000/svg"><metadata><!-- """);
+        builder.Append(ValidSignature);
+        builder.Append(""" --></metadata><text>""");
+        builder.Append('x', (int)SafeXmlDocumentLoader.MaximumXmlCharacters);
+        builder.Append("</text></svg>");
+
+        var output = new MemoryStream();
+        using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
+        using (var writer = new StreamWriter(gzip, Encoding.UTF8))
+        {
+            writer.Write(builder.ToString());
+        }
+
+        output.Position = 0;
+        return output;
     }
 }
