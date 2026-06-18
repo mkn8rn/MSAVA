@@ -33,7 +33,9 @@ public static class TemporaryFileCleanup
         }
         catch (Exception ex) when (IsRecoverableDeleteFailure(ex))
         {
-            logger.LogWarning(ex, "Failed to delete temporary file {TempFilePath}", tempFilePath);
+            logger.LogWarning(
+                "Failed to delete temporary file after {ExceptionType}. The temporary file path was redacted.",
+                ex.GetType().Name);
         }
     }
 

@@ -28,30 +28,34 @@ public class TemporaryFileCleanupTests
     public void DeleteIfPresent_LogsWarningWhenDeleteFails()
     {
         var logger = new CapturingLogger();
-        var deleteException = new IOException("Simulated cleanup failure.");
+        const string tempFilePath = "C:\\temp\\stuck.tmp";
+        var deleteException = new IOException($"Simulated cleanup failure for {tempFilePath}.");
 
         TemporaryFileCleanup.DeleteIfPresent(
-            "C:\\temp\\stuck.tmp",
+            tempFilePath,
             logger,
             _ => true,
             _ => throw deleteException);
 
         logger.Messages.Should().ContainSingle(message =>
             message.Level == LogLevel.Warning &&
-            message.Exception == deleteException &&
+            message.Exception == null &&
             message.Text.Contains("Failed to delete temporary file", StringComparison.Ordinal) &&
-            message.Text.Contains("C:\\temp\\stuck.tmp", StringComparison.Ordinal));
+            message.Text.Contains(nameof(IOException), StringComparison.Ordinal) &&
+            !message.Text.Contains(tempFilePath, StringComparison.Ordinal) &&
+            !message.Text.Contains(deleteException.Message, StringComparison.Ordinal));
     }
 
     [Test]
     public void DeleteIfPresent_LogsWarningWhenExistenceCheckFails()
     {
         var logger = new CapturingLogger();
-        var existsException = new UnauthorizedAccessException("Simulated existence check failure.");
+        const string tempFilePath = "C:\\temp\\hidden.tmp";
+        var existsException = new UnauthorizedAccessException($"Simulated existence check failure for {tempFilePath}.");
         bool deleteCalled = false;
 
         TemporaryFileCleanup.DeleteIfPresent(
-            "C:\\temp\\hidden.tmp",
+            tempFilePath,
             logger,
             _ => throw existsException,
             _ => deleteCalled = true);
@@ -59,9 +63,11 @@ public class TemporaryFileCleanupTests
         deleteCalled.Should().BeFalse();
         logger.Messages.Should().ContainSingle(message =>
             message.Level == LogLevel.Warning &&
-            message.Exception == existsException &&
+            message.Exception == null &&
             message.Text.Contains("Failed to delete temporary file", StringComparison.Ordinal) &&
-            message.Text.Contains("C:\\temp\\hidden.tmp", StringComparison.Ordinal));
+            message.Text.Contains(nameof(UnauthorizedAccessException), StringComparison.Ordinal) &&
+            !message.Text.Contains(tempFilePath, StringComparison.Ordinal) &&
+            !message.Text.Contains(existsException.Message, StringComparison.Ordinal));
     }
 
     [Test]
