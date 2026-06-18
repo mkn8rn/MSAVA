@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -210,51 +211,61 @@ public static partial class TextMetadataExtractor
 
     private static JsonDocument ExtractCsv(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
+        var text = BoundedMetadataTextReader.Read(stream);
+        var lines = ReadAnalyzedLines(text.Content);
 
-        var firstLine = reader.ReadLine();
-        var headers = firstLine?.Split(',') ?? [];
+        var firstLine = lines.FirstOrDefault();
+        string[] headers = firstLine?.Split(',') ?? [];
         var columnCount = headers.Length;
 
-        var rowCount = 1;
-        string? line;
-        while ((line = reader.ReadLine()) != null)
-            rowCount++;
-
-        // Detect if first row is header
-        var hasHeader = headers.All(h => !double.TryParse(h.Trim(), out _));
+        var hasHeader = headers.Length > 0 &&
+            headers.All(header => !double.TryParse(
+                header.Trim(),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out _));
 
         return MetadataExtractor.ToJsonDocument(new
         {
             Type = "CSV",
-            RowCount = rowCount,
+            RowCount = lines.Count,
             ColumnCount = columnCount,
             HasHeader = hasHeader,
             Headers = hasHeader ? headers.Take(20).Select(h => h.Trim()).ToList() : null,
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
     }
 
     private static JsonDocument ExtractTsv(Stream stream, long size)
     {
-        using var reader = new StreamReader(stream, leaveOpen: true);
+        var text = BoundedMetadataTextReader.Read(stream);
+        var lines = ReadAnalyzedLines(text.Content);
 
-        var firstLine = reader.ReadLine();
-        var headers = firstLine?.Split('\t') ?? [];
+        var firstLine = lines.FirstOrDefault();
+        string[] headers = firstLine?.Split('\t') ?? [];
         var columnCount = headers.Length;
-
-        var rowCount = 1;
-        while (reader.ReadLine() != null)
-            rowCount++;
 
         return MetadataExtractor.ToJsonDocument(new
         {
             Type = "TSV",
-            RowCount = rowCount,
+            RowCount = lines.Count,
             ColumnCount = columnCount,
             Headers = headers.Take(20).Select(h => h.Trim()).ToList(),
+            AnalysisTruncated = text.Truncated,
             Size = size
         });
+    }
+
+    private static List<string> ReadAnalyzedLines(string content)
+    {
+        var lines = new List<string>();
+        using var reader = new StringReader(content);
+
+        while (reader.ReadLine() is { } line)
+            lines.Add(line);
+
+        return lines;
     }
 
     private static JsonDocument ExtractXml(Stream stream, long size)

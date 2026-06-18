@@ -48,6 +48,55 @@ public class MetadataExtractorTests
     }
 
     [Test]
+    public void ExtractMetadata_ReportsCsvHeaderAndRowsForSmallCsvFile()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
+            name,age
+            Ada,37
+            """));
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "csv", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("CSV");
+        metadata.RootElement.GetProperty("RowCount").GetInt32().Should().Be(2);
+        metadata.RootElement.GetProperty("ColumnCount").GetInt32().Should().Be(2);
+        metadata.RootElement.GetProperty("HasHeader").GetBoolean().Should().BeTrue();
+        metadata.RootElement.GetProperty("Headers").EnumerateArray()
+            .Select(header => header.GetString())
+            .Should()
+            .Equal("name", "age");
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeFalse();
+    }
+
+    [Test]
+    public void ExtractMetadata_BoundsCsvAnalysisForLargeCsvFile()
+    {
+        using var stream = new RepeatingByteStream(
+            (byte)'a',
+            BoundedMetadataTextReader.MaximumAnalyzedCharacters + 50_000);
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "csv", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("CSV");
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
+        stream.Position.Should().BeLessThan(stream.Length);
+    }
+
+    [Test]
+    public void ExtractMetadata_BoundsTsvAnalysisForLargeTsvFile()
+    {
+        using var stream = new RepeatingByteStream(
+            (byte)'a',
+            BoundedMetadataTextReader.MaximumAnalyzedCharacters + 50_000);
+
+        using JsonDocument metadata = MetadataExtractor.ExtractMetadata(stream, "tsv", stream.Length);
+
+        metadata.RootElement.GetProperty("Type").GetString().Should().Be("TSV");
+        metadata.RootElement.GetProperty("AnalysisTruncated").GetBoolean().Should().BeTrue();
+        stream.Position.Should().BeLessThan(stream.Length);
+    }
+
+    [Test]
     public void ExtractMetadata_RejectsXmlDtdAsInvalidMetadata()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""
