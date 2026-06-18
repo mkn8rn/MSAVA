@@ -69,6 +69,29 @@ public class AuthenticationService : IAuthenticationService
         return new LoginResponseDTO { Token = token.TokenString };
     }
 
+    public async Task LogoutAsync(string tokenString, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(tokenString))
+            throw new ArgumentException("Token string must be provided.", nameof(tokenString));
+
+        string normalizedTokenString = tokenString.Trim();
+        JwtDB? jwt = await _context.Jwts
+            .FirstOrDefaultAsync(token => token.TokenString == normalizedTokenString, cancellationToken);
+
+        if (jwt is null)
+            return;
+
+        _context.Jwts.Remove(jwt);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await _serviceLogger.WriteLogAsync(
+            UserLogAction.SessionLogOut,
+            $"User {jwt.Username} logged out.",
+            jwt.UserId,
+            null,
+            cancellationToken);
+    }
+
     private async Task<UserDB?> GetUniqueUserForLoginAsync(string username, CancellationToken cancellationToken)
     {
         string usernameComparisonKey = AuthInputPolicy.CreateUsernameComparisonKey(username);

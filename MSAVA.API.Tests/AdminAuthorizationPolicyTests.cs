@@ -51,7 +51,7 @@ public class AdminAuthorizationPolicyTests
     }
 
     [Test]
-    public void AuthenticationController_AllowsAnonymousOnlyOnLoginAndRegisterActions()
+    public void AuthenticationController_AllowsAnonymousOnlyOnLoginAndRegisterActionsAndProtectsLogout()
     {
         typeof(AuthenticationController)
             .GetCustomAttributes<AllowAnonymousAttribute>()
@@ -60,6 +60,7 @@ public class AdminAuthorizationPolicyTests
 
         AssertAllowsAnonymous(typeof(AuthenticationController), nameof(AuthenticationController.Login));
         AssertAllowsAnonymous(typeof(AuthenticationController), nameof(AuthenticationController.Register));
+        AssertUsesCurrentUserPolicy(typeof(AuthenticationController), nameof(AuthenticationController.Logout));
     }
 
     [Test]
@@ -128,6 +129,16 @@ public class AdminAuthorizationPolicyTests
     private static void AssertUsesCurrentUserPolicy(Type controllerType)
     {
         controllerType.GetCustomAttributes<AuthorizeAttribute>()
+            .Should()
+            .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentUser);
+    }
+
+    private static void AssertUsesCurrentUserPolicy(Type controllerType, string methodName)
+    {
+        var method = controllerType.GetMethod(methodName)
+            ?? throw new InvalidOperationException($"Method {controllerType.Name}.{methodName} was not found.");
+
+        method.GetCustomAttributes<AuthorizeAttribute>()
             .Should()
             .ContainSingle(attribute => attribute.Policy == AuthorizationPolicies.CurrentUser);
     }

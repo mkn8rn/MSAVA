@@ -337,6 +337,56 @@ public class AuthenticationServiceTests
         token.ValidTo.Should().Be(FixedNow.UtcDateTime.AddHours(2));
     }
 
+    [Test]
+    public async Task LogoutAsync_RemovesPersistedJwtAndWritesLogoutLog()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("logout-user", "password", isBanned: false);
+        var targetJwt = CreateJwt(user, "target-token");
+        var otherJwt = CreateJwt(user, "other-token");
+        context.Users.Add(user);
+        context.Jwts.AddRange(targetJwt, otherJwt);
+        await context.SaveChangesAsync();
+        var service = CreateService(context, new FixedTimeProvider(FixedNow));
+
+        await service.LogoutAsync(" target-token ");
+
+        context.Jwts.Should().NotContain(jwt => jwt.TokenString == "target-token");
+        context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "other-token");
+        var log = context.UserLogs.Should().ContainSingle().Which;
+        log.Action.Should().Be(UserLogAction.SessionLogOut);
+        log.UserId.Should().Be(user.Id);
+        log.AdminId.Should().BeNull();
+        log.Timestamp.Should().Be(FixedNow.UtcDateTime);
+    }
+
+    [Test]
+    public async Task LogoutAsync_DoesNotWriteLogWhenTokenIsAlreadyRevoked()
+    {
+        using var context = CreateContext();
+        var service = CreateService(context, new FixedTimeProvider(FixedNow));
+
+        await service.LogoutAsync("missing-token");
+
+        context.Jwts.Should().BeEmpty();
+        context.UserLogs.Should().BeEmpty();
+    }
+
+    [TestCase("")]
+    [TestCase(" ")]
+    public async Task LogoutAsync_RejectsMissingTokenString(string tokenString)
+    {
+        using var context = CreateContext();
+        var service = CreateService(context);
+
+        Func<Task> act = () => service.LogoutAsync(tokenString);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("Token string must be provided.*");
+        context.Jwts.Should().BeEmpty();
+        context.UserLogs.Should().BeEmpty();
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public async Task RegisterAsync_RejectsMissingUsername(string username)
@@ -652,6 +702,24 @@ public class AuthenticationServiceTests
             IsBanned = isBanned,
             IsWhitelisted = isWhitelisted,
             CreatedAt = DateTime.UtcNow
+        };
+    }
+
+    private static JwtDB CreateJwt(UserDB user, string tokenString)
+    {
+        return new JwtDB
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            User = user,
+            Username = user.Username,
+            IsAdmin = user.IsAdmin,
+            IsBanned = user.IsBanned,
+            IsWhitelisted = user.IsWhitelisted,
+            InviteCode = user.InviteCodeId ?? Guid.Empty,
+            TokenString = tokenString,
+            IssuedAt = FixedNow.UtcDateTime,
+            ExpiresAt = FixedNow.UtcDateTime.AddHours(2)
         };
     }
 

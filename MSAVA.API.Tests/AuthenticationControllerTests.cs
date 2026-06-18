@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Controllers;
 using MSAVA_BLL.Services.Interfaces;
@@ -57,6 +58,45 @@ public class AuthenticationControllerTests
         service.RegisterCancellationToken.Should().Be(cancellationTokenSource.Token);
     }
 
+    [Test]
+    public async Task Logout_ReturnsNoContentAndPassesBearerTokenAndCancellationToken()
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+        controller.Request.Headers.Authorization = "Bearer logout-token";
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var response = await controller.Logout(cancellationTokenSource.Token);
+
+        response.Should().BeOfType<NoContentResult>();
+        service.LogoutTokenString.Should().Be("logout-token");
+        service.LogoutCancellationToken.Should().Be(cancellationTokenSource.Token);
+    }
+
+    [Test]
+    public async Task Logout_ReturnsUnauthorizedWhenBearerHeaderIsMissing()
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+
+        var response = await controller.Logout();
+
+        response.Should().BeOfType<UnauthorizedResult>();
+        service.LogoutTokenString.Should().BeNull();
+    }
+
     private sealed class TestAuthenticationService : IAuthenticationService
     {
         public readonly Guid RegisteredUserId = Guid.NewGuid();
@@ -65,6 +105,8 @@ public class AuthenticationControllerTests
         public CancellationToken LoginCancellationToken { get; private set; }
         public RegisterRequestDTO? RegisterRequest { get; private set; }
         public CancellationToken RegisterCancellationToken { get; private set; }
+        public string? LogoutTokenString { get; private set; }
+        public CancellationToken LogoutCancellationToken { get; private set; }
 
         public Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
         {
@@ -78,6 +120,13 @@ public class AuthenticationControllerTests
             RegisterRequest = request;
             RegisterCancellationToken = cancellationToken;
             return Task.FromResult(RegisteredUserId);
+        }
+
+        public Task LogoutAsync(string tokenString, CancellationToken cancellationToken = default)
+        {
+            LogoutTokenString = tokenString;
+            LogoutCancellationToken = cancellationToken;
+            return Task.CompletedTask;
         }
     }
 }
