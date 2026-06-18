@@ -573,6 +573,26 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void GlobalJson_UsesStableSdkWithExplicitFeatureBandRollForward()
+    {
+        string globalJsonPath = Path.Combine(FindRepositoryRoot(), "global.json");
+        using var stream = File.OpenRead(globalJsonPath);
+        using var document = JsonDocument.Parse(stream);
+
+        JsonElement sdk = document.RootElement.GetProperty("sdk");
+        string sdkVersion = sdk.GetProperty("version").GetString() ?? string.Empty;
+
+        sdkVersion.Should().MatchRegex(@"^\d+\.\d+\.\d+$",
+            "the repository SDK pin should not select prerelease SDK builds");
+        sdkVersion.Should().StartWith("10.0.",
+            "the projects target net10.0 and CI installs the 10.0 SDK line");
+        sdk.GetProperty("rollForward").GetString().Should().Be("latestFeature",
+            "CI installs 10.0.x and local machines may have newer .NET 10 feature bands than the baseline");
+        sdk.GetProperty("allowPrerelease").GetBoolean().Should().BeFalse(
+            "production builds should not opt into prerelease SDKs by default");
+    }
+
+    [Test]
     public void FileUploadFormFields_MatchServerFormDtoPropertyNames()
     {
         var serverDto = typeof(SaveFileFromFormFileDTO);
