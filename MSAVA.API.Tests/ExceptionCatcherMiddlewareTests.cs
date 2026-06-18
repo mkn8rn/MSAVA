@@ -224,6 +224,30 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
+    public async Task InvokeAsync_MasksBadHttpRequestDetailsInProduction()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext();
+        var middleware = new ExceptionCatcherMiddleware(
+            _ => throw new BadHttpRequestException(
+                "Malformed request body near C:\\tenant-secrets\\upload.tmp.",
+                StatusCodes.Status400BadRequest));
+
+        await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+        var errorLog = dbContext.ErrorLogs.Single();
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        response.Should().NotBeNull();
+        response!.Message.Should().Be("The request is invalid.");
+        response.Message.Should().NotContain("tenant-secrets");
+        response.Message.Should().NotContain("upload.tmp");
+        errorLog.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Test]
     public async Task InvokeAsync_ReturnsPayloadTooLargeForFileTooLargeException()
     {
         using var dbContext = CreateContext(throwOnSave: false);

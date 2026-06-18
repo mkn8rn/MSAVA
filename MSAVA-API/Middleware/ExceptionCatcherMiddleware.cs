@@ -24,6 +24,7 @@ namespace MSAVA_API.Middleware
         private const string ProductionAuthenticationRequiredMessage = "Authentication is required.";
         private const string ProductionForbiddenMessage = "Access to the requested resource is forbidden.";
         private const string ProductionNotFoundMessage = "The requested resource was not found.";
+        private const string ProductionBadRequestMessage = "The request is invalid.";
         private const string ProductionConflictMessage = "The request conflicts with the current resource state.";
         private const string ProductionUpstreamFailureMessage = "A dependent service request failed.";
         private const string ProductionServiceUnavailableMessage = "A dependent file or service is temporarily unavailable.";
@@ -283,6 +284,7 @@ namespace MSAVA_API.Middleware
 
             return exception switch
             {
+                BadHttpRequestException => ProductionBadRequestMessage,
                 FileTooLargeException => exception.Message,
                 ArgumentException
                     or FormatException
