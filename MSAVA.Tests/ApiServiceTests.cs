@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
@@ -268,6 +269,32 @@ public class ApiServiceTests
         handler.RequestUri.Should().Be(new Uri("https://api.msava.test/msava/api/test"));
     }
 
+    [Test]
+    public async Task SendForAsync_RedactsQueryStringFromFailureLog()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.BadRequest);
+        var handler = new RecordingHttpMessageHandler(response);
+        var logger = new CapturingLogger<ApiService>();
+        var api = new ApiService(
+            new StaticHttpClientFactory(new HttpClient(handler)),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
+            logger);
+        const string route = "api/test?filter=recent&access_token=super-secret-token";
+
+        var result = await api.SendForAsync(
+            HttpMethod.Get,
+            route,
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
+
+        result.Should().BeNull();
+        handler.RequestUri.Should().Be(new Uri("https://api.msava.test/" + route));
+        logger.Messages.Should().ContainSingle();
+        string logText = logger.Messages[0].Text;
+        logText.Should().Contain("api/test?[redacted]");
+        logText.Should().NotContain("super-secret-token");
+        logText.Should().NotContain("filter=recent");
+    }
+
     [TestCase("")]
     [TestCase(" ")]
     public void CreateJsonRequest_RejectsMissingApiRoute(string route)
@@ -441,6 +468,31 @@ public class ApiServiceTests
     }
 
     [Test]
+    public async Task SendForAsync_RedactsQueryStringFromDeserializationFailureLog()
+    {
+        var logger = new CapturingLogger<ApiService>();
+        var api = new ApiService(
+            new StaticHttpClientFactory(new HttpClient(new StaticHttpMessageHandler(
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{not-json", Encoding.UTF8, "application/json")
+                }))),
+            new ApiClientOptions { Url = "https://api.msava.test/" },
+            logger);
+
+        var result = await api.SendForAsync(
+            HttpMethod.Get,
+            "api/test?downloadToken=super-secret-download-token",
+            ApiServiceTestJsonSerializerContext.Default.ApiServiceTestPayload);
+
+        result.Should().BeNull();
+        logger.Messages.Should().ContainSingle();
+        string logText = logger.Messages[0].Text;
+        logText.Should().Contain("api/test?[redacted]");
+        logText.Should().NotContain("super-secret-download-token");
+    }
+
+    [Test]
     public async Task SendMultipartForAsync_ReturnsDefaultForInvalidJson()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK)
@@ -514,6 +566,27 @@ public class ApiServiceTests
             return Task.FromResult(_response);
         }
     }
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<LogMessage> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(new LogMessage(logLevel, exception, formatter(state, exception)));
+        }
+    }
+
+    private sealed record LogMessage(LogLevel Level, Exception? Exception, string Text);
 
     private sealed class CancelledJsonContent : HttpContent
     {

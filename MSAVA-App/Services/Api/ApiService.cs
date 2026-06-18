@@ -171,7 +171,11 @@ public class ApiService
         using var resp = await SendAsync(msg, cancellationToken);
         if (!resp.IsSuccessStatusCode)
         {
-            _logger.LogWarning("API call {Method} {Url} failed with status {Status}", method, relativeUrl, resp.StatusCode);
+            _logger.LogWarning(
+                "API call {Method} {Url} failed with status {Status}",
+                method,
+                SanitizeRelativeUrlForLog(relativeUrl),
+                resp.StatusCode);
             return default;
         }
 
@@ -195,7 +199,11 @@ public class ApiService
         using var resp = await SendAsync(msg, cancellationToken);
         if (!resp.IsSuccessStatusCode)
         {
-            _logger.LogWarning("API multipart call {Method} {Url} failed with status {Status}", method, relativeUrl, resp.StatusCode);
+            _logger.LogWarning(
+                "API multipart call {Method} {Url} failed with status {Status}",
+                method,
+                SanitizeRelativeUrlForLog(relativeUrl),
+                resp.StatusCode);
             return default;
         }
 
@@ -290,13 +298,56 @@ public class ApiService
 
     private void LogDeserializationFailure(Exception exception, ApiResponseKind responseKind, string relativeUrl)
     {
+        string logUrl = SanitizeRelativeUrlForLog(relativeUrl);
+
         if (responseKind == ApiResponseKind.Multipart)
         {
-            _logger.LogError(exception, "Failed to deserialize multipart API response for {Url}", relativeUrl);
+            _logger.LogError(exception, "Failed to deserialize multipart API response for {Url}", logUrl);
             return;
         }
 
-        _logger.LogError(exception, "Failed to deserialize API response for {Url}", relativeUrl);
+        _logger.LogError(exception, "Failed to deserialize API response for {Url}", logUrl);
+    }
+
+    private static string SanitizeRelativeUrlForLog(string relativeUrl)
+    {
+        int queryStart = relativeUrl.IndexOf('?');
+        ReadOnlySpan<char> path = queryStart >= 0
+            ? relativeUrl.AsSpan(0, queryStart)
+            : relativeUrl.AsSpan();
+
+        string sanitizedPath = SanitizeLogValue(path);
+        return queryStart >= 0
+            ? sanitizedPath + "?[redacted]"
+            : sanitizedPath;
+    }
+
+    private static string SanitizeLogValue(ReadOnlySpan<char> value)
+    {
+        const int maximumLogValueLength = 256;
+        Span<char> buffer = value.Length <= maximumLogValueLength
+            ? stackalloc char[value.Length]
+            : stackalloc char[maximumLogValueLength];
+
+        int written = 0;
+        foreach (char character in value)
+        {
+            if (written >= maximumLogValueLength)
+                break;
+
+            if (character is '\r' or '\n' or '\t')
+            {
+                buffer[written++] = ' ';
+                continue;
+            }
+
+            if (char.IsControl(character))
+                continue;
+
+            buffer[written++] = character;
+        }
+
+        return new string(buffer[..written]);
     }
 
     private enum ApiResponseKind
