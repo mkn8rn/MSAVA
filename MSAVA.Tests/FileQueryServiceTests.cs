@@ -27,6 +27,55 @@ public class FileQueryServiceTests
         pattern.Should().Be("%50\\%\\_done\\\\today%");
     }
 
+    [TestCase(null, null)]
+    [TestCase("", null)]
+    [TestCase(" ", null)]
+    [TestCase("  visible  ", "visible")]
+    public void NormalizeSearchText_TrimsSearchTextAndIgnoresBlankValues(
+        string? value,
+        string? expected)
+    {
+        string? normalized = FileQuerySearchPolicy.NormalizeSearchText(
+            value,
+            "value",
+            "Value",
+            maximumLength: 16);
+
+        normalized.Should().Be(expected);
+    }
+
+    [TestCase("tag", FileQuerySearchPolicy.MaximumTagSearchLength, "Tag")]
+    [TestCase("category", FileQuerySearchPolicy.MaximumCategorySearchLength, "Category")]
+    [TestCase("name", FileQuerySearchPolicy.MaximumNameSearchLength, "Name")]
+    [TestCase("description", FileQuerySearchPolicy.MaximumDescriptionSearchLength, "Description")]
+    public async Task GetFileGuidsByAllFieldsAsync_RejectsOversizeSearchText(
+        string fieldName,
+        int maximumLength,
+        string messageFieldName)
+    {
+        using var context = CreateContext();
+        var session = new SessionDTO
+        {
+            LoggedIn = true,
+            UserId = Guid.NewGuid(),
+            Username = "session",
+            AccessGroups = [],
+            IsAdmin = true,
+            IsWhitelisted = true
+        };
+        var service = new FileQueryService(context, new TestUserSessionService(session));
+        string value = new('s', maximumLength + 1);
+
+        Func<Task> act = () => service.GetFileGuidsByAllFieldsAsync(
+            tag: fieldName == "tag" ? value : null,
+            category: fieldName == "category" ? value : null,
+            name: fieldName == "name" ? value : null,
+            description: fieldName == "description" ? value : null);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{messageFieldName} search text must be {maximumLength} characters or fewer.*");
+    }
+
     [Test]
     public async Task GetAllFileMetadataAsync_ReturnsCurrentGroupsAndPublicViewingForNonAdmin()
     {

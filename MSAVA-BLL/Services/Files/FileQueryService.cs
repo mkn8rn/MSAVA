@@ -124,35 +124,56 @@ public class FileQueryService : IFileQueryService
         string? name,
         string? description)
     {
+        string? normalizedTag = FileQuerySearchPolicy.NormalizeSearchText(
+            tag,
+            nameof(tag),
+            "Tag",
+            FileQuerySearchPolicy.MaximumTagSearchLength);
+        string? normalizedCategory = FileQuerySearchPolicy.NormalizeSearchText(
+            category,
+            nameof(category),
+            "Category",
+            FileQuerySearchPolicy.MaximumCategorySearchLength);
+        string? normalizedName = FileQuerySearchPolicy.NormalizeSearchText(
+            name,
+            nameof(name),
+            "Name",
+            FileQuerySearchPolicy.MaximumNameSearchLength);
+        string? normalizedDescription = FileQuerySearchPolicy.NormalizeSearchText(
+            description,
+            nameof(description),
+            "Description",
+            FileQuerySearchPolicy.MaximumDescriptionSearchLength);
+
         // Use EF.Functions.ILike for PostgreSQL case-insensitive search
         // These translate directly to SQL ILIKE operations
-        if (!string.IsNullOrWhiteSpace(tag))
+        if (normalizedTag is not null)
         {
-            var tagPattern = BuildExactLikePattern(tag);
+            var tagPattern = BuildExactLikePattern(normalizedTag);
             query = query.Where(f =>
                 f.Tags != null &&
                 f.Tags.Any(t => EF.Functions.ILike(t, tagPattern, LikeEscapeCharacter)));
         }
 
-        if (!string.IsNullOrWhiteSpace(category))
+        if (normalizedCategory is not null)
         {
-            var categoryPattern = BuildExactLikePattern(category);
+            var categoryPattern = BuildExactLikePattern(normalizedCategory);
             query = query.Where(f =>
                 f.Categories != null &&
                 f.Categories.Any(c => EF.Functions.ILike(c, categoryPattern, LikeEscapeCharacter)));
         }
 
-        if (!string.IsNullOrWhiteSpace(name))
+        if (normalizedName is not null)
         {
-            var namePattern = BuildContainsLikePattern(name);
+            var namePattern = BuildContainsLikePattern(normalizedName);
             query = query.Where(f =>
                 f.Name != null &&
                 EF.Functions.ILike(f.Name, namePattern, LikeEscapeCharacter));
         }
 
-        if (!string.IsNullOrWhiteSpace(description))
+        if (normalizedDescription is not null)
         {
-            var descPattern = BuildContainsLikePattern(description);
+            var descPattern = BuildContainsLikePattern(normalizedDescription);
             query = query.Where(f =>
                 f.Description != null &&
                 EF.Functions.ILike(f.Description, descPattern, LikeEscapeCharacter));
