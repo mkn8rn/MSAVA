@@ -77,6 +77,25 @@ public class PublicFileAccessGuardTests
     }
 
     [Test]
+    public async Task CanServePublicFile_DeniesPublicSqlReferenceFromNestedDataDirectory()
+    {
+        await using var context = CreateDataContext();
+        byte[] hash = SHA256.HashData(Guid.NewGuid().ToByteArray());
+        var reference = CreateReference(hash, publicDownload: true);
+        context.FileRefs.Add(reference);
+        context.FileData.Add(CreateFileData(reference));
+        await context.SaveChangesAsync();
+        string physicalPath = Path.Combine(
+            FileContentUtils.FilesDirectory,
+            "nested",
+            $"{Convert.ToHexString(hash).ToLowerInvariant()}.txt");
+
+        bool result = CanServePublicFile(context, physicalPath);
+
+        result.Should().BeFalse();
+    }
+
+    [Test]
     public async Task CanServePublicFile_DeniesWhenMetadataIsPublicButSqlReferenceIsPrivate()
     {
         await using var context = CreateDataContext();

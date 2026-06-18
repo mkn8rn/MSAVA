@@ -16,7 +16,8 @@ public static class PublicFileAccessGuard
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentNullException.ThrowIfNull(logger);
 
-        if (!FileContentUtils.IsSafeFilePath(physicalPath))
+        if (string.IsNullOrWhiteSpace(physicalPath) ||
+            !FileContentUtils.IsSafeFilePath(physicalPath))
         {
             LogDeniedRequest(logger, physicalPath, "physical path is outside the data directory");
             return false;
@@ -24,6 +25,12 @@ public static class PublicFileAccessGuard
 
         if (!StoredFileName.TryParse(physicalPath, out var storedFileName))
             return false;
+
+        if (!IsCanonicalStoredFilePath(physicalPath, storedFileName))
+        {
+            LogDeniedRequest(logger, physicalPath, "physical path is not the canonical stored file path");
+            return false;
+        }
 
         try
         {
@@ -49,6 +56,25 @@ public static class PublicFileAccessGuard
             LogDeniedRequest(logger, physicalPath, "public file database lookup failed", ex);
             return false;
         }
+    }
+
+    private static bool IsCanonicalStoredFilePath(string physicalPath, StoredFileName storedFileName)
+    {
+        string canonicalPath = FileContentUtils.GetFullPath(
+            storedFileName.FileHash,
+            storedFileName.Extension);
+
+        return string.Equals(
+            Path.GetFullPath(canonicalPath),
+            Path.GetFullPath(physicalPath),
+            GetPathComparison());
+    }
+
+    private static StringComparison GetPathComparison()
+    {
+        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
     }
 
     private static void LogDeniedRequest(
