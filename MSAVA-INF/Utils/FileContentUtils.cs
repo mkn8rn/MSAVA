@@ -206,8 +206,7 @@ public static class FileContentUtils
             "xls" => read >= 8 && header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0,
             "ppt" => read >= 8 && header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0,
             "rtf" => read >= 5 && header[0] == 0x7B && header[1] == 0x5C && header[2] == 0x72 && header[3] == 0x74 && header[4] == 0x66,
-            "html" or "htm" => StartsWithAsciiIgnoreCase(header, read, "<html") ||
-                                StartsWithAsciiIgnoreCase(header, read, "<!doctype html"),
+            "html" or "htm" => IsHtmlContent(header, read),
             "xml" => read >= 5 && header[0] == 0x3C && header[1] == 0x3F && header[2] == 0x78 && header[3] == 0x6D && header[4] == 0x6C,
             "json" => read >= 1 && (header[0] == 0x7B || header[0] == 0x5B),
             "csv" or "tsv" or "txt" or "log" or "md" or "markdown" or "yaml" or "yml" or "ini" => true,
@@ -299,6 +298,17 @@ public static class FileContentUtils
         return StartsWithSvgRoot(content);
     }
 
+    private static bool IsHtmlContent(ReadOnlySpan<byte> header, int read)
+    {
+        ReadOnlySpan<byte> content = header[..read];
+
+        content = SkipUtf8ByteOrderMark(content);
+        content = TrimLeadingAsciiWhitespace(content);
+
+        return StartsWithHtmlRoot(content) ||
+            StartsWithHtmlDoctype(content);
+    }
+
     private static ReadOnlySpan<byte> SkipUtf8ByteOrderMark(ReadOnlySpan<byte> content)
     {
         return content is [0xEF, 0xBB, 0xBF, ..]
@@ -342,6 +352,32 @@ public static class FileContentUtils
         byte rootTerminator = content[4];
         return rootTerminator is (byte)'>' or (byte)'/' ||
             IsAsciiWhitespace(rootTerminator);
+    }
+
+    private static bool StartsWithHtmlRoot(ReadOnlySpan<byte> content)
+    {
+        if (!StartsWithAsciiIgnoreCase(content, "<html"))
+            return false;
+
+        if (content.Length == 5)
+            return true;
+
+        byte rootTerminator = content[5];
+        return rootTerminator is (byte)'>' || IsAsciiWhitespace(rootTerminator);
+    }
+
+    private static bool StartsWithHtmlDoctype(ReadOnlySpan<byte> content)
+    {
+        const string marker = "<!doctype html";
+
+        if (!StartsWithAsciiIgnoreCase(content, marker))
+            return false;
+
+        if (content.Length == marker.Length)
+            return true;
+
+        byte markerTerminator = content[marker.Length];
+        return markerTerminator is (byte)'>' || IsAsciiWhitespace(markerTerminator);
     }
 
     private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> header, int read, string expected)

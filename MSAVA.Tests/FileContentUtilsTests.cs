@@ -208,6 +208,23 @@ public class FileContentUtilsTests
     }
 
     [Test]
+    public void ValidateFileContent_AcceptsHtmlRootAfterWhitespace()
+    {
+        using var stream = new MemoryStream(" \r\n<html lang=\"en\"></html>"u8.ToArray());
+
+        FileContentUtils.ValidateFileContent(stream, "html").Should().BeTrue();
+    }
+
+    [TestCase("<htmlscript></htmlscript>")]
+    [TestCase("<!DOCTYPE htmlish>")]
+    public void ValidateFileContent_RejectsNonHtmlPrefixAsHtml(string content)
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+
+        FileContentUtils.ValidateFileContent(stream, "html").Should().BeFalse();
+    }
+
+    [Test]
     public void ValidateFileContent_AcceptsSvgRootWithoutXmlDeclaration()
     {
         using var stream = new MemoryStream("<svg viewBox=\"0 0 1 1\"></svg>"u8.ToArray());
