@@ -285,6 +285,30 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
+    public async Task InvokeAsync_PropagatesAggregateCriticalExceptionsWithoutLoggingOrWritingResponse()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext();
+        var criticalException = new AccessViolationException("Native memory boundary failed.");
+        var aggregateException = new AggregateException(
+            "Multiple pipeline operations failed.",
+            new InvalidOperationException("Recoverable operation failed."),
+            criticalException);
+        var middleware = new ExceptionCatcherMiddleware(_ => throw aggregateException);
+
+        var act = async () => await InvokeMiddlewareAsync(middleware, context, dbContext, isDevelopment: false);
+
+        var thrown = await act.Should().ThrowAsync<AggregateException>();
+        thrown.Which.InnerExceptions.Should().Contain(criticalException);
+        dbContext.ErrorLogs.Should().BeEmpty();
+        dbContext.SaveChangesCalls.Should().Be(0);
+        dbContext.SaveChangesAsyncCalls.Should().Be(0);
+        context.Response.ContentType.Should().BeNull();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        (await ReadResponseBodyAsync(context)).Should().BeEmpty();
+    }
+
+    [Test]
     public async Task InvokeAsync_TreatsRuntimeProgrammingFaultAsMaskedServerError()
     {
         using var dbContext = CreateContext(throwOnSave: false);

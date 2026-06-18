@@ -25,6 +25,17 @@ public class CriticalExceptionPolicyTests
     }
 
     [Test]
+    public void ContainsCriticalException_ReturnsTrueForNonFirstAggregateCriticalFailure()
+    {
+        var exception = new AggregateException(
+            "Multiple import operations failed.",
+            new InvalidDataException("Unsupported import metadata."),
+            new AccessViolationException("Native boundary failed."));
+
+        CriticalExceptionPolicy.ContainsCriticalException(exception).Should().BeTrue();
+    }
+
+    [Test]
     public void ContainsCriticalException_ReturnsFalseForRecoverableException()
     {
         var exception = new InvalidDataException("Unsupported metadata shape.");
@@ -50,6 +61,28 @@ public class CriticalExceptionPolicyTests
             new OutOfMemoryException("Memory pressure."));
 
         CriticalExceptionPolicy.ContainsNonCancellationCriticalException(exception).Should().BeTrue();
+    }
+
+    [Test]
+    public void ContainsNonCancellationCriticalException_ReturnsTrueForNonFirstAggregateOutOfMemory()
+    {
+        var exception = new AggregateException(
+            "Multiple response handlers failed.",
+            new InvalidOperationException("Recoverable response handler failure."),
+            new OutOfMemoryException("Memory pressure."));
+
+        CriticalExceptionPolicy.ContainsNonCancellationCriticalException(exception).Should().BeTrue();
+    }
+
+    [Test]
+    public void ContainsNonCancellationCriticalException_ExcludesAggregateCancellation()
+    {
+        var exception = new AggregateException(
+            "Multiple tasks failed.",
+            new InvalidOperationException("Recoverable task failure."),
+            new OperationCanceledException("Task was canceled."));
+
+        CriticalExceptionPolicy.ContainsNonCancellationCriticalException(exception).Should().BeFalse();
     }
 
     [Test]

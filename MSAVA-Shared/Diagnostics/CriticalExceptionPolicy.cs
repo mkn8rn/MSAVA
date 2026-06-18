@@ -19,10 +19,30 @@ public static class CriticalExceptionPolicy
         ArgumentNullException.ThrowIfNull(exception);
         ArgumentNullException.ThrowIfNull(isMatch);
 
-        for (Exception? current = exception; current is not null; current = current.InnerException)
+        var pending = new Stack<Exception>();
+        var visited = new HashSet<Exception>();
+        pending.Push(exception);
+
+        while (pending.Count > 0)
         {
+            Exception current = pending.Pop();
+            if (!visited.Add(current))
+                continue;
+
             if (isMatch(current))
                 return true;
+
+            if (current is AggregateException aggregateException)
+            {
+                foreach (Exception innerException in aggregateException.InnerExceptions)
+                {
+                    pending.Push(innerException);
+                }
+            }
+            else if (current.InnerException is not null)
+            {
+                pending.Push(current.InnerException);
+            }
         }
 
         return false;
