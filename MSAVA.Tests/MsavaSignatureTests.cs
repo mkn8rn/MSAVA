@@ -86,6 +86,23 @@ public class MsavaSignatureTests
         signature.Should().BeNull();
     }
 
+    [TestCase("MSAVA:v0:{0}:42:1700000000")]
+    [TestCase("MSAVA:v+1:{0}:42:1700000000")]
+    [TestCase("MSAVA:v-1:{0}:42:1700000000")]
+    [TestCase("MSAVA:v1:{0}:+42:1700000000")]
+    [TestCase("MSAVA:v1:{0}:-42:1700000000")]
+    [TestCase("MSAVA:v1:{0}:42:+1700000000")]
+    [TestCase("MSAVA:v1:{0}:42:-1700000000")]
+    public void TryParse_RejectsSignedNumericFields(string inputFormat)
+    {
+        string input = string.Format(inputFormat, ContentHash);
+
+        bool parsed = MsavaSignature.TryParse(input, out var signature);
+
+        parsed.Should().BeFalse();
+        signature.Should().BeNull();
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow()

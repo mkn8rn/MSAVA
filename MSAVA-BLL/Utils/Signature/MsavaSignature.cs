@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace MSAVA_BLL.Utils.Signature;
 
 /// <summary>
@@ -80,18 +82,22 @@ public sealed record MsavaSignature
             return false;
 
         // Parse version
-        if (!parts[1].StartsWith('v') || !int.TryParse(parts[1][1..], out var version))
+        if (!parts[1].StartsWith('v') ||
+            !TryParseUnsignedInt32(parts[1][1..], out var version) ||
+            version == 0)
+        {
             return false;
+        }
 
         // Parse remaining fields
         var contentHash = parts[2];
         if (!IsSha256Hex(contentHash))
             return false;
 
-        if (!long.TryParse(parts[3], out var fileId))
+        if (!TryParseUnsignedInt64(parts[3], out var fileId))
             return false;
 
-        if (!long.TryParse(parts[4], out var timestamp))
+        if (!TryParseUnsignedInt64(parts[4], out var timestamp))
             return false;
 
         signature = new MsavaSignature
@@ -103,6 +109,24 @@ public sealed record MsavaSignature
         };
 
         return true;
+    }
+
+    private static bool TryParseUnsignedInt32(string value, out int result)
+    {
+        return int.TryParse(
+            value,
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out result);
+    }
+
+    private static bool TryParseUnsignedInt64(string value, out long result)
+    {
+        return long.TryParse(
+            value,
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out result);
     }
 
     private static bool IsSha256Hex(string contentHash)
