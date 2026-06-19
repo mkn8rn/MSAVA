@@ -9,6 +9,8 @@ namespace MSAVA_BLL.Services.Auth;
 
 public class UserSessionService : IUserSessionService
 {
+    private const string UserNotFoundMessage = "User was not found.";
+
     private readonly BaseDataContext _context;
     private readonly IRequestSessionAccessor _requestSessionAccessor;
 
@@ -108,7 +110,7 @@ public class UserSessionService : IUserSessionService
             .AsNoTracking()
             .Include(u => u.AccessGroups)
             .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
+            ?? throw new KeyNotFoundException(UserNotFoundMessage);
 
         return userDb;
     }

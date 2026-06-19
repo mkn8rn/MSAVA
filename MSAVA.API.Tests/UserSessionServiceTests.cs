@@ -77,8 +77,9 @@ public class UserSessionServiceTests
 
         Func<Task> act = () => service.GetCurrentSessionAsync();
 
-        await act.Should().ThrowAsync<KeyNotFoundException>()
-            .WithMessage($"User with id {deletedUserId} not found.");
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("User was not found.");
+        exception.Which.Message.Should().NotContain(deletedUserId.ToString());
     }
 
     [Test]
@@ -230,6 +231,38 @@ public class UserSessionServiceTests
 
         result.Id.Should().Be(otherUser.Id);
         result.Username.Should().Be(otherUser.Username);
+    }
+
+    [Test]
+    public async Task GetUserById_RedactsRequestedUserIdWhenAdminReadsMissingUser()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser(isAdmin: true, isBanned: false, isWhitelisted: true);
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+        var missingUserId = Guid.NewGuid();
+
+        var service = CreateService(
+            context,
+            new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = admin.Id,
+                Username = admin.Username,
+                IsAdmin = true,
+                IsBanned = false,
+                IsWhitelisted = true,
+                Roles = ["Admin", "Whitelisted"],
+                AccessGroups = [],
+                IssuedAt = DateTime.UtcNow.AddMinutes(-5),
+                ExpiresAt = DateTime.UtcNow.AddHours(1)
+            });
+
+        Func<Task> act = () => service.GetUserByIdAsync(missingUserId);
+
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("User was not found.");
+        exception.Which.Message.Should().NotContain(missingUserId.ToString());
     }
 
     [Test]
