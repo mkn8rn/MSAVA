@@ -158,7 +158,9 @@ public class ApiServiceTests
 
     [TestCase("bad\ntoken")]
     [TestCase("bad\u0000token")]
-    public void CreateJsonRequestWithAccessToken_RejectsControlCharacters(string token)
+    [TestCase("bad token")]
+    [TestCase("bad,token")]
+    public void CreateJsonRequestWithAccessToken_RejectsInvalidTokenCharacters(string token)
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
 
@@ -196,7 +198,9 @@ public class ApiServiceTests
 
     [TestCase("bad\ntoken")]
     [TestCase("bad\u0000token")]
-    public void SetAccessToken_RejectsControlCharacters(string token)
+    [TestCase("bad token")]
+    [TestCase("bad,token")]
+    public void SetAccessToken_RejectsInvalidTokenCharacters(string token)
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
 

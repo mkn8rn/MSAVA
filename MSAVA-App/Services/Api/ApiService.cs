@@ -259,7 +259,7 @@ public class ApiService
             return null;
 
         string normalizedToken = token.Trim();
-        if (ContainsControlCharacter(normalizedToken))
+        if (ContainsInvalidTokenCharacter(normalizedToken))
             throw new ArgumentException("Access token contains invalid characters.", parameterName);
 
         return normalizedToken;
@@ -274,12 +274,16 @@ public class ApiService
         return normalizedToken;
     }
 
-    private static bool ContainsControlCharacter(string value)
+    private static bool ContainsInvalidTokenCharacter(string value)
     {
         foreach (char character in value)
         {
-            if (char.IsControl(character))
+            if (char.IsWhiteSpace(character) ||
+                char.IsControl(character) ||
+                character == ',')
+            {
                 return true;
+            }
         }
 
         return false;
