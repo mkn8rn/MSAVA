@@ -8,6 +8,7 @@ using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Import;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_BLL.Utils;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Managers;
 using MSAVA_INF.Models;
@@ -113,6 +114,42 @@ public class ProviderImportServiceTests
 
         exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
         errorStream.BytesRead.Should().Be(0);
+    }
+
+    [Test]
+    public async Task ProviderHttpFailure_SanitizesReasonPhraseBeforeException()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            ReasonPhrase = "Bad\tGateway\u0001token"
+        };
+
+        Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider download", response, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage("Provider download failed 502 (Bad Gatewaytoken)");
+
+        exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        exception.Which.Message.Should().NotContain("\t");
+        exception.Which.Message.Should().NotContain("\u0001");
+    }
+
+    [Test]
+    public async Task ProviderHttpFailure_LimitsReasonPhraseLengthBeforeException()
+    {
+        string reasonPhrase = new('x', HttpFailureMessage.MaximumReasonPhraseLength + 20);
+        using var response = new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            ReasonPhrase = reasonPhrase
+        };
+
+        Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider download", response, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage($"Provider download failed 502 ({new string('x', HttpFailureMessage.MaximumReasonPhraseLength)})");
+
+        exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        exception.Which.Message.Should().NotContain(new string('x', HttpFailureMessage.MaximumReasonPhraseLength + 1));
     }
 
     [Test]
