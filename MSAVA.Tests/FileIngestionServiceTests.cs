@@ -369,9 +369,10 @@ public class FileIngestionServiceTests
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
             var exception = await act.Should().ThrowAsync<HttpRequestException>()
-                .WithMessage("File URL download failed 404: missing file");
+                .WithMessage("File URL download failed 404 (Not Found).");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
+            exception.Which.Message.Should().NotContain("missing file");
             httpClientFactory.WasCalled.Should().BeTrue();
             httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.RequestUri.Should().Be(new Uri(dto.FileUrl));
@@ -385,7 +386,7 @@ public class FileIngestionServiceTests
     }
 
     [Test]
-    public async Task CreateFileFromUrlAsync_TruncatesRemoteErrorBodyWithoutReadingEntireBody()
+    public async Task CreateFileFromUrlAsync_DoesNotReadRemoteErrorBody()
     {
         var errorStream = new CountingRepeatingReadStream((byte)'x', 100_000);
         var handler = new RecordingHttpMessageHandler(_ =>
@@ -395,7 +396,6 @@ public class FileIngestionServiceTests
             });
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
-        string expectedBody = new('x', 2048);
 
         try
         {
@@ -408,10 +408,10 @@ public class FileIngestionServiceTests
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
             var exception = await act.Should().ThrowAsync<HttpRequestException>()
-                .WithMessage($"File URL download failed 502: {expectedBody}");
+                .WithMessage("File URL download failed 502 (Bad Gateway).");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
-            errorStream.BytesRead.Should().BeLessThan(errorStream.TotalLength);
+            errorStream.BytesRead.Should().Be(0);
             httpClientFactory.WasCalled.Should().BeTrue();
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();

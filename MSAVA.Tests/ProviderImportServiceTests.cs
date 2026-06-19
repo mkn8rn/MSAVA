@@ -63,9 +63,12 @@ public class ProviderImportServiceTests
     }
 
     [Test]
-    public async Task ProviderHttpFailure_UsesReasonPhraseWhenBodyIsMissing()
+    public async Task ProviderHttpFailure_UsesReasonPhraseWithoutReadingBody()
     {
-        using var response = new HttpResponseMessage(HttpStatusCode.NotFound);
+        using var response = new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent("provider-token=secret-value")
+        };
 
         Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider request", response, CancellationToken.None);
 
@@ -73,43 +76,43 @@ public class ProviderImportServiceTests
             .WithMessage("Provider request failed 404 (Not Found)");
 
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        exception.Which.Message.Should().NotContain("secret-value");
     }
 
     [Test]
-    public async Task ProviderHttpFailure_TruncatesLongErrorBody()
+    public async Task ProviderHttpFailure_DoesNotExposeLongErrorBody()
     {
-        string errorBody = new('x', 2050);
+        string errorBody = "provider-token=" + new string('x', 2050);
         using var response = new HttpResponseMessage(HttpStatusCode.BadGateway)
         {
             Content = new StringContent(errorBody)
         };
-        string expectedBody = new('x', 2048);
 
         Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider download", response, CancellationToken.None);
 
         var exception = await act.Should().ThrowAsync<HttpRequestException>()
-            .WithMessage($"Provider download failed 502: {expectedBody}");
+            .WithMessage("Provider download failed 502 (Bad Gateway)");
 
         exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        exception.Which.Message.Should().NotContain("provider-token");
     }
 
     [Test]
-    public async Task ProviderHttpFailure_TruncatesStreamingErrorBodyWithoutReadingEntireBody()
+    public async Task ProviderHttpFailure_DoesNotReadStreamingErrorBody()
     {
         var errorStream = new CountingRepeatingReadStream((byte)'x', 100_000);
         using var response = new HttpResponseMessage(HttpStatusCode.BadGateway)
         {
             Content = new StreamContent(errorStream)
         };
-        string expectedBody = new('x', 2048);
 
         Func<Task> act = () => ProviderHttpFailure.ThrowAsync("Provider download", response, CancellationToken.None);
 
         var exception = await act.Should().ThrowAsync<HttpRequestException>()
-            .WithMessage($"Provider download failed 502: {expectedBody}");
+            .WithMessage("Provider download failed 502 (Bad Gateway)");
 
         exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
-        errorStream.BytesRead.Should().BeLessThan(errorStream.TotalLength);
+        errorStream.BytesRead.Should().Be(0);
     }
 
     [Test]
@@ -142,9 +145,10 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             var exception = await act.Should().ThrowAsync<HttpRequestException>()
-                .WithMessage("Google Drive initial request failed 400: drive failure");
+                .WithMessage("Google Drive initial request failed 400 (Bad Request)");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            exception.Which.Message.Should().NotContain("drive failure");
             httpClientFactory.WasCalled.Should().BeTrue();
             httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.Requests.Should().ContainSingle();
@@ -375,9 +379,10 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             var exception = await act.Should().ThrowAsync<HttpRequestException>()
-                .WithMessage("OneDrive download failed 400: onedrive failure");
+                .WithMessage("OneDrive download failed 400 (Bad Request)");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            exception.Which.Message.Should().NotContain("onedrive failure");
             httpClientFactory.WasCalled.Should().BeTrue();
             httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.Requests.Should().ContainSingle();
@@ -608,9 +613,10 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             var exception = await act.Should().ThrowAsync<HttpRequestException>()
-                .WithMessage("OneDrive download failed 400: sharepoint failure");
+                .WithMessage("OneDrive download failed 400 (Bad Request)");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            exception.Which.Message.Should().NotContain("sharepoint failure");
             httpClientFactory.WasCalled.Should().BeTrue();
             httpClientFactory.ClientName.Should().Be(FileIngestionService.RemoteFileHttpClientName);
             handler.Requests.Should().ContainSingle();
@@ -696,9 +702,10 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             var exception = await act.Should().ThrowAsync<HttpRequestException>()
-                .WithMessage("Google Drive download failed 502: download failure");
+                .WithMessage("Google Drive download failed 502 (Bad Gateway)");
 
             exception.Which.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+            exception.Which.Message.Should().NotContain("download failure");
             AssertCreatedTempFilesWereDeleted(tempFileFactory);
             AssertLogsDoNotExposeTempPaths(logger, tempFileFactory);
             logger.Messages.Should().NotContain(message =>

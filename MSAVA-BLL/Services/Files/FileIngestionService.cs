@@ -8,8 +8,6 @@ public class FileIngestionService : IFileIngestionService
 {
     public const string RemoteFileHttpClientName = "RemoteFileIngestion";
 
-    private const int MaximumRemoteErrorBodyLength = 2048;
-
     private readonly FilePersistenceService _persistenceService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HostAddressResolver _hostAddressResolver;
@@ -66,22 +64,18 @@ public class FileIngestionService : IFileIngestionService
         return await _persistenceService.CreateFileFromStreamAsync(streamDto, cancellationToken);
     }
 
-    private static async Task EnsureSuccessfulRemoteResponseAsync(
+    private static Task EnsureSuccessfulRemoteResponseAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
-            return;
+            return Task.CompletedTask;
 
-        string body = await HttpErrorBodyReader.ReadTrimmedBodyAsync(
-            response.Content,
-            MaximumRemoteErrorBodyLength,
-            cancellationToken);
-        string message = string.IsNullOrWhiteSpace(body)
-            ? $"File URL download failed {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()})."
-            : $"File URL download failed {(int)response.StatusCode}: {body}";
+        cancellationToken.ThrowIfCancellationRequested();
 
-        throw new HttpRequestException(message, null, response.StatusCode);
+        string message = $"File URL download failed {HttpFailureMessage.FormatStatus(response)}.";
+
+        return Task.FromException(new HttpRequestException(message, null, response.StatusCode));
     }
 
     private async Task EnsureSafeResolvedHostAsync(Uri uri, CancellationToken cancellationToken)
