@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
-using MSAVA_Shared.Models;
 
-namespace MSAVA_BLL.Services.Files;
+namespace MSAVA_Shared.Models;
 
 public static class HashCheckBatchPolicy
 {

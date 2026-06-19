@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Authorization;
 using MSAVA_Shared.Models;
 using MSAVA_BLL.Services.Interfaces;
-using MSAVA_BLL.Services.Files;
 using System.ComponentModel.DataAnnotations;
 
 namespace MSAVA_API.Controllers;
