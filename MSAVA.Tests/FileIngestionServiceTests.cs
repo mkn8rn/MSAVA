@@ -67,6 +67,45 @@ public class FileIngestionServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromUrlAsync_RejectsOversizeUrlBeforeSessionHostOrClientWork()
+    {
+        var httpClientFactory = new RecordingHttpClientFactory();
+        var metadataDirectory = CreateTempDirectory();
+        bool resolverCalled = false;
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(
+                context,
+                metadataStore,
+                httpClientFactory,
+                hostAddressResolver: (_, _) =>
+                {
+                    resolverCalled = true;
+                    return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
+                });
+            string fileUrl = "https://files.example.test/" + new string('a', FileUrlInputPolicy.MaximumUrlLength);
+            var dto = CreateUrlDto(fileUrl);
+
+            Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage($"FileUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+
+            resolverCalled.Should().BeFalse();
+            httpClientFactory.WasCalled.Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromUrlAsync_RejectsEmbeddedCredentialsBeforeResolvingHostOrCreatingHttpClient()
     {
         var httpClientFactory = new RecordingHttpClientFactory();

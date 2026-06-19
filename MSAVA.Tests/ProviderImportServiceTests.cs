@@ -273,6 +273,46 @@ public class ProviderImportServiceTests
     }
 
     [Test]
+    public async Task GoogleDriveImportAsync_RejectsOversizeFileUrlBeforeSessionOrHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        string fileUrl = "https://drive.google.com/file/d/abcDEF12345/view?padding=" +
+            new string('a', FileUrlInputPolicy.MaximumUrlLength);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new GoogleDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<GoogleDriveImportService>.Instance);
+            var dto = new FetchFileGoogleDriveDTO
+            {
+                FileUrl = fileUrl,
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage($"FileUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task GoogleDriveImportAsync_RejectsEmbeddedCredentialsBeforeCreatingHttpClient()
     {
         var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
@@ -535,6 +575,46 @@ public class ProviderImportServiceTests
 
             httpClientFactory.WasCalled.Should().BeFalse();
             handler.Requests.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task OneDriveImportAsync_RejectsOversizeFileUrlBeforeSessionOrHttpClient()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var httpClientFactory = new RecordingHttpClientFactory(handler);
+        var metadataDirectory = CreateTempDirectory();
+        string fileUrl = "https://1drv.ms/u/s!abcDEF12345?padding=" +
+            new string('a', FileUrlInputPolicy.MaximumUrlLength);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new OneDriveImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                httpClientFactory,
+                NullLogger<OneDriveImportService>.Instance);
+            var dto = new FetchFileFromOneDriveDTO
+            {
+                FileUrl = fileUrl,
+                AccessGroupId = Guid.NewGuid()
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage($"FileUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+
+            httpClientFactory.WasCalled.Should().BeFalse();
+            handler.Requests.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
         }
         finally
         {
@@ -1421,6 +1501,46 @@ public class ProviderImportServiceTests
 
             await act.Should().ThrowAsync<ArgumentException>()
                 .WithMessage("At least one YouTube stream type must be selected.*");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task YouTubeImportAsync_RejectsOversizeUrlBeforeSessionOrManifest()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var youTubeClient = new ThrowingYouTubeDownloadClient();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = new YouTubeImportService(
+                CreatePersistenceService(context, metadataStore),
+                new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
+                NullLogger<YouTubeImportService>.Instance,
+                youTubeClient);
+            var dto = new FetchFileYouTubeDTO
+            {
+                YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345&padding=" +
+                    new string('a', FileUrlInputPolicy.MaximumUrlLength),
+                AccessGroupId = Guid.NewGuid(),
+                DownloadVideo = true,
+                DownloadAudio = true
+            };
+
+            Func<Task> act = () => service.ImportAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage($"YouTubeUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+
+            youTubeClient.ManifestCalls.Should().Be(0);
+            youTubeClient.CopyCalls.Should().Be(0);
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
         }
         finally
         {
