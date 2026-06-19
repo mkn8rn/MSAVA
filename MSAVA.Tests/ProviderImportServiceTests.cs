@@ -1686,33 +1686,41 @@ public class ProviderImportServiceTests
     }
 
     [Test]
-    public async Task ReadBoundedFfmpegErrorOutputAsync_DrainsReaderButCapturesBoundedPrefix()
+    public async Task DrainFfmpegErrorOutputAsync_DrainsReaderWithoutCapturingOutput()
     {
-        string capturedPrefix = new('a', YouTubeImportService.FfmpegErrorOutputCaptureLimitChars);
-        string extraOutput = new('b', YouTubeImportService.FfmpegErrorOutputCaptureLimitChars);
-        var reader = new CountingTextReader(capturedPrefix + extraOutput);
+        string diagnosticOutput =
+            "C:\\temp\\msava-video.webm provider-token=secret-value " +
+            new string('x', 8_192);
+        var reader = new CountingTextReader(diagnosticOutput);
 
-        string result = await YouTubeImportService.ReadBoundedFfmpegErrorOutputAsync(
+        await YouTubeImportService.DrainFfmpegErrorOutputAsync(
             reader,
             CancellationToken.None);
 
-        result.Should().Be(capturedPrefix);
-        reader.CharactersRead.Should().Be(capturedPrefix.Length + extraOutput.Length);
+        reader.CharactersRead.Should().Be(diagnosticOutput.Length);
     }
 
     [Test]
-    public async Task ReadBoundedFfmpegErrorOutputAsync_HonorsCancellation()
+    public async Task DrainFfmpegErrorOutputAsync_HonorsCancellation()
     {
         var reader = new CountingTextReader("ffmpeg diagnostic output");
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
 
-        Func<Task> act = () => YouTubeImportService.ReadBoundedFfmpegErrorOutputAsync(
+        Func<Task> act = () => YouTubeImportService.DrainFfmpegErrorOutputAsync(
             reader,
             cancellationTokenSource.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
         reader.CharactersRead.Should().Be(0);
+    }
+
+    [Test]
+    public void CreateFfmpegFailureMessage_IncludesOnlyExitCode()
+    {
+        string message = YouTubeImportService.CreateFfmpegFailureMessage(123);
+
+        message.Should().Be("FFmpeg failed to mux video and audio with exit code 123.");
     }
 
     [Test]

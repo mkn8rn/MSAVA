@@ -8,13 +8,11 @@ using MSAVA_Shared.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
 
 namespace MSAVA_BLL.Services.Import;
 
 public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
 {
-    internal const int FfmpegErrorOutputCaptureLimitChars = 4096;
     internal static readonly TimeSpan FfmpegMuxTimeout = TimeSpan.FromSeconds(15);
 
     private readonly FilePersistenceService _persistenceService;
@@ -187,7 +185,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
             using var process = Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start FFmpeg process.");
 
-            var stderrTask = ReadBoundedFfmpegErrorOutputAsync(
+            var stderrTask = DrainFfmpegErrorOutputAsync(
                 process.StandardError,
                 cancellationToken);
 
@@ -209,10 +207,10 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
                 throw;
             }
 
-            string errorOutput = await stderrTask;
+            await stderrTask;
 
             if (process.ExitCode != 0)
-                throw new InvalidOperationException($"FFmpeg failed to mux video and audio: {errorOutput}");
+                throw new InvalidOperationException(CreateFfmpegFailureMessage(process.ExitCode));
 
             FileSizePolicy.EnsureWithinMaximum(
                 new FileInfo(outputPath).Length,
@@ -269,14 +267,18 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
         return processStartInfo;
     }
 
-    internal static async Task<string> ReadBoundedFfmpegErrorOutputAsync(
+    internal static string CreateFfmpegFailureMessage(int exitCode)
+    {
+        return $"FFmpeg failed to mux video and audio with exit code {exitCode}.";
+    }
+
+    internal static async Task DrainFfmpegErrorOutputAsync(
         TextReader errorReader,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(errorReader);
 
         char[] buffer = new char[1024];
-        var capturedError = new StringBuilder(FfmpegErrorOutputCaptureLimitChars);
 
         while (true)
         {
@@ -284,13 +286,7 @@ public class YouTubeImportService : IFileImportService<FetchFileYouTubeDTO>
                 buffer.AsMemory(0, buffer.Length),
                 cancellationToken);
             if (charsRead == 0)
-                return capturedError.ToString();
-
-            int remainingCaptureCapacity = FfmpegErrorOutputCaptureLimitChars - capturedError.Length;
-            if (remainingCaptureCapacity <= 0)
-                continue;
-
-            capturedError.Append(buffer, 0, Math.Min(charsRead, remainingCaptureCapacity));
+                return;
         }
     }
 
