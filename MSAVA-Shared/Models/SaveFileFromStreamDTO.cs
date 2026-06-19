@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MSAVA_Shared.Models
 {
-    public class SaveFileFromStreamDTO
+    public class SaveFileFromStreamDTO : IFileCreationMetadataRequest
     {
         public required string FileName { get; set; }
         public required string FileExtension { get; set; }

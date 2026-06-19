@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace MSAVA_Shared.Models
 {
-    public class SaveFileFromFetchDTO
+    public class SaveFileFromFetchDTO : IFileCreationMetadataRequest
     {
         public required string FileName { get; set; }
         public required string FileExtension { get; set; }

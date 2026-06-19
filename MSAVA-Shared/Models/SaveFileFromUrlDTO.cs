@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace MSAVA_Shared.Models
 {
-    public class SaveFileFromUrlDTO
+    public class SaveFileFromUrlDTO : IFileCreationMetadataRequest
     {
         public required string FileUrl { get; set; }
         public required string FileName { get; set; }

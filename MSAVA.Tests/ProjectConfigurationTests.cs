@@ -646,6 +646,17 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void FileCreationSaveDtos_ImplementSharedMetadataContract()
+    {
+        Type metadataContract = typeof(IFileCreationMetadataRequest);
+
+        typeof(SaveFileFromStreamDTO).Should().BeAssignableTo(metadataContract);
+        typeof(SaveFileFromFetchDTO).Should().BeAssignableTo(metadataContract);
+        typeof(SaveFileFromUrlDTO).Should().BeAssignableTo(metadataContract);
+        typeof(SaveFileFromFormFileDTO).Should().BeAssignableTo(metadataContract);
+    }
+
+    [Test]
     public void ContinuousIntegration_RunsBothUnitTestProjects()
     {
         string workflowPath = Path.Combine(

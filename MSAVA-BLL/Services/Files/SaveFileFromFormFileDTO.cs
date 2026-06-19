@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Http;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Files;
 
-public class SaveFileFromFormFileDTO
+public class SaveFileFromFormFileDTO : IFileCreationMetadataRequest
 {
     public required string FileName { get; set; }
     public required string FileExtension { get; set; }

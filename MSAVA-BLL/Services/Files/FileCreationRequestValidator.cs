@@ -9,12 +9,7 @@ internal static class FileCreationRequestValidator
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        ApplyMetadata(dto, NormalizeMetadata(
-            dto.FileName,
-            dto.FileExtension,
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplyMetadata(dto);
 
         if (dto.Stream is null)
             throw new ArgumentException("File content must be provided as a stream.", nameof(dto));
@@ -26,12 +21,7 @@ internal static class FileCreationRequestValidator
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        ApplyMetadata(dto, NormalizeMetadata(
-            dto.FileName,
-            dto.FileExtension,
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplyMetadata(dto);
 
         dto.TempFilePath = TempFilePathPolicy.RequireSystemTempFilePath(dto.TempFilePath);
 
@@ -48,12 +38,7 @@ internal static class FileCreationRequestValidator
 
         FileUrlPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
 
-        ApplyMetadata(dto, NormalizeMetadata(
-            dto.FileName,
-            dto.FileExtension,
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplyMetadata(dto);
 
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
@@ -63,12 +48,7 @@ internal static class FileCreationRequestValidator
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        ApplyMetadata(dto, NormalizeMetadata(
-            dto.FileName,
-            dto.FileExtension,
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplyMetadata(dto);
 
         if (dto.FormFile is null)
             throw new ArgumentException("FormFile must be provided.", nameof(dto));
@@ -179,6 +159,18 @@ internal static class FileCreationRequestValidator
             normalizedDescription);
     }
 
+    private static void NormalizeAndApplyMetadata(IFileCreationMetadataRequest dto)
+    {
+        FileCreationMetadata metadata = NormalizeMetadata(
+            dto.FileName,
+            dto.FileExtension,
+            dto.Tags,
+            dto.Categories,
+            dto.Description);
+
+        ApplyMetadata(dto, metadata);
+    }
+
     private static string NormalizeSupportedFileExtension(string? fileExtension)
     {
         if (MappingUtils.TryParseSupportedFileExtension(
@@ -193,34 +185,7 @@ internal static class FileCreationRequestValidator
         throw new ArgumentException(error, nameof(fileExtension));
     }
 
-    private static void ApplyMetadata(SaveFileFromStreamDTO dto, FileCreationMetadata metadata)
-    {
-        dto.FileName = metadata.FileName;
-        dto.FileExtension = metadata.FileExtension;
-        dto.Tags = metadata.Tags;
-        dto.Categories = metadata.Categories;
-        dto.Description = metadata.Description;
-    }
-
-    private static void ApplyMetadata(SaveFileFromFetchDTO dto, FileCreationMetadata metadata)
-    {
-        dto.FileName = metadata.FileName;
-        dto.FileExtension = metadata.FileExtension;
-        dto.Tags = metadata.Tags;
-        dto.Categories = metadata.Categories;
-        dto.Description = metadata.Description;
-    }
-
-    private static void ApplyMetadata(SaveFileFromUrlDTO dto, FileCreationMetadata metadata)
-    {
-        dto.FileName = metadata.FileName;
-        dto.FileExtension = metadata.FileExtension;
-        dto.Tags = metadata.Tags;
-        dto.Categories = metadata.Categories;
-        dto.Description = metadata.Description;
-    }
-
-    private static void ApplyMetadata(SaveFileFromFormFileDTO dto, FileCreationMetadata metadata)
+    private static void ApplyMetadata(IFileCreationMetadataRequest dto, FileCreationMetadata metadata)
     {
         dto.FileName = metadata.FileName;
         dto.FileExtension = metadata.FileExtension;
