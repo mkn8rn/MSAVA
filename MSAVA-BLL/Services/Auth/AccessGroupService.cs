@@ -35,7 +35,7 @@ public class AccessGroupService
 
     public async Task<Guid> CreateAccessGroupAsync(string name, CancellationToken cancellationToken = default)
     {
-        string accessGroupName = AccessGroupInputPolicy.NormalizeName(name);
+        string accessGroupName = AccessGroupNamePolicy.NormalizeName(name);
 
         if (!ShouldUseSerializableAccessGroupTransaction())
             return await CreateValidatedAccessGroupAsync(accessGroupName, cancellationToken);

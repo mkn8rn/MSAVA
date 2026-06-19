@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_INF.Models
 {
     public class AccessGroupDB : IIdentifiableDB
     {
-        public const int MaximumNameLength = 128;
+        public const int MaximumNameLength = AccessGroupNamePolicy.MaximumNameLength;
 
         public Guid Id { get; set; }
         public required Guid OwnerId { get; set; }

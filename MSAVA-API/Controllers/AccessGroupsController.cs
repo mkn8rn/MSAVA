@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Authorization;
 using MSAVA_BLL.Services.Interfaces;
+using MSAVA_Shared.Models;
 using System.ComponentModel.DataAnnotations;
 
 namespace MSAVA_API.Controllers;
@@ -11,7 +12,6 @@ namespace MSAVA_API.Controllers;
 [Authorize(Policy = AuthorizationPolicies.CurrentUser)]
 public class AccessGroupsController : ControllerBase
 {
-    private const string AccessGroupNameRequiredMessage = "Access group name must be provided.";
     private const string UserIdRequiredMessage = "User id must be provided.";
     private const string AccessGroupIdRequiredMessage = "Access group id must be provided.";
 
@@ -27,10 +27,10 @@ public class AccessGroupsController : ControllerBase
         [FromQuery][Required] string name,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(AccessGroupNameRequiredMessage);
+        if (!AccessGroupNamePolicy.TryNormalizeName(name, out string accessGroupName, out string validationMessage))
+            return BadRequest(validationMessage);
 
-        var id = await _accessGroupService.CreateAccessGroupAsync(name, cancellationToken);
+        var id = await _accessGroupService.CreateAccessGroupAsync(accessGroupName, cancellationToken);
         return Ok(id);
     }
 

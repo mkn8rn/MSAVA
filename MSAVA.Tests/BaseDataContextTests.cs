@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
 
@@ -186,6 +187,7 @@ public class BaseDataContextTests
             .GetMaxLength()
             .Should()
             .Be(AccessGroupDB.MaximumNameLength);
+        AccessGroupDB.MaximumNameLength.Should().Be(AccessGroupNamePolicy.MaximumNameLength);
 
         FindProperty(context.Model, typeof(JwtDB), nameof(JwtDB.Username))
             .GetMaxLength()

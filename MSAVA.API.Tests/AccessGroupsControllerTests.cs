@@ -36,8 +36,49 @@ public class AccessGroupsControllerTests
         var response = await controller.CreateAccessGroup(name);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().Be("Access group name must be provided.");
+        badRequest.Value.Should().Be(AccessGroupNamePolicy.MissingNameMessage);
         context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateAccessGroup_NormalizesNameBeforeServiceCall()
+    {
+        var service = new RecordingAccessGroupService();
+        var controller = new AccessGroupsController(service);
+
+        var response = await controller.CreateAccessGroup("  Editors  ");
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(service.CreatedAccessGroupId);
+        service.CreateName.Should().Be("Editors");
+    }
+
+    [TestCase("Editors\nAudit")]
+    [TestCase("Editors\u0000Audit")]
+    public async Task CreateAccessGroup_RejectsInvalidNameBeforeServiceCall(string name)
+    {
+        var service = new RecordingAccessGroupService();
+        var controller = new AccessGroupsController(service);
+
+        var response = await controller.CreateAccessGroup(name);
+
+        var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().Be(AccessGroupNamePolicy.InvalidNameMessage);
+        service.CreateName.Should().BeNull();
+    }
+
+    [Test]
+    public async Task CreateAccessGroup_RejectsOversizeNameBeforeServiceCall()
+    {
+        var service = new RecordingAccessGroupService();
+        var controller = new AccessGroupsController(service);
+        string name = new('a', AccessGroupNamePolicy.MaximumNameLength + 1);
+
+        var response = await controller.CreateAccessGroup(name);
+
+        var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().Be(AccessGroupNamePolicy.OversizeNameMessage);
+        service.CreateName.Should().BeNull();
     }
 
     [Test]

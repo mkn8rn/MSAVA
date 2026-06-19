@@ -24,6 +24,12 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public void AccessGroupNamePoliciesUseSharedLimit()
+    {
+        AccessGroupDB.MaximumNameLength.Should().Be(AccessGroupNamePolicy.MaximumNameLength);
+    }
+
+    [Test]
     public async Task CreateAccessGroup_PersistsTrimmedNameAndAddsSessionUser()
     {
         using var context = CreateContext();
@@ -163,10 +169,10 @@ public class AccessGroupServiceTests
             new ThrowingUserSessionService(),
             logger);
 
-        Func<Task> act = () => service.CreateAccessGroupAsync(new string('a', AccessGroupInputPolicy.MaximumNameLength + 1));
+        Func<Task> act = () => service.CreateAccessGroupAsync(new string('a', AccessGroupNamePolicy.MaximumNameLength + 1));
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"Access group name must be {AccessGroupInputPolicy.MaximumNameLength} characters or fewer.*");
+            .WithMessage($"{AccessGroupNamePolicy.OversizeNameMessage}*");
         context.AccessGroups.Should().BeEmpty();
     }
 
