@@ -160,7 +160,19 @@ namespace MSAVA_INF.Environment
         public static bool IsDevelopment()
         {
             var aspnetEnv = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            return string.Equals(aspnetEnv, "Development", StringComparison.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(aspnetEnv))
+                return IsDevelopmentEnvironmentName(aspnetEnv);
+
+            var dotnetEnv = System.Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+            return IsDevelopmentEnvironmentName(dotnetEnv);
+        }
+
+        private static bool IsDevelopmentEnvironmentName(string? environmentName)
+        {
+            return string.Equals(
+                environmentName,
+                "Development",
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static Dictionary<string, string> LoadEnvFile(string path)
