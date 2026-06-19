@@ -20,6 +20,13 @@ public static class FileMetadataPolicy
         if (ContainsDisallowedControlCharacter(normalizedFileName, allowLineBreaks: false))
             throw new FileMetadataValidationException("FileName contains invalid characters.");
 
+        if (normalizedFileName.Contains('/') ||
+            normalizedFileName.Contains('\\') ||
+            normalizedFileName.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new FileMetadataValidationException("FileName contains invalid characters.");
+        }
+
         return normalizedFileName;
     }
 

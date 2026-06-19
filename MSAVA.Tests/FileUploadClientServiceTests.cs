@@ -159,7 +159,7 @@ public class FileUploadClientServiceTests
             });
 
         var outcome = await service.CreateFileFromFormFileAsync(
-            fileName: "  quarterly/report  ",
+            fileName: "  quarterly report  ",
             fileExtension: " .TXT ",
             fileStream: new MemoryStream(Encoding.UTF8.GetBytes("content")),
             accessGroupId: Guid.Parse("f1e4c22b-0dd8-4aa4-b9a2-640b6e241552"),
@@ -172,7 +172,7 @@ public class FileUploadClientServiceTests
         outcome.Success.Should().BeTrue();
         snapshot.Should().NotBeNull();
         snapshot!.PathAndQuery.Should().Be("/api/files/store/formfile");
-        snapshot.Fields[FileUploadFormFields.FileName].Should().Equal("quarterly/report");
+        snapshot.Fields[FileUploadFormFields.FileName].Should().Equal("quarterly report");
         snapshot.Fields[FileUploadFormFields.FileExtension].Should().Equal("txt");
         snapshot.Fields[FileUploadFormFields.AccessGroupId].Should().Equal("f1e4c22b-0dd8-4aa4-b9a2-640b6e241552");
         snapshot.Fields[FileUploadFormFields.Description].Should().Equal("first line\nsecond line");
@@ -182,6 +182,29 @@ public class FileUploadClientServiceTests
         snapshot.Fields[FileUploadFormFields.Categories].Should().Equal("finance");
         snapshot.FilePartFileName.Should().Be("upload.txt");
         snapshot.FilePartContentType.Should().Be("application/octet-stream");
+    }
+
+    [Test]
+    public async Task CreateFileFromFormFileAsync_RejectsPathLikeFileNameBeforeSending()
+    {
+        bool requestWasSent = false;
+        var service = CreateService(
+            new HttpResponseMessage(HttpStatusCode.OK),
+            (_, _) =>
+            {
+                requestWasSent = true;
+                return Task.CompletedTask;
+            });
+
+        Func<Task> act = () => service.CreateFileFromFormFileAsync(
+            fileName: "quarterly/report",
+            fileExtension: "txt",
+            fileStream: new MemoryStream(Encoding.UTF8.GetBytes("content")),
+            accessGroupId: Guid.NewGuid());
+
+        await act.Should().ThrowAsync<FileMetadataValidationException>()
+            .WithMessage("FileName contains invalid characters.");
+        requestWasSent.Should().BeFalse();
     }
 
     [Test]

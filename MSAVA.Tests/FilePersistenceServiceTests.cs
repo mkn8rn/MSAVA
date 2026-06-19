@@ -487,6 +487,42 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task CreateFileFromStreamAsync_RejectsPathLikeFileNameBeforeWritingContent()
+    {
+        var content = Encoding.UTF8.GetBytes($"path-like-name-{Guid.NewGuid()}");
+        var hash = SHA256.HashData(content);
+        var contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        var metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var (sessionUser, accessGroup) = SeedUserWithAccessGroup(context);
+            var service = CreateService(context, metadataStore, sessionUser.Id);
+            var dto = CreateStreamDto(content, accessGroup.Id);
+            dto.FileName = "quarterly/report";
+
+            Func<Task> act = () => service.CreateFileFromStreamAsync(dto);
+
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("FileName contains invalid characters.");
+
+            File.Exists(contentPath).Should().BeFalse();
+            metadataStore.Exists(hash, "txt").Should().BeFalse();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_RejectsBlankTagBeforeWritingContent()
     {
         var content = Encoding.UTF8.GetBytes($"blank-tag-{Guid.NewGuid()}");
