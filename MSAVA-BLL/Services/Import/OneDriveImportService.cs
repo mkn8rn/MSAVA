@@ -137,7 +137,7 @@ public class OneDriveImportService : IFileImportService<FetchFileFromOneDriveDTO
             throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", nameof(fileUrl));
         }
 
-        FileUrlInputPolicy.EnsureNoEmbeddedCredentials(uri, nameof(fileUrl));
+        FileUrlPolicy.EnsureNoEmbeddedCredentials(uri, nameof(fileUrl));
 
         if (!IsSupportedOneDriveUri(uri))
         {

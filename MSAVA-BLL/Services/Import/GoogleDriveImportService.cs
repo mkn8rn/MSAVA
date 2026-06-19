@@ -168,7 +168,7 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         if (!Uri.TryCreate(urlOrId, UriKind.Absolute, out var uri))
             return null;
 
-        FileUrlInputPolicy.EnsureNoEmbeddedCredentials(uri, nameof(FetchFileGoogleDriveDTO.FileUrl));
+        FileUrlPolicy.EnsureNoEmbeddedCredentials(uri, nameof(FetchFileGoogleDriveDTO.FileUrl));
 
         if (!IsSupportedFileIdUri(uri))
             return null;

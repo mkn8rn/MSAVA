@@ -15,6 +15,41 @@ namespace MSAVA_App.Tests;
 public class FileIngestionServiceTests
 {
     [Test]
+    public void FileUrlPolicy_AllowsUrlAtMaximumLength()
+    {
+        const string prefix = "https://files.example.test/";
+        string fileUrl = prefix + new string('a', FileUrlPolicy.MaximumUrlLength - prefix.Length);
+
+        Action act = () => FileUrlPolicy.EnsureAllowedLength(fileUrl, "FileUrl", "dto");
+
+        act.Should().NotThrow();
+    }
+
+    [Test]
+    public void FileUrlPolicy_RejectsUrlAboveMaximumLength()
+    {
+        string fileUrl = "https://files.example.test/" + new string('a', FileUrlPolicy.MaximumUrlLength);
+
+        Action act = () => FileUrlPolicy.EnsureAllowedLength(fileUrl, "FileUrl", "dto");
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage($"FileUrl must be {FileUrlPolicy.MaximumUrlLength} characters or fewer.*")
+            .And.ParamName.Should().Be("dto");
+    }
+
+    [Test]
+    public void FileUrlPolicy_RejectsEmbeddedCredentials()
+    {
+        var uri = new Uri("https://user:password@files.example.test/sample.txt");
+
+        Action act = () => FileUrlPolicy.EnsureNoEmbeddedCredentials(uri, "fileUrl");
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage($"{FileUrlPolicy.EmbeddedCredentialsMessage}*")
+            .And.ParamName.Should().Be("fileUrl");
+    }
+
+    [Test]
     public async Task CreateFileFromUrlAsync_RejectsRelativeUrlBeforeCreatingHttpClient()
     {
         var httpClientFactory = new RecordingHttpClientFactory();
@@ -86,13 +121,13 @@ public class FileIngestionServiceTests
                     resolverCalled = true;
                     return Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
                 });
-            string fileUrl = "https://files.example.test/" + new string('a', FileUrlInputPolicy.MaximumUrlLength);
+            string fileUrl = "https://files.example.test/" + new string('a', FileUrlPolicy.MaximumUrlLength);
             var dto = CreateUrlDto(fileUrl);
 
             Func<Task> act = () => service.CreateFileFromUrlAsync(dto);
 
             await act.Should().ThrowAsync<ArgumentException>()
-                .WithMessage($"FileUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+                .WithMessage($"FileUrl must be {FileUrlPolicy.MaximumUrlLength} characters or fewer.*");
 
             resolverCalled.Should().BeFalse();
             httpClientFactory.WasCalled.Should().BeFalse();

@@ -1,12 +1,11 @@
-namespace MSAVA_BLL.Services.Files;
+namespace MSAVA_Shared.Models;
 
-internal static class FileUrlInputPolicy
+public static class FileUrlPolicy
 {
-    internal const int MaximumUrlLength = 4096;
+    public const int MaximumUrlLength = 4096;
+    public const string EmbeddedCredentialsMessage = "FileUrl must not contain embedded credentials.";
 
-    internal const string EmbeddedCredentialsMessage = "FileUrl must not contain embedded credentials.";
-
-    internal static void EnsureAllowedLength(
+    public static void EnsureAllowedLength(
         string url,
         string fieldName,
         string parameterName)
@@ -19,7 +18,7 @@ internal static class FileUrlInputPolicy
             throw new ArgumentException($"{fieldName} must be {MaximumUrlLength} characters or fewer.", parameterName);
     }
 
-    internal static void EnsureNoEmbeddedCredentials(Uri uri, string parameterName)
+    public static void EnsureNoEmbeddedCredentials(Uri uri, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(uri);
 

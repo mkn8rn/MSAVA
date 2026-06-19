@@ -1,4 +1,5 @@
 using System.Net;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Files;
 
@@ -18,7 +19,7 @@ internal static class RemoteFileHostPolicy
             throw new ArgumentException("FileUrl must be an absolute HTTP or HTTPS URL.", parameterName);
         }
 
-        FileUrlInputPolicy.EnsureNoEmbeddedCredentials(uri, parameterName);
+        FileUrlPolicy.EnsureNoEmbeddedCredentials(uri, parameterName);
 
         string host = GetNormalizedHost(uri, parameterName);
 

@@ -279,7 +279,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         string fileUrl = "https://drive.google.com/file/d/abcDEF12345/view?padding=" +
-            new string('a', FileUrlInputPolicy.MaximumUrlLength);
+            new string('a', FileUrlPolicy.MaximumUrlLength);
 
         try
         {
@@ -299,7 +299,7 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             await act.Should().ThrowAsync<ArgumentException>()
-                .WithMessage($"FileUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+                .WithMessage($"FileUrl must be {FileUrlPolicy.MaximumUrlLength} characters or fewer.*");
 
             httpClientFactory.WasCalled.Should().BeFalse();
             handler.Requests.Should().BeEmpty();
@@ -589,7 +589,7 @@ public class ProviderImportServiceTests
         var httpClientFactory = new RecordingHttpClientFactory(handler);
         var metadataDirectory = CreateTempDirectory();
         string fileUrl = "https://1drv.ms/u/s!abcDEF12345?padding=" +
-            new string('a', FileUrlInputPolicy.MaximumUrlLength);
+            new string('a', FileUrlPolicy.MaximumUrlLength);
 
         try
         {
@@ -609,7 +609,7 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             await act.Should().ThrowAsync<ArgumentException>()
-                .WithMessage($"FileUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+                .WithMessage($"FileUrl must be {FileUrlPolicy.MaximumUrlLength} characters or fewer.*");
 
             httpClientFactory.WasCalled.Should().BeFalse();
             handler.Requests.Should().BeEmpty();
@@ -1526,7 +1526,7 @@ public class ProviderImportServiceTests
             var dto = new FetchFileYouTubeDTO
             {
                 YouTubeUrl = "https://www.youtube.com/watch?v=abcDEF12345&padding=" +
-                    new string('a', FileUrlInputPolicy.MaximumUrlLength),
+                    new string('a', FileUrlPolicy.MaximumUrlLength),
                 AccessGroupId = Guid.NewGuid(),
                 DownloadVideo = true,
                 DownloadAudio = true
@@ -1535,7 +1535,7 @@ public class ProviderImportServiceTests
             Func<Task> act = () => service.ImportAsync(dto);
 
             await act.Should().ThrowAsync<ArgumentException>()
-                .WithMessage($"YouTubeUrl must be {FileUrlInputPolicy.MaximumUrlLength} characters or fewer.*");
+                .WithMessage($"YouTubeUrl must be {FileUrlPolicy.MaximumUrlLength} characters or fewer.*");
 
             youTubeClient.ManifestCalls.Should().Be(0);
             youTubeClient.CopyCalls.Should().Be(0);

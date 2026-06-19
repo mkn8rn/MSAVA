@@ -46,7 +46,7 @@ internal static class FileCreationRequestValidator
         if (string.IsNullOrWhiteSpace(dto.FileUrl))
             throw new ArgumentException("FileUrl must be provided.", nameof(dto));
 
-        FileUrlInputPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
+        FileUrlPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
 
         ApplyMetadata(dto, NormalizeMetadata(
             dto.FileName,
@@ -83,7 +83,7 @@ internal static class FileCreationRequestValidator
         if (string.IsNullOrWhiteSpace(dto.FileUrl))
             throw new ArgumentException("FileUrl must be provided.", nameof(dto));
 
-        FileUrlInputPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
+        FileUrlPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
 
         ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
             dto.Tags,
@@ -101,7 +101,7 @@ internal static class FileCreationRequestValidator
         if (string.IsNullOrWhiteSpace(dto.FileUrl))
             throw new ArgumentException("FileUrl must be provided.", nameof(dto));
 
-        FileUrlInputPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
+        FileUrlPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
 
         ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
             dto.Tags,
@@ -118,7 +118,7 @@ internal static class FileCreationRequestValidator
 
         if (string.IsNullOrWhiteSpace(dto.YouTubeUrl))
             throw new ArgumentException("YouTubeUrl must be provided.", nameof(dto));
-        FileUrlInputPolicy.EnsureAllowedLength(dto.YouTubeUrl, nameof(dto.YouTubeUrl), nameof(dto));
+        FileUrlPolicy.EnsureAllowedLength(dto.YouTubeUrl, nameof(dto.YouTubeUrl), nameof(dto));
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
         if (!dto.DownloadVideo && !dto.DownloadAudio)
