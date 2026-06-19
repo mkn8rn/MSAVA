@@ -1,4 +1,4 @@
-namespace MSAVA_BLL.Services.Files;
+namespace MSAVA_Shared.Models;
 
 public static class FileQueryPagePolicy
 {

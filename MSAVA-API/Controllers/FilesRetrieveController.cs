@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Authorization;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_API.Attributes;
-using MSAVA_BLL.Services.Files;
 
 namespace MSAVA_API.Controllers;
 

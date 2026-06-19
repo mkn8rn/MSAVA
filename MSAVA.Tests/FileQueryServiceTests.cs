@@ -10,6 +10,31 @@ namespace MSAVA_App.Tests;
 
 public class FileQueryServiceTests
 {
+    [Test]
+    public void FileQueryPagePolicy_NormalizesValidPage()
+    {
+        var page = FileQueryPagePolicy.Normalize(skip: 10, take: 25);
+
+        page.Should().Be(new FileQueryPage(10, 25));
+    }
+
+    [TestCase(-1, 1, "skip", "File query skip must be between 0 and 100000.")]
+    [TestCase(100_001, 1, "skip", "File query skip must be between 0 and 100000.")]
+    [TestCase(0, 0, "take", "File query take must be between 1 and 100.")]
+    [TestCase(0, 101, "take", "File query take must be between 1 and 100.")]
+    public void FileQueryPagePolicy_RejectsInvalidPageBounds(
+        int skip,
+        int take,
+        string parameterName,
+        string message)
+    {
+        Action act = () => FileQueryPagePolicy.Normalize(skip, take);
+
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .WithMessage($"{message}*")
+            .And.ParamName.Should().Be(parameterName);
+    }
+
     [TestCase("literal", "literal")]
     [TestCase("100%", "100\\%")]
     [TestCase("file_name", "file\\_name")]
