@@ -657,6 +657,16 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void FileImportDtos_ImplementSharedSupplementalMetadataContract()
+    {
+        Type supplementalMetadataContract = typeof(IFileSupplementalMetadataRequest);
+
+        typeof(FetchFileGoogleDriveDTO).Should().BeAssignableTo(supplementalMetadataContract);
+        typeof(FetchFileFromOneDriveDTO).Should().BeAssignableTo(supplementalMetadataContract);
+        typeof(FetchFileYouTubeDTO).Should().BeAssignableTo(supplementalMetadataContract);
+    }
+
+    [Test]
     public void ContinuousIntegration_RunsBothUnitTestProjects()
     {
         string workflowPath = Path.Combine(

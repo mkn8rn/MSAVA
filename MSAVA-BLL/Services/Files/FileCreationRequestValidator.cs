@@ -65,10 +65,7 @@ internal static class FileCreationRequestValidator
 
         FileUrlPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
 
-        ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplySupplementalMetadata(dto);
 
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
@@ -83,10 +80,7 @@ internal static class FileCreationRequestValidator
 
         FileUrlPolicy.EnsureAllowedLength(dto.FileUrl, nameof(dto.FileUrl), nameof(dto));
 
-        ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplySupplementalMetadata(dto);
 
         if (dto.AccessGroupId == Guid.Empty)
             throw new ArgumentException("AccessGroupId must be provided.", nameof(dto));
@@ -104,10 +98,7 @@ internal static class FileCreationRequestValidator
         if (!dto.DownloadVideo && !dto.DownloadAudio)
             throw new ArgumentException("At least one YouTube stream type must be selected.", nameof(dto));
 
-        ApplySupplementalMetadata(dto, NormalizeSupplementalMetadata(
-            dto.Tags,
-            dto.Categories,
-            dto.Description));
+        NormalizeAndApplySupplementalMetadata(dto);
     }
 
     public static string NormalizeFileName(string? fileName)
@@ -171,6 +162,16 @@ internal static class FileCreationRequestValidator
         ApplyMetadata(dto, metadata);
     }
 
+    private static void NormalizeAndApplySupplementalMetadata(IFileSupplementalMetadataRequest dto)
+    {
+        SupplementalFileCreationMetadata metadata = NormalizeSupplementalMetadata(
+            dto.Tags,
+            dto.Categories,
+            dto.Description);
+
+        ApplySupplementalMetadata(dto, metadata);
+    }
+
     private static string NormalizeSupportedFileExtension(string? fileExtension)
     {
         if (MappingUtils.TryParseSupportedFileExtension(
@@ -195,25 +196,7 @@ internal static class FileCreationRequestValidator
     }
 
     private static void ApplySupplementalMetadata(
-        FetchFileGoogleDriveDTO dto,
-        SupplementalFileCreationMetadata metadata)
-    {
-        dto.Tags = metadata.Tags;
-        dto.Categories = metadata.Categories;
-        dto.Description = metadata.Description;
-    }
-
-    private static void ApplySupplementalMetadata(
-        FetchFileFromOneDriveDTO dto,
-        SupplementalFileCreationMetadata metadata)
-    {
-        dto.Tags = metadata.Tags;
-        dto.Categories = metadata.Categories;
-        dto.Description = metadata.Description;
-    }
-
-    private static void ApplySupplementalMetadata(
-        FetchFileYouTubeDTO dto,
+        IFileSupplementalMetadataRequest dto,
         SupplementalFileCreationMetadata metadata)
     {
         dto.Tags = metadata.Tags;

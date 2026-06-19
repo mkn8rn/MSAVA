@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MSAVA_Shared.Models
 {
-    public class FetchFileFromOneDriveDTO
+    public class FetchFileFromOneDriveDTO : IFileSupplementalMetadataRequest
     {
         public string? FileUrl { get; set; }
 
