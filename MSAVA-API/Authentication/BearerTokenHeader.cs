@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Http;
-using MSAVA_BLL.Services.Auth;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Authentication;
 
@@ -27,7 +27,7 @@ internal static class BearerTokenHeader
         if (candidate.Length == 0)
             return false;
 
-        if (!AuthInputPolicy.IsTokenStringAllowed(candidate))
+        if (!AuthenticationTokenPolicy.IsTokenStringAllowed(candidate))
             return false;
 
         tokenString = candidate;

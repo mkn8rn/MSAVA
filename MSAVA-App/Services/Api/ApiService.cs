@@ -256,45 +256,12 @@ public class ApiService
 
     internal static string? NormalizeAccessToken(string? token, string parameterName = "token")
     {
-        if (string.IsNullOrWhiteSpace(token))
-            return null;
-
-        string normalizedToken = token.Trim();
-        if (normalizedToken.Length > AuthenticationTokenPolicy.MaximumTokenStringLength)
-        {
-            throw new ArgumentException(
-                $"Access token must be {AuthenticationTokenPolicy.MaximumTokenStringLength} characters or fewer.",
-                parameterName);
-        }
-
-        if (ContainsInvalidTokenCharacter(normalizedToken))
-            throw new ArgumentException("Access token contains invalid characters.", parameterName);
-
-        return normalizedToken;
+        return AuthenticationTokenPolicy.NormalizeAccessToken(token, parameterName);
     }
 
     private static string NormalizeRequiredAccessToken(string? token, string parameterName)
     {
-        string? normalizedToken = NormalizeAccessToken(token, parameterName);
-        if (normalizedToken is null)
-            throw new ArgumentException("Access token is required.", parameterName);
-
-        return normalizedToken;
-    }
-
-    private static bool ContainsInvalidTokenCharacter(string value)
-    {
-        foreach (char character in value)
-        {
-            if (char.IsWhiteSpace(character) ||
-                char.IsControl(character) ||
-                character == ',')
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return AuthenticationTokenPolicy.RequireAccessToken(token, parameterName);
     }
 
     private static bool IsRecoverableDeserializationFailure(Exception exception)

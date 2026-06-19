@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Controllers;
-using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_Shared.Models;
 
@@ -150,7 +149,7 @@ public class AuthenticationControllerTests
             }
         };
         controller.Request.Headers.Authorization =
-            "Bearer " + new string('a', AuthInputPolicy.MaximumTokenStringLength + 1);
+            "Bearer " + new string('a', AuthenticationTokenPolicy.MaximumTokenStringLength + 1);
 
         var response = await controller.Logout();
 

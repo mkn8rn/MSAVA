@@ -154,7 +154,7 @@ public class ApiServiceTests
         };
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage("Access token is required.*");
+            .WithMessage($"{AuthenticationTokenPolicy.MissingAccessTokenMessage}*");
     }
 
     [TestCase("bad\ntoken")]
@@ -171,7 +171,7 @@ public class ApiServiceTests
         };
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage("Access token contains invalid characters.*");
+            .WithMessage($"{AuthenticationTokenPolicy.InvalidAccessTokenMessage}*");
     }
 
     [Test]
@@ -186,7 +186,7 @@ public class ApiServiceTests
         };
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage($"Access token must be {AuthenticationTokenPolicy.MaximumTokenStringLength} characters or fewer.*");
+            .WithMessage($"{AuthenticationTokenPolicy.OversizeAccessTokenMessage}*");
     }
 
     [Test]
@@ -223,7 +223,7 @@ public class ApiServiceTests
         Action act = () => api.SetAccessToken(token);
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage("Access token contains invalid characters.*");
+            .WithMessage($"{AuthenticationTokenPolicy.InvalidAccessTokenMessage}*");
     }
 
     [Test]
@@ -235,7 +235,7 @@ public class ApiServiceTests
         Action act = () => api.SetAccessToken(token);
 
         act.Should().Throw<ArgumentException>()
-            .WithMessage($"Access token must be {AuthenticationTokenPolicy.MaximumTokenStringLength} characters or fewer.*");
+            .WithMessage($"{AuthenticationTokenPolicy.OversizeAccessTokenMessage}*");
     }
 
     [TestCase(null)]

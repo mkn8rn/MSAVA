@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using MSAVA_API.Authentication;
-using MSAVA_BLL.Services.Auth;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Tests;
 
@@ -100,7 +100,7 @@ public class PersistedJwtTokenValidatorTests
     [Test]
     public async Task ValidateAsync_FailsWhenBearerTokenHeaderContainsOversizeTokenText()
     {
-        string oversizedToken = new('a', AuthInputPolicy.MaximumTokenStringLength + 1);
+        string oversizedToken = new('a', AuthenticationTokenPolicy.MaximumTokenStringLength + 1);
         var tokenContext = CreateTokenValidatedContext($"Bearer {oversizedToken}");
         var validator = new PersistedJwtTokenValidator(
             (_, _, _) => throw new InvalidOperationException("Token lookup should not be reached."),

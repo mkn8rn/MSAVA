@@ -40,6 +40,9 @@ public class AuthenticationServiceTests
         tokenProperty!.GetMaxLength().Should().Be(AuthInputPolicy.MaximumTokenStringLength);
         AuthInputPolicy.MaximumTokenStringLength.Should().Be(JwtDB.MaximumTokenStringLength);
         AuthInputPolicy.MaximumTokenStringLength.Should().Be(AuthenticationTokenPolicy.MaximumTokenStringLength);
+        AuthInputPolicy.MissingTokenStringMessage.Should().Be(AuthenticationTokenPolicy.MissingTokenStringMessage);
+        AuthInputPolicy.InvalidTokenStringMessage.Should().Be(AuthenticationTokenPolicy.InvalidTokenStringMessage);
+        AuthInputPolicy.OversizeTokenStringMessage.Should().Be(AuthenticationTokenPolicy.OversizeTokenStringMessage);
     }
 
     [Test]
