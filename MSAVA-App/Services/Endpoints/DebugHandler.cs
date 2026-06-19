@@ -13,23 +13,6 @@ internal class DebugHttpHandler : DelegatingHandler
         "X-Api-Key"
     };
 
-    private static readonly HashSet<string> SensitiveQueryParameterNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "access_token",
-        "api_key",
-        "apikey",
-        "client_secret",
-        "code",
-        "id_token",
-        "key",
-        "password",
-        "refresh_token",
-        "secret",
-        "sig",
-        "signature",
-        "token"
-    };
-
     private readonly ILogger<DebugHttpHandler> _logger;
 
     public DebugHttpHandler(ILogger<DebugHttpHandler> logger, HttpMessageHandler? innerHandler = null)
@@ -100,33 +83,7 @@ internal class DebugHttpHandler : DelegatingHandler
         if (queryStart < 0)
             return textWithoutFragment + fragment;
 
-        var query = textWithoutFragment[(queryStart + 1)..];
-
-        return textWithoutFragment[..(queryStart + 1)] + FormatQueryString(query) + fragment;
-    }
-
-    private static string FormatQueryString(string query)
-    {
-        if (string.IsNullOrEmpty(query))
-            return query;
-
-        var parameters = query.Split('&');
-        for (var i = 0; i < parameters.Length; i++)
-        {
-            var parameter = parameters[i];
-            if (string.IsNullOrEmpty(parameter))
-                continue;
-
-            var separator = parameter.IndexOf('=', StringComparison.Ordinal);
-            var name = separator < 0 ? parameter : parameter[..separator];
-            var decodedName = Uri.UnescapeDataString(name.Replace("+", " ", StringComparison.Ordinal));
-            if (!SensitiveQueryParameterNames.Contains(decodedName))
-                continue;
-
-            parameters[i] = $"{name}={RedactedValue}";
-        }
-
-        return string.Join("&", parameters);
+        return textWithoutFragment[..queryStart] + "?" + RedactedValue + fragment;
     }
 
     private static string FormatAbsoluteUri(Uri requestUri)

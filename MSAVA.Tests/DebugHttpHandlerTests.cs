@@ -45,7 +45,7 @@ public class DebugHttpHandlerTests
     }
 
     [Test]
-    public async Task SendAsync_RedactsCredentialQueryValuesFromFailedRequestUri()
+    public async Task SendAsync_RedactsEntireQueryStringFromFailedRequestUri()
     {
         var logger = new CapturingLogger<DebugHttpHandler>();
         using var handler = new DebugHttpHandler(
@@ -63,10 +63,8 @@ public class DebugHttpHandlerTests
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         string logText = string.Join(Environment.NewLine, logger.Messages.Select(message => message.Text));
-        logText.Should().Contain("filter=recent");
-        logText.Should().Contain("access_token=[redacted]");
-        logText.Should().Contain("api_key=[redacted]");
-        logText.Should().Contain("sig=[redacted]");
+        logText.Should().Contain("https://api.msava.test/api/files/retrieve/meta/all?[redacted]");
+        logText.Should().NotContain("filter=recent");
         logText.Should().NotContain("super-secret-token");
         logText.Should().NotContain("super-secret-key");
         logText.Should().NotContain("super-secret-signature");
@@ -91,7 +89,8 @@ public class DebugHttpHandlerTests
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         string logText = string.Join(Environment.NewLine, logger.Messages.Select(message => message.Text));
-        logText.Should().Contain("https://api.msava.test/api/auth/callback?state=visible#[redacted]");
+        logText.Should().Contain("https://api.msava.test/api/auth/callback?[redacted]#[redacted]");
+        logText.Should().NotContain("state=visible");
         logText.Should().NotContain("super-secret-fragment-token");
         logText.Should().NotContain("super-secret-id-token");
     }
@@ -114,7 +113,8 @@ public class DebugHttpHandlerTests
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         string logText = string.Join(Environment.NewLine, logger.Messages.Select(message => message.Text));
-        logText.Should().Contain("https://[redacted]@api.msava.test/api/files?filter=recent&token=[redacted]");
+        logText.Should().Contain("https://[redacted]@api.msava.test/api/files?[redacted]");
+        logText.Should().NotContain("filter=recent");
         logText.Should().NotContain("super-secret-password");
         logText.Should().NotContain("super-secret-token");
     }
