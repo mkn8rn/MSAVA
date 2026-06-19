@@ -1,12 +1,11 @@
-using MSAVA_INF.Models;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Auth;
 
 public static class AuthInputPolicy
 {
-    public const int MaximumUsernameLength = UserDB.MaximumUsernameLength;
-    public const int MaximumPasswordLength = 1024;
+    public const int MaximumUsernameLength = AuthenticationCredentialPolicy.MaximumUsernameLength;
+    public const int MaximumPasswordLength = AuthenticationCredentialPolicy.MaximumPasswordLength;
     public const int MaximumTokenStringLength = AuthenticationTokenPolicy.MaximumTokenStringLength;
     public const string MissingTokenStringMessage = "Token string must be provided.";
     public const string InvalidTokenStringMessage = "Token string contains invalid characters.";
@@ -16,18 +15,7 @@ public static class AuthInputPolicy
 
     public static string NormalizeUsername(string username)
     {
-        if (string.IsNullOrWhiteSpace(username))
-            throw new ArgumentException("Username must be provided.", nameof(username));
-
-        string normalizedUsername = username.Trim();
-
-        if (normalizedUsername.Length > MaximumUsernameLength)
-            throw new ArgumentException($"Username must be {MaximumUsernameLength} characters or fewer.", nameof(username));
-
-        if (AuthTextInputPolicy.ContainsControlCharacter(normalizedUsername))
-            throw new ArgumentException("Username contains invalid characters.", nameof(username));
-
-        return normalizedUsername;
+        return AuthenticationCredentialPolicy.NormalizeUsername(username);
     }
 
     public static string CreateUsernameComparisonKey(string username)
@@ -39,11 +27,7 @@ public static class AuthInputPolicy
 
     public static void EnsurePasswordAllowed(string password)
     {
-        if (string.IsNullOrWhiteSpace(password))
-            throw new ArgumentException("Password must be provided.", nameof(password));
-
-        if (password.Length > MaximumPasswordLength)
-            throw new ArgumentException($"Password must be {MaximumPasswordLength} characters or fewer.", nameof(password));
+        AuthenticationCredentialPolicy.EnsurePasswordAllowed(password);
     }
 
     public static string RequireTokenString(string? tokenString)

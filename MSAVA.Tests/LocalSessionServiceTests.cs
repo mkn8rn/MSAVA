@@ -29,6 +29,81 @@ public class LocalSessionServiceTests
         service.IsLoggedIn.Should().BeFalse();
     }
 
+    [TestCase("")]
+    [TestCase(" ")]
+    public async Task LoginAsync_RejectsMissingUsernameBeforeRequest(string username)
+    {
+        var service = CreateServiceThatFailsOnRequest();
+
+        Func<Task> act = () => service.LoginAsync(username, "password");
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthenticationCredentialPolicy.MissingUsernameMessage}*");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoginAsync_RejectsOversizeUsernameBeforeRequest()
+    {
+        var service = CreateServiceThatFailsOnRequest();
+        string username = new('u', AuthenticationCredentialPolicy.MaximumUsernameLength + 1);
+
+        Func<Task> act = () => service.LoginAsync(username, "password");
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthenticationCredentialPolicy.OversizeUsernameMessage}*");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [TestCase("bad\nuser")]
+    [TestCase("bad\u0000user")]
+    public async Task LoginAsync_RejectsUsernameWithControlCharacterBeforeRequest(string username)
+    {
+        var service = CreateServiceThatFailsOnRequest();
+
+        Func<Task> act = () => service.LoginAsync(username, "password");
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthenticationCredentialPolicy.InvalidUsernameMessage}*");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [TestCase("")]
+    [TestCase(" ")]
+    public async Task LoginAsync_RejectsMissingPasswordBeforeRequest(string password)
+    {
+        var service = CreateServiceThatFailsOnRequest();
+
+        Func<Task> act = () => service.LoginAsync("alice", password);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthenticationCredentialPolicy.MissingPasswordMessage}*");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoginAsync_RejectsOversizePasswordBeforeRequest()
+    {
+        var service = CreateServiceThatFailsOnRequest();
+        string password = new('p', AuthenticationCredentialPolicy.MaximumPasswordLength + 1);
+
+        Func<Task> act = () => service.LoginAsync("alice", password);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthenticationCredentialPolicy.OversizePasswordMessage}*");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
     [Test]
     public async Task LoginAsync_ReturnsNullForRecoverableHttpFailure()
     {
@@ -262,6 +337,43 @@ public class LocalSessionServiceTests
     }
 
     [Test]
+    public async Task LoginAsync_NormalizesUsernameBeforeLoginRequest()
+    {
+        var userId = Guid.NewGuid();
+        const string token = "opaque-login-token";
+        LoginRequestDTO? loginRequest = null;
+        var requests = new List<(HttpMethod Method, string PathAndQuery, string? Authorization)>();
+        var handler = new RecordingHttpMessageHandler(async (request, _) =>
+        {
+            requests.Add(RecordRequest(request));
+
+            if (requests.Count == 1)
+            {
+                string requestBody = await request.Content!.ReadAsStringAsync();
+                loginRequest = JsonSerializer.Deserialize(
+                    requestBody,
+                    AppJsonSerializerContext.Default.LoginRequestDTO);
+                return CreateLoginResponse(token);
+            }
+
+            return requests.Count switch
+            {
+                2 => CreateSessionResponse(userId, "database-alice", isAdmin: false, loggedIn: true),
+                _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            };
+        });
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("  alice  ", "password");
+
+        result.Should().Be(token);
+        requests.Should().HaveCount(2);
+        loginRequest.Should().NotBeNull();
+        loginRequest!.Username.Should().Be("alice");
+        loginRequest.Password.Should().Be("password");
+    }
+
+    [Test]
     public async Task LoginAsync_NormalizesTokenBeforeSessionRequestAndState()
     {
         var userId = Guid.NewGuid();
@@ -325,6 +437,12 @@ public class LocalSessionServiceTests
     private static LocalSessionService CreateService(HttpMessageHandler handler)
     {
         return CreateService(handler, out _);
+    }
+
+    private static LocalSessionService CreateServiceThatFailsOnRequest()
+    {
+        return CreateService(new RecordingHttpMessageHandler((_, _) =>
+            throw new InvalidOperationException("HTTP request should not be sent.")));
     }
 
     private static LocalSessionService CreateService(

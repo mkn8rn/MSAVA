@@ -1,6 +1,6 @@
-namespace MSAVA_BLL.Services.Auth;
+namespace MSAVA_Shared.Models;
 
-internal static class AuthTextInputPolicy
+public static class TextInputPolicy
 {
     public static bool ContainsControlCharacter(string value)
     {

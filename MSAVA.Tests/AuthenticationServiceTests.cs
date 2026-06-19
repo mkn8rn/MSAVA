@@ -43,6 +43,14 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public void AuthenticationCredentialPoliciesUseSharedLimits()
+    {
+        AuthInputPolicy.MaximumUsernameLength.Should().Be(AuthenticationCredentialPolicy.MaximumUsernameLength);
+        AuthInputPolicy.MaximumPasswordLength.Should().Be(AuthenticationCredentialPolicy.MaximumPasswordLength);
+        UserDB.MaximumUsernameLength.Should().Be(AuthenticationCredentialPolicy.MaximumUsernameLength);
+    }
+
+    [Test]
     public void AuthenticationService_DependsOnInviteCodeServiceInterface()
     {
         var constructor = typeof(AuthenticationService).GetConstructors().Should().ContainSingle().Subject;

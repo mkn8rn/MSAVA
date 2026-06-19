@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_INF.Models
 {
     public class UserDB : IIdentifiableDB
     {
-        public const int MaximumUsernameLength = 128;
+        public const int MaximumUsernameLength = AuthenticationCredentialPolicy.MaximumUsernameLength;
 
         public Guid Id { get; set; }
         public required DateTime CreatedAt { get; set; }

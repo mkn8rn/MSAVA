@@ -31,12 +31,12 @@ public class LocalSessionService
 
     public async Task<string?> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(username)) throw new ArgumentException("Username is required", nameof(username));
-        if (string.IsNullOrWhiteSpace(password)) throw new ArgumentException("Password is required", nameof(password));
+        string normalizedUsername = AuthenticationCredentialPolicy.NormalizeUsername(username);
+        AuthenticationCredentialPolicy.EnsurePasswordAllowed(password);
 
         var requestBody = new LoginRequestDTO
         {
-            Username = username,
+            Username = normalizedUsername,
             Password = password
         };
 
