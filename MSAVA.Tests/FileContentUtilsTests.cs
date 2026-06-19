@@ -214,6 +214,15 @@ public class FileContentUtilsTests
     }
 
     [Test]
+    public void ValidateFileContent_RejectsMissingStream()
+    {
+        Action act = () => FileContentUtils.ValidateFileContent(null!, "pdf");
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("contentStream");
+    }
+
+    [Test]
     public void ValidateFileContent_RejectsBlankExtension()
     {
         using var stream = new MemoryStream([0x25, 0x50, 0x44, 0x46]);

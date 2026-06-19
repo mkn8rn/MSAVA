@@ -176,6 +176,8 @@ public static class FileContentUtils
     /// </summary>
     public static bool ValidateFileContent(Stream contentStream, string extension)
     {
+        ArgumentNullException.ThrowIfNull(contentStream);
+
         if (string.IsNullOrWhiteSpace(extension))
             return false;
 
