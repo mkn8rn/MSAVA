@@ -204,7 +204,7 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
-    public async Task CheckAndGetReferenceAsync_ReturnsFailureForDatabaseBannedUserBeforeReferenceLookup()
+    public async Task CheckAndGetReferenceAsync_ThrowsForDatabaseBannedUserBeforeReferenceLookup()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-banned-session-{Guid.NewGuid()}"));
         var metadataDirectory = CreateTempDirectory();
@@ -242,12 +242,10 @@ public class FileDeduplicationServiceTests
                 PublicDownload = false
             };
 
-            var result = await service.CheckAndGetReferenceAsync(request);
+            Func<Task> act = () => service.CheckAndGetReferenceAsync(request);
 
-            result.Error.Should().Be("Banned users cannot check file hashes.");
-            result.FileExists.Should().BeFalse();
-            result.ReferenceId.Should().BeNull();
-            result.NewReferenceCreated.Should().BeFalse();
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("Banned users cannot check file hashes.");
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
             metadataStore.GetByFileHash(contentHash, "txt").Should().BeEmpty();
@@ -259,7 +257,7 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
-    public async Task CheckAndGetReferenceAsync_ReturnsFailureForDatabaseNonWhitelistedUser()
+    public async Task CheckAndGetReferenceAsync_ThrowsForDatabaseNonWhitelistedUser()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-non-whitelisted-{Guid.NewGuid()}"));
         var metadataDirectory = CreateTempDirectory();
@@ -299,12 +297,10 @@ public class FileDeduplicationServiceTests
                 PublicDownload = false
             };
 
-            var result = await service.CheckAndGetReferenceAsync(request);
+            Func<Task> act = () => service.CheckAndGetReferenceAsync(request);
 
-            result.Error.Should().Be("Users must be whitelisted before checking file hashes.");
-            result.FileExists.Should().BeFalse();
-            result.ReferenceId.Should().BeNull();
-            result.NewReferenceCreated.Should().BeFalse();
+            await act.Should().ThrowAsync<UnauthorizedAccessException>()
+                .WithMessage("Users must be whitelisted before checking file hashes.");
             context.FileRefs.Should().BeEmpty();
             context.FileData.Should().BeEmpty();
             metadataStore.GetByFileHash(contentHash, "txt").Should().BeEmpty();

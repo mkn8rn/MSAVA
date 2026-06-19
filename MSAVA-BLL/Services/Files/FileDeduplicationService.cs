@@ -59,15 +59,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
             return HashCheckResult.Failed(hashHex, extensionValidationError);
         }
 
-        SessionDTO session;
-        try
-        {
-            session = await GetActiveSessionAsync(cancellationToken);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return HashCheckResult.Failed(hashHex, ex.Message);
-        }
+        SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         Guid sessionUserId = session.UserId;
         var fileHash = Convert.FromHexString(hashHex);
