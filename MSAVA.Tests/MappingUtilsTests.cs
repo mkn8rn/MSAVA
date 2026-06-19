@@ -141,8 +141,9 @@ public class MappingUtilsTests
 
         Action act = () => MappingUtils.MapReturnFileDTO(fileReference, fileBytes: []);
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage($"Saved file reference {fileReference.Id} has unsupported file extension 'Unknown'.");
+        var exception = act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Saved file reference has unsupported file extension 'Unknown'.");
+        exception.Which.Message.Should().NotContain(fileReference.Id.ToString());
     }
 
     [Test]
@@ -292,8 +293,9 @@ public class MappingUtilsTests
 
         Action act = () => MappingUtils.MapSavedFileMetaRecord(fileReference, FixedNow);
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage($"Saved file reference {fileReference.Id} has unsupported file extension '{short.MaxValue}'.");
+        var exception = act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"Saved file reference has unsupported file extension '{short.MaxValue}'.");
+        exception.Which.Message.Should().NotContain(fileReference.Id.ToString());
     }
 
     private static SavedFileReferenceDB CreateFileReference(byte[] hash)

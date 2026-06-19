@@ -12,7 +12,7 @@ public static class FileExtensionUtils
             !Enum.IsDefined(db.FileExtension))
         {
             throw new InvalidOperationException(
-                $"Saved file reference {db.Id} has unsupported file extension '{db.FileExtension}'.");
+                $"Saved file reference has unsupported file extension '{db.FileExtension}'.");
         }
 
         return db.FileExtension.ToString().TrimStart('_').ToLowerInvariant();

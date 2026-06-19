@@ -13,6 +13,10 @@ namespace MSAVA_BLL.Services.Files;
 
 public class FileDownloadService : IFileDownloadService
 {
+    private const string DownloadableFileReferenceNotFoundMessage = "Downloadable file reference was not found.";
+    private const string FileDataNotFoundMessage = "File data was not found for the requested file reference.";
+    private const string DownloadCountOverflowMessage = "Download count for the requested file reference has reached the maximum value.";
+
     private readonly BaseDataContext _context;
     private readonly FileManager _fileManager;
     private readonly IUserSessionService _userService;
@@ -227,7 +231,7 @@ public class FileDownloadService : IFileDownloadService
     {
         return await FileReferencesWithData()
             .SingleOrDefaultAsync(r => r.Id == id, cancellationToken)
-            ?? throw new KeyNotFoundException($"File with id {id} not found.");
+            ?? throw new KeyNotFoundException(DownloadableFileReferenceNotFoundMessage);
     }
 
     private IQueryable<SavedFileReferenceDB> FileReferencesWithData()
@@ -254,10 +258,10 @@ public class FileDownloadService : IFileDownloadService
     {
         var fileData = await _context.FileData
             .SingleOrDefaultAsync(fileData => fileData.FileReferenceId == fileReferenceId, cancellationToken)
-            ?? throw new KeyNotFoundException($"File data for reference id {fileReferenceId} not found.");
+            ?? throw new KeyNotFoundException(FileDataNotFoundMessage);
 
         if (fileData.DownloadCount == uint.MaxValue)
-            throw new OverflowException($"Download count for file reference id {fileReferenceId} has reached the maximum value.");
+            throw new OverflowException(DownloadCountOverflowMessage);
 
         fileData.DownloadCount++;
         await _context.SaveChangesAsync(cancellationToken);

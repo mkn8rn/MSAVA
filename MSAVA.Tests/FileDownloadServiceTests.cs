@@ -179,8 +179,9 @@ public class FileDownloadServiceTests
 
             Func<Task> act = () => service.GetPhysicalFileReturnDataByIdAsync(fileReference.Id);
 
-            await act.Should().ThrowAsync<KeyNotFoundException>()
-                .WithMessage($"File with id {fileReference.Id} not found.");
+            var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+                .WithMessage("Downloadable file reference was not found.");
+            exception.Which.Message.Should().NotContain(fileReference.Id.ToString());
             File.Exists(contentPath).Should().BeTrue();
             context.AccessLogs.Should().BeEmpty();
         }
@@ -266,9 +267,58 @@ public class FileDownloadServiceTests
 
             Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
 
-            await act.Should().ThrowAsync<KeyNotFoundException>()
-                .WithMessage($"File with id {fileReference.Id} not found.");
+            var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+                .WithMessage("Downloadable file reference was not found.");
+            exception.Which.Message.Should().NotContain(fileReference.Id.ToString());
             File.Exists(contentPath).Should().BeTrue();
+            context.AccessLogs.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetFileStreamByIdAsync_RedactsReferenceIdWhenDownloadCountOverflows()
+    {
+        using var context = CreateContext();
+        var metadataDirectory = CreateTempDirectory();
+        var fileReference = CreateFileReference(publicDownload: true);
+        var fileData = CreateFileData(fileReference, downloadCount: uint.MaxValue);
+        string contentPath = FileContentUtils.GetFullPath(fileReference.FileHash, "txt");
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
+            File.WriteAllText(contentPath, "download-count-overflow");
+            context.FileRefs.Add(fileReference);
+            context.FileData.Add(fileData);
+            await context.SaveChangesAsync();
+
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, new SessionDTO
+            {
+                LoggedIn = true,
+                UserId = Guid.NewGuid(),
+                Username = "active-user",
+                AccessGroups = [],
+                IsAdmin = false,
+                IsWhitelisted = true
+            });
+
+            Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
+
+            var exception = await act.Should().ThrowAsync<OverflowException>()
+                .WithMessage("Download count for the requested file reference has reached the maximum value.");
+            exception.Which.Message.Should().NotContain(fileReference.Id.ToString());
+            context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
+                .DownloadCount
+                .Should()
+                .Be(uint.MaxValue);
             context.AccessLogs.Should().BeEmpty();
         }
         finally
@@ -306,8 +356,9 @@ public class FileDownloadServiceTests
 
             Func<Task> act = () => service.GetFileStreamByIdAsync(fileReference.Id);
 
-            await act.Should().ThrowAsync<InvalidOperationException>()
-                .WithMessage($"Saved file reference {fileReference.Id} has unsupported file extension 'Unknown'.");
+            var exception = await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("Saved file reference has unsupported file extension 'Unknown'.");
+            exception.Which.Message.Should().NotContain(fileReference.Id.ToString());
             context.FileData.Single(fileData => fileData.FileReferenceId == fileReference.Id)
                 .DownloadCount
                 .Should()
