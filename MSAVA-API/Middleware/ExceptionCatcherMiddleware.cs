@@ -13,7 +13,6 @@ using System.Net;
 using System.Data.Common;
 using MSAVA_API.Authorization;
 using MSAVA_INF.Contexts;
-using MSAVA_BLL.Services.Files;
 using MSAVA_Shared.Diagnostics;
 
 namespace MSAVA_API.Middleware

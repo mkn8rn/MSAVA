@@ -5,6 +5,7 @@ using System.Xml;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Utils;
 using MSAVA_Shared.Diagnostics;
+using MSAVA_Shared.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using TagLib;

@@ -1,9 +1,9 @@
 using System.Text;
 using System.IO.Compression;
 using System.Xml;
-using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Utils;
 using MSAVA_BLL.Utils.Signature;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
 

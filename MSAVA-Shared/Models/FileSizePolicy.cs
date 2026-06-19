@@ -1,21 +1,29 @@
-namespace MSAVA_BLL.Services.Files;
+namespace MSAVA_Shared.Models;
 
 public static class FileSizePolicy
 {
     public const long MaximumFileSizeBytes = 100L * 1024L * 1024L;
 
-    internal static long RequireValidMaximum(long maximumFileSizeBytes)
+    public static long RequireValidMaximum(long maximumFileSizeBytes)
     {
         if (maximumFileSizeBytes <= 0)
-            throw new ArgumentOutOfRangeException(nameof(maximumFileSizeBytes), "Maximum file size must be greater than zero.");
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maximumFileSizeBytes),
+                "Maximum file size must be greater than zero.");
+        }
 
         return maximumFileSizeBytes;
     }
 
-    internal static void EnsureWithinMaximum(long fileSizeBytes, long maximumFileSizeBytes)
+    public static void EnsureWithinMaximum(long fileSizeBytes, long maximumFileSizeBytes)
     {
         if (fileSizeBytes < 0)
-            throw new ArgumentOutOfRangeException(nameof(fileSizeBytes), "File size cannot be negative.");
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(fileSizeBytes),
+                "File size cannot be negative.");
+        }
 
         maximumFileSizeBytes = RequireValidMaximum(maximumFileSizeBytes);
 
@@ -23,15 +31,24 @@ public static class FileSizePolicy
             throw CreateFileTooLargeException(fileSizeBytes, maximumFileSizeBytes);
     }
 
-    internal static void EnsureChunkWithinMaximum(
+    public static void EnsureChunkWithinMaximum(
         long currentFileSizeBytes,
         int nextChunkBytes,
         long maximumFileSizeBytes)
     {
         if (currentFileSizeBytes < 0)
-            throw new ArgumentOutOfRangeException(nameof(currentFileSizeBytes), "File size cannot be negative.");
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(currentFileSizeBytes),
+                "File size cannot be negative.");
+        }
+
         if (nextChunkBytes < 0)
-            throw new ArgumentOutOfRangeException(nameof(nextChunkBytes), "Read size cannot be negative.");
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(nextChunkBytes),
+                "Read size cannot be negative.");
+        }
 
         maximumFileSizeBytes = RequireValidMaximum(maximumFileSizeBytes);
         long remainingBytes = maximumFileSizeBytes - currentFileSizeBytes;
@@ -40,7 +57,7 @@ public static class FileSizePolicy
             throw CreateFileTooLargeException(currentFileSizeBytes + nextChunkBytes, maximumFileSizeBytes);
     }
 
-    internal static FileTooLargeException CreateFileTooLargeException(
+    public static FileTooLargeException CreateFileTooLargeException(
         long fileSizeBytes,
         long maximumFileSizeBytes)
     {

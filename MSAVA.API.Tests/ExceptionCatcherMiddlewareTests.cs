@@ -10,7 +10,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_API.Middleware;
-using MSAVA_BLL.Services.Files;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Models;
 using MSAVA_Shared.Models;
