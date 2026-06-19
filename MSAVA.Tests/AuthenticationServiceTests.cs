@@ -28,7 +28,7 @@ public class AuthenticationServiceTests
     }
 
     [Test]
-    public void JwtTokenStringModelConfiguration_UsesAuthInputPolicyLengthLimit()
+    public void JwtTokenStringModelConfiguration_UsesSharedTokenPolicyLengthLimit()
     {
         using var context = CreateContext();
 
@@ -37,19 +37,13 @@ public class AuthenticationServiceTests
             ?.FindProperty(nameof(JwtDB.TokenString));
 
         tokenProperty.Should().NotBeNull();
-        tokenProperty!.GetMaxLength().Should().Be(AuthInputPolicy.MaximumTokenStringLength);
-        AuthInputPolicy.MaximumTokenStringLength.Should().Be(JwtDB.MaximumTokenStringLength);
-        AuthInputPolicy.MaximumTokenStringLength.Should().Be(AuthenticationTokenPolicy.MaximumTokenStringLength);
-        AuthInputPolicy.MissingTokenStringMessage.Should().Be(AuthenticationTokenPolicy.MissingTokenStringMessage);
-        AuthInputPolicy.InvalidTokenStringMessage.Should().Be(AuthenticationTokenPolicy.InvalidTokenStringMessage);
-        AuthInputPolicy.OversizeTokenStringMessage.Should().Be(AuthenticationTokenPolicy.OversizeTokenStringMessage);
+        tokenProperty!.GetMaxLength().Should().Be(AuthenticationTokenPolicy.MaximumTokenStringLength);
+        AuthenticationTokenPolicy.MaximumTokenStringLength.Should().Be(JwtDB.MaximumTokenStringLength);
     }
 
     [Test]
     public void AuthenticationCredentialPoliciesUseSharedLimits()
     {
-        AuthInputPolicy.MaximumUsernameLength.Should().Be(AuthenticationCredentialPolicy.MaximumUsernameLength);
-        AuthInputPolicy.MaximumPasswordLength.Should().Be(AuthenticationCredentialPolicy.MaximumPasswordLength);
         UserDB.MaximumUsernameLength.Should().Be(AuthenticationCredentialPolicy.MaximumUsernameLength);
     }
 
@@ -189,11 +183,11 @@ public class AuthenticationServiceTests
         Func<Task> act = () => service.LoginAsync(new LoginRequestDTO
         {
             Username = user.Username,
-            Password = new string('p', AuthInputPolicy.MaximumPasswordLength + 1)
+            Password = new string('p', AuthenticationCredentialPolicy.MaximumPasswordLength + 1)
         });
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"Password must be {AuthInputPolicy.MaximumPasswordLength} characters or fewer.*");
+            .WithMessage($"Password must be {AuthenticationCredentialPolicy.MaximumPasswordLength} characters or fewer.*");
         context.Jwts.Should().BeEmpty();
     }
 
@@ -433,7 +427,7 @@ public class AuthenticationServiceTests
         Func<Task> act = () => service.LogoutAsync(tokenString);
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"{AuthInputPolicy.InvalidTokenStringMessage}*");
+            .WithMessage($"{AuthenticationTokenPolicy.InvalidTokenStringMessage}*");
         context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "target-token");
         context.UserLogs.Should().BeEmpty();
     }
@@ -448,12 +442,12 @@ public class AuthenticationServiceTests
         context.Jwts.Add(targetJwt);
         await context.SaveChangesAsync();
         var service = CreateService(context);
-        string tokenString = new('t', AuthInputPolicy.MaximumTokenStringLength + 1);
+        string tokenString = new('t', AuthenticationTokenPolicy.MaximumTokenStringLength + 1);
 
         Func<Task> act = () => service.LogoutAsync(tokenString);
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"{AuthInputPolicy.OversizeTokenStringMessage}*");
+            .WithMessage($"{AuthenticationTokenPolicy.OversizeTokenStringMessage}*");
         context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "target-token");
         context.UserLogs.Should().BeEmpty();
     }
@@ -468,7 +462,7 @@ public class AuthenticationServiceTests
         Func<Task> act = () => service.LogoutAsync(tokenString);
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"{AuthInputPolicy.MissingTokenStringMessage}*");
+            .WithMessage($"{AuthenticationTokenPolicy.MissingTokenStringMessage}*");
         context.Jwts.Should().BeEmpty();
         context.UserLogs.Should().BeEmpty();
     }
@@ -531,13 +525,13 @@ public class AuthenticationServiceTests
 
         Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
         {
-            Username = new string('u', AuthInputPolicy.MaximumUsernameLength + 1),
+            Username = new string('u', AuthenticationCredentialPolicy.MaximumUsernameLength + 1),
             Password = "password",
             InviteCode = inviteCode.Id
         });
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"Username must be {AuthInputPolicy.MaximumUsernameLength} characters or fewer.*");
+            .WithMessage($"Username must be {AuthenticationCredentialPolicy.MaximumUsernameLength} characters or fewer.*");
         context.Users.Should().BeEmpty();
     }
 
@@ -573,12 +567,12 @@ public class AuthenticationServiceTests
         Func<Task> act = () => service.RegisterAsync(new RegisterRequestDTO
         {
             Username = "new-user",
-            Password = new string('p', AuthInputPolicy.MaximumPasswordLength + 1),
+            Password = new string('p', AuthenticationCredentialPolicy.MaximumPasswordLength + 1),
             InviteCode = inviteCode.Id
         });
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"Password must be {AuthInputPolicy.MaximumPasswordLength} characters or fewer.*");
+            .WithMessage($"Password must be {AuthenticationCredentialPolicy.MaximumPasswordLength} characters or fewer.*");
         context.Users.Should().BeEmpty();
     }
 

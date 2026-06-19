@@ -2,11 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_BLL.Loggers;
 using MSAVA_BLL.Services;
-using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Utils;
 using MSAVA_INF.Contexts;
 using MSAVA_INF.Environment;
 using MSAVA_INF.Models;
+using MSAVA_Shared.Models;
 using Serilog.Events;
 
 namespace MSAVA_App.Tests;
@@ -152,12 +152,12 @@ public class SeedingServiceTests
         using var context = CreateContext();
         var service = CreateService(
             context,
-            adminUsername: new string('a', AuthInputPolicy.MaximumUsernameLength + 1));
+            adminUsername: new string('a', AuthenticationCredentialPolicy.MaximumUsernameLength + 1));
 
         Func<Task> act = () => service.SeedAsync();
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"Username must be {AuthInputPolicy.MaximumUsernameLength} characters or fewer.*");
+            .WithMessage($"Username must be {AuthenticationCredentialPolicy.MaximumUsernameLength} characters or fewer.*");
         context.Users.Should().BeEmpty();
     }
 
@@ -167,12 +167,12 @@ public class SeedingServiceTests
         using var context = CreateContext();
         var service = CreateService(
             context,
-            adminPassword: new string('p', AuthInputPolicy.MaximumPasswordLength + 1));
+            adminPassword: new string('p', AuthenticationCredentialPolicy.MaximumPasswordLength + 1));
 
         Func<Task> act = () => service.SeedAsync();
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage($"Password must be {AuthInputPolicy.MaximumPasswordLength} characters or fewer.*");
+            .WithMessage($"Password must be {AuthenticationCredentialPolicy.MaximumPasswordLength} characters or fewer.*");
         context.Users.Should().BeEmpty();
     }
 

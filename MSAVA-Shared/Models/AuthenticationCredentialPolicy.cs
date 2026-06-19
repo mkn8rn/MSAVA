@@ -31,6 +31,13 @@ public static class AuthenticationCredentialPolicy
         return normalizedUsername;
     }
 
+    public static string CreateUsernameComparisonKey(string username)
+    {
+        ArgumentNullException.ThrowIfNull(username);
+
+        return username.ToUpperInvariant();
+    }
+
     public static void EnsurePasswordAllowed(string password)
     {
         if (string.IsNullOrWhiteSpace(password))

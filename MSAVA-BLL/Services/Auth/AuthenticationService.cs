@@ -44,8 +44,8 @@ public class AuthenticationService : IAuthenticationService
     public async Task<LoginResponseDTO> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        string username = AuthInputPolicy.NormalizeUsername(request.Username);
-        AuthInputPolicy.EnsurePasswordAllowed(request.Password);
+        string username = AuthenticationCredentialPolicy.NormalizeUsername(request.Username);
+        AuthenticationCredentialPolicy.EnsurePasswordAllowed(request.Password);
 
         UserDB? user = await GetUniqueUserForLoginAsync(username, cancellationToken);
 
@@ -71,7 +71,7 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task LogoutAsync(string tokenString, CancellationToken cancellationToken = default)
     {
-        string requiredTokenString = AuthInputPolicy.RequireTokenString(tokenString);
+        string requiredTokenString = AuthenticationTokenPolicy.RequireTokenString(tokenString);
 
         JwtDB? jwt = await _context.Jwts
             .FirstOrDefaultAsync(token => token.TokenString == requiredTokenString, cancellationToken);
@@ -92,7 +92,7 @@ public class AuthenticationService : IAuthenticationService
 
     private async Task<UserDB?> GetUniqueUserForLoginAsync(string username, CancellationToken cancellationToken)
     {
-        string usernameComparisonKey = AuthInputPolicy.CreateUsernameComparisonKey(username);
+        string usernameComparisonKey = AuthenticationCredentialPolicy.CreateUsernameComparisonKey(username);
 
         List<UserDB> matchingUsers = await _context.Users
             .AsNoTracking()
@@ -167,8 +167,8 @@ public class AuthenticationService : IAuthenticationService
     public async Task<Guid> RegisterAsync(RegisterRequestDTO request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        string username = AuthInputPolicy.NormalizeUsername(request.Username);
-        AuthInputPolicy.EnsurePasswordAllowed(request.Password);
+        string username = AuthenticationCredentialPolicy.NormalizeUsername(request.Username);
+        AuthenticationCredentialPolicy.EnsurePasswordAllowed(request.Password);
 
         if (request.InviteCode == Guid.Empty)
             throw new ArgumentException("Invite code is required.", nameof(RegisterRequestDTO.InviteCode));
@@ -230,7 +230,7 @@ public class AuthenticationService : IAuthenticationService
 
     private async Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken)
     {
-        string usernameComparisonKey = AuthInputPolicy.CreateUsernameComparisonKey(username);
+        string usernameComparisonKey = AuthenticationCredentialPolicy.CreateUsernameComparisonKey(username);
 
         return await _context.Users
             .AsNoTracking()
