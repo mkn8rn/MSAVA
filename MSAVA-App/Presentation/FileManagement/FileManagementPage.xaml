@@ -89,6 +89,7 @@
 
         <!-- NavigationView -->
         <NavigationView Grid.Row="1" IsBackButtonVisible="Collapsed" x:Name="FilesNav"
+                        AutomationProperties.AutomationId="FileManagementNavigation"
                         DataContext="{Binding}"
                         PaneDisplayMode="LeftCompact"
                         IsSettingsVisible="False"

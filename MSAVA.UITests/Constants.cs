@@ -1,11 +1,13 @@
 namespace MSAVA_App.UITests;
 
-public class Constants
+public static class Constants
 {
-    public readonly static string WebAssemblyDefaultUri = "http://localhost:5000/";
-    public readonly static string iOSAppName = "MSAVA";
-    public readonly static string AndroidAppName = "MSAVA";
-    public readonly static string iOSDeviceNameOrId = "iPad Pro (12.9-inch) (3rd generation)";
+    public const string WebAssemblyDefaultUri = "http://localhost:5000/";
+    public const string iOSAppName = "MSAVA";
+    public const string AndroidAppName = "MSAVA";
+    public const string iOSDeviceNameOrId = "iPad Pro (12.9-inch) (3rd generation)";
+    public const string FileManagementButtonAutomationId = "FileManagementButton";
+    public const string FileManagementNavigationAutomationId = "FileManagementNavigation";
 
     public readonly static Platform CurrentPlatform = Platform.Browser;
     public readonly static Browser WebAssemblyBrowser = Browser.Chrome;
