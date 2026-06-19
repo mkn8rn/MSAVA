@@ -102,6 +102,36 @@ public class ExceptionCatcherMiddlewareTests
     }
 
     [Test]
+    public async Task InvokeAsync_LogsErrorIdAsStructuredProperty()
+    {
+        using var dbContext = CreateContext(throwOnSave: false);
+        var context = CreateHttpContext();
+        var logger = new CapturingLogger<ExceptionCatcherMiddleware>();
+        var middleware = new ExceptionCatcherMiddleware(
+            _ => throw new ArgumentException("Bad query."),
+            new FixedTimeProvider(FixedNow));
+
+        await InvokeMiddlewareAsync(
+            middleware,
+            context,
+            dbContext,
+            isDevelopment: false,
+            logger);
+
+        var body = await ReadResponseBodyAsync(context);
+        var response = JsonSerializer.Deserialize<ErrorLogDTO>(body);
+
+        response.Should().NotBeNull();
+        var message = logger.Messages.Should().ContainSingle(log =>
+                log.Level == LogLevel.Error &&
+                log.Message.StartsWith("Unhandled exception occurred:", StringComparison.Ordinal))
+            .Subject;
+        message.Properties.Should().ContainKey("ErrorId")
+            .WhoseValue.Should().Be(response!.Id);
+        message.Message.Should().Contain(response.Id.ToString());
+    }
+
+    [Test]
     public async Task InvokeAsync_PassesRequestCancellationTokenToErrorLogPersistence()
     {
         using var dbContext = CreateContext(throwOnSave: false);
@@ -455,12 +485,13 @@ public class ExceptionCatcherMiddlewareTests
         ExceptionCatcherMiddleware middleware,
         HttpContext context,
         BaseDataContext dbContext,
-        bool isDevelopment)
+        bool isDevelopment,
+        ILogger<ExceptionCatcherMiddleware>? logger = null)
     {
         return middleware.InvokeAsync(
             context,
             new TestHostEnvironment(isDevelopment ? Environments.Development : Environments.Production),
-            NullLogger<ExceptionCatcherMiddleware>.Instance,
+            logger ?? NullLogger<ExceptionCatcherMiddleware>.Instance,
             dbContext);
     }
 
@@ -565,6 +596,45 @@ public class ExceptionCatcherMiddlewareTests
         {
         }
     }
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<CapturedLogMessage> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(new CapturedLogMessage(
+                logLevel,
+                eventId,
+                exception,
+                formatter(state, exception),
+                CaptureProperties(state)));
+        }
+
+        private static IReadOnlyDictionary<string, object?> CaptureProperties<TState>(TState state)
+        {
+            if (state is not IEnumerable<KeyValuePair<string, object?>> pairs)
+                return new Dictionary<string, object?>();
+
+            return pairs.ToDictionary(pair => pair.Key, pair => pair.Value);
+        }
+    }
+
+    private sealed record CapturedLogMessage(
+        LogLevel Level,
+        EventId EventId,
+        Exception? Exception,
+        string Message,
+        IReadOnlyDictionary<string, object?> Properties);
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {

@@ -71,7 +71,7 @@ namespace MSAVA_API.Middleware
                 Guid errorId = Guid.NewGuid();
                 DateTime timestamp = GetUtcNow();
                 int statusCode = GetStatusCode(ex, context.User?.Identity?.IsAuthenticated == true);
-                logger.LogError(ex, "Unhandled exception occurred: " + errorId);
+                logger.LogError(ex, "Unhandled exception occurred: {ErrorId}", errorId);
                 await TryLogErrorToDbAsync(errorId, timestamp, context, dbContext, statusCode, logger);
                 await HandleExceptionAsync(
                     errorId,
