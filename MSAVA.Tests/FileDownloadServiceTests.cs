@@ -717,8 +717,9 @@ public class FileDownloadServiceTests
 
             Func<Task> act = () => service.GetFileStreamByPathAsync(fileNameWithExtension);
 
-            await act.Should().ThrowAsync<FileNotFoundException>()
-                .WithMessage($"No file reference found for file: {fileNameWithExtension}");
+            var exception = await act.Should().ThrowAsync<FileNotFoundException>()
+                .WithMessage("No file reference found for the requested stored file.");
+            exception.Which.Message.Should().NotContain(fileNameWithExtension);
             File.Exists(contentPath).Should().BeTrue();
             context.AccessLogs.Should().BeEmpty();
         }

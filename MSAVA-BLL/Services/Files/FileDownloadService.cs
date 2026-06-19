@@ -216,7 +216,7 @@ public class FileDownloadService : IFileDownloadService
 
         bool exists = await references.AnyAsync(cancellationToken);
         if (!exists)
-            throw new FileNotFoundException($"No file reference found for file: {fileNameWithExtension}");
+            throw new FileNotFoundException("No file reference found for the requested stored file.");
 
         throw new UnauthorizedAccessException("User does not have permission to access this file.");
     }

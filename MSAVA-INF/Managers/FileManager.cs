@@ -24,7 +24,7 @@ public class FileManager
         ArgumentException.ThrowIfNullOrWhiteSpace(tempFilePath);
 
         if (!File.Exists(tempFilePath))
-            throw new FileNotFoundException("Temporary file not found.", tempFilePath);
+            throw new FileNotFoundException("Temporary file not found.");
 
         string path = FileContentUtils.GetFullPath(fileMeta.FileHash, fileMeta.FileExtension);
         bool fileExists = File.Exists(path);
@@ -96,7 +96,7 @@ public class FileManager
     {
         string fullPath = FileContentUtils.GetFullPath(fileHash, fileExtension);
         if (!File.Exists(fullPath))
-            throw new FileNotFoundException($"File not found: {fullPath}");
+            throw new FileNotFoundException("Stored file content was not found.");
 
         var options = FileStreamUtils.GetDefaultFileStreamOptions();
         return GetFileStream(fullPath, options);

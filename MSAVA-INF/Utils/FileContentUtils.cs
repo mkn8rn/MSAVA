@@ -132,10 +132,10 @@ public static class FileContentUtils
     public static string GetFullPathIfSafe(string fileNameWithExtension)
     {
         if (!TryGetSafeFullPath(fileNameWithExtension, out string fullPath))
-            throw new UnauthorizedAccessException($"Unsafe file name: {fileNameWithExtension}");
+            throw new UnauthorizedAccessException("Stored file name is not safe.");
 
         if (!File.Exists(fullPath))
-            throw new FileNotFoundException($"File not found: {fullPath}");
+            throw new FileNotFoundException("Stored file content was not found.");
 
         return fullPath;
     }

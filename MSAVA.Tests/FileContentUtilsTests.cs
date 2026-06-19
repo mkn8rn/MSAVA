@@ -175,6 +175,33 @@ public class FileContentUtilsTests
     }
 
     [Test]
+    public void GetFullPathIfSafe_RejectsUnsafeStoredFileNameWithoutEchoingInput()
+    {
+        const string unsafeFileName = "../tenant-secret.txt";
+
+        Action act = () => FileContentUtils.GetFullPathIfSafe(unsafeFileName);
+
+        var exception = act.Should().Throw<UnauthorizedAccessException>()
+            .WithMessage("Stored file name is not safe.");
+        exception.Which.Message.Should().NotContain(unsafeFileName);
+    }
+
+    [Test]
+    public void GetFullPathIfSafe_RejectsMissingStoredFileWithoutEchoingPath()
+    {
+        string fileName = $"{Guid.NewGuid():N}{Guid.NewGuid():N}.txt";
+        FileContentUtils.TryGetSafeFullPath(fileName, out string fullPath).Should().BeTrue();
+        DeleteFileIfPresent(fullPath);
+
+        Action act = () => FileContentUtils.GetFullPathIfSafe(fileName);
+
+        var exception = act.Should().Throw<FileNotFoundException>()
+            .WithMessage("Stored file content was not found.");
+        exception.Which.Message.Should().NotContain(fileName);
+        exception.Which.Message.Should().NotContain(fullPath);
+    }
+
+    [Test]
     public void ValidateFileContent_AcceptsPdfHeaderAndRestoresStreamPosition()
     {
         using var stream = new MemoryStream([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31]);
@@ -286,5 +313,11 @@ public class FileContentUtilsTests
         using var stream = new MemoryStream("<svg></svg>"u8.ToArray());
 
         FileContentUtils.ValidateFileContent(stream, "svgz").Should().BeFalse();
+    }
+
+    private static void DeleteFileIfPresent(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
     }
 }

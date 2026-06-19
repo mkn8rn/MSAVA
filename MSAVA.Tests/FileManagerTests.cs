@@ -75,6 +75,71 @@ public class FileManagerTests
         }
     }
 
+    [Test]
+    public async Task SaveTempFileAsync_RejectsMissingTempFileWithoutEchoingPath()
+    {
+        byte[] content = Encoding.UTF8.GetBytes($"missing-temp-{Guid.NewGuid()}");
+        byte[] hash = SHA256.HashData(content);
+        string tempFilePath = Path.Combine(Path.GetTempPath(), $"msava-missing-{Guid.NewGuid():N}.tmp");
+        string metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(tempFilePath);
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
+            var metadata = new SavedFileMetaRecord
+            {
+                RefId = Guid.NewGuid(),
+                FileHash = hash,
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                PublicDownload = false,
+                CreatedAt = DateTime.UnixEpoch
+            };
+
+            Func<Task> act = () => fileManager.SaveTempFileAsync(metadata, tempFilePath);
+
+            var exception = await act.Should().ThrowAsync<FileNotFoundException>()
+                .WithMessage("Temporary file not found.");
+            exception.Which.Message.Should().NotContain(tempFilePath);
+            exception.Which.FileName.Should().BeNull();
+        }
+        finally
+        {
+            DeleteFileIfPresent(tempFilePath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public void GetFileStream_RejectsMissingContentWithoutEchoingPath()
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"missing-content-{Guid.NewGuid()}"));
+        string contentPath = FileContentUtils.GetFullPath(hash, "txt");
+        string metadataDirectory = CreateTempDirectory();
+
+        DeleteFileIfPresent(contentPath);
+
+        try
+        {
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var fileManager = new FileManager(metadataStore, NullLogger<FileManager>.Instance);
+
+            Action act = () => fileManager.GetFileStream(hash, "txt");
+
+            var exception = act.Should().Throw<FileNotFoundException>()
+                .WithMessage("Stored file content was not found.");
+            exception.Which.Message.Should().NotContain(contentPath);
+        }
+        finally
+        {
+            DeleteFileIfPresent(contentPath);
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "msava-tests", Guid.NewGuid().ToString("N"));
