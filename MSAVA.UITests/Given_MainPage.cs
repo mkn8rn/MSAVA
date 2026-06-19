@@ -3,6 +3,7 @@ namespace MSAVA_App.UITests;
 public class Given_MainPage : TestBase
 {
     [Test]
+    [Explicit("Requires a running MSAVA WebAssembly app at Constants.WebAssemblyDefaultUri.")]
     public void When_FileManagementButtonIsTapped_NavigatesToFileManagement()
     {
         Query fileManagementButton = q => q.All().Marked(Constants.FileManagementButtonAutomationId);
