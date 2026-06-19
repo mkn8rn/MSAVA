@@ -105,40 +105,15 @@ public class FileUploadClientServiceTests
     }
 
     [Test]
-    public async Task CreateFileFromFormFileAsync_PropagatesCancellationWhileReadingErrorResponse()
+    public async Task CreateFileFromFormFileAsync_ReturnsGenericErrorForFailedResponse()
     {
         var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
             ReasonPhrase = "Bad Request",
-            Content = new CancelledContent()
-        });
-
-        var act = async () => await CreateUploadAsync(service);
-
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
-
-    [Test]
-    public async Task CreateFileFromFormFileAsync_PropagatesCriticalFailureWhileReadingErrorResponse()
-    {
-        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
-        {
-            ReasonPhrase = "Bad Request",
-            Content = new ThrowingContent(new OutOfMemoryException("Critical memory failure."))
-        });
-
-        var act = async () => await CreateUploadAsync(service);
-
-        await act.Should().ThrowAsync<OutOfMemoryException>();
-    }
-
-    [Test]
-    public async Task CreateFileFromFormFileAsync_ReturnsErrorBodyFromFailedResponse()
-    {
-        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
-        {
-            ReasonPhrase = "Bad Request",
-            Content = new StringContent("upload rejected", Encoding.UTF8, "text/plain")
+            Content = new StringContent(
+                "upload rejected because internal token abc123 was unavailable",
+                Encoding.UTF8,
+                "text/plain")
         });
 
         var outcome = await CreateUploadAsync(service);
@@ -146,43 +121,26 @@ public class FileUploadClientServiceTests
         outcome.Success.Should().BeFalse();
         outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);
         outcome.Id.Should().BeNull();
-        outcome.Error.Should().Be("upload rejected");
+        outcome.Error.Should().Be(FileUploadClientService.FailedUploadMessage);
+        outcome.Error.Should().NotContain("internal token");
+        outcome.Error.Should().NotContain("upload rejected");
     }
 
     [Test]
-    public async Task CreateFileFromFormFileAsync_BoundsLargeErrorBodyWithoutReadingEntireBody()
+    public async Task CreateFileFromFormFileAsync_DoesNotReadFailedResponseBody()
     {
-        var errorStream = new CountingRepeatingReadStream((byte)'x', 100_000);
-        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        var service = CreateService(new HttpResponseMessage(HttpStatusCode.InternalServerError)
         {
-            ReasonPhrase = "Bad Request",
-            Content = new StreamContent(errorStream)
+            ReasonPhrase = "Internal Server Error",
+            Content = new ThrowingContent(new InvalidOperationException("Body should not be read."))
         });
 
         var outcome = await CreateUploadAsync(service);
 
         outcome.Success.Should().BeFalse();
-        outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);
+        outcome.StatusCode.Should().Be((int)HttpStatusCode.InternalServerError);
         outcome.Id.Should().BeNull();
-        outcome.Error.Should().Be(new string('x', FileUploadClientService.MaximumErrorBodyLength));
-        errorStream.BytesRead.Should().BeLessThan(errorStream.TotalLength);
-    }
-
-    [Test]
-    public async Task CreateFileFromFormFileAsync_ReturnsReasonPhraseWhenErrorBodyCannotBeRead()
-    {
-        var service = CreateService(new HttpResponseMessage(HttpStatusCode.BadRequest)
-        {
-            ReasonPhrase = "Bad Request",
-            Content = new ThrowingContent()
-        });
-
-        var outcome = await CreateUploadAsync(service);
-
-        outcome.Success.Should().BeFalse();
-        outcome.StatusCode.Should().Be((int)HttpStatusCode.BadRequest);
-        outcome.Id.Should().BeNull();
-        outcome.Error.Should().Be("Bad Request");
+        outcome.Error.Should().Be(FileUploadClientService.FailedUploadMessage);
     }
 
     [Test]
@@ -384,33 +342,6 @@ public class FileUploadClientServiceTests
         string? FilePartFileName,
         string? FilePartContentType);
 
-    private sealed class CancelledContent : HttpContent
-    {
-        public CancelledContent()
-        {
-            Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        }
-
-        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
-        {
-            throw new OperationCanceledException();
-        }
-
-        protected override Task SerializeToStreamAsync(
-            Stream stream,
-            TransportContext? context,
-            CancellationToken cancellationToken)
-        {
-            throw new OperationCanceledException(cancellationToken);
-        }
-
-        protected override bool TryComputeLength(out long length)
-        {
-            length = 0;
-            return false;
-        }
-    }
-
     private sealed class ThrowingContent : HttpContent
     {
         private readonly Exception _exception;
@@ -482,71 +413,6 @@ public class FileUploadClientServiceTests
         {
             length = 0;
             return false;
-        }
-    }
-
-    private sealed class CountingRepeatingReadStream : Stream
-    {
-        private readonly byte _value;
-
-        public CountingRepeatingReadStream(byte value, long totalLength)
-        {
-            _value = value;
-            TotalLength = totalLength;
-        }
-
-        public long TotalLength { get; }
-
-        public long BytesRead { get; private set; }
-
-        public override bool CanRead => true;
-
-        public override bool CanSeek => false;
-
-        public override bool CanWrite => false;
-
-        public override long Length => throw new NotSupportedException();
-
-        public override long Position
-        {
-            get => throw new NotSupportedException();
-            set => throw new NotSupportedException();
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            return ReadCore(buffer.AsSpan(offset, count));
-        }
-
-        public override ValueTask<int> ReadAsync(
-            Memory<byte> buffer,
-            CancellationToken cancellationToken = default)
-        {
-            if (cancellationToken.IsCancellationRequested)
-                return ValueTask.FromCanceled<int>(cancellationToken);
-
-            return ValueTask.FromResult(ReadCore(buffer.Span));
-        }
-
-        public override void Flush()
-        {
-        }
-
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-        private int ReadCore(Span<byte> buffer)
-        {
-            if (BytesRead >= TotalLength)
-                return 0;
-
-            int bytesToRead = (int)Math.Min(buffer.Length, TotalLength - BytesRead);
-            buffer[..bytesToRead].Fill(_value);
-            BytesRead += bytesToRead;
-            return bytesToRead;
         }
     }
 }
