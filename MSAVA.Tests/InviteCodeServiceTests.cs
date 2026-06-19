@@ -179,6 +179,23 @@ public class InviteCodeServiceTests
     }
 
     [Test]
+    public async Task GetRemainingUses_RedactsInviteCodeIdWhenInviteCodeIsMissing()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("admin");
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+        var service = CreateService(context, admin);
+        var missingInviteCodeId = Guid.NewGuid();
+
+        Func<Task> act = () => service.GetRemainingUsesAsync(missingInviteCodeId);
+
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("Invite code was not found.");
+        exception.Which.Message.Should().NotContain(missingInviteCodeId.ToString());
+    }
+
+    [Test]
     public async Task GetAllInviteCodes_RejectsNonAdminUser()
     {
         using var context = CreateContext();
@@ -274,6 +291,23 @@ public class InviteCodeServiceTests
             ExpiresAt = inviteCode.ExpiresAt,
             MaxUses = inviteCode.MaxUses
         });
+    }
+
+    [Test]
+    public async Task GetInviteCodeById_RedactsInviteCodeIdWhenInviteCodeIsMissing()
+    {
+        using var context = CreateContext();
+        var admin = CreateUser("admin");
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+        var service = CreateService(context, admin);
+        var missingInviteCodeId = Guid.NewGuid();
+
+        Func<Task> act = () => service.GetInviteCodeByIdAsync(missingInviteCodeId);
+
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("Invite code was not found.");
+        exception.Which.Message.Should().NotContain(missingInviteCodeId.ToString());
     }
 
     [Test]

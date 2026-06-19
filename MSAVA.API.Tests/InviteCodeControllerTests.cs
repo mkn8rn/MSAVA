@@ -159,8 +159,9 @@ public class InviteCodeControllerTests
 
         Func<Task> act = () => controller.GetInviteCodeById(missingInviteCodeId);
 
-        await act.Should().ThrowAsync<KeyNotFoundException>()
-            .WithMessage($"Invite code with id {missingInviteCodeId} not found.");
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("Invite code was not found.");
+        exception.Which.Message.Should().NotContain(missingInviteCodeId.ToString());
     }
 
     [Test]

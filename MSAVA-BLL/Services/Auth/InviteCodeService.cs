@@ -11,6 +11,8 @@ namespace MSAVA_BLL.Services.Auth;
 public class InviteCodeService
     : IInviteCodeService
 {
+    private const string InviteCodeNotFoundMessage = "Invite code was not found.";
+
     private readonly BaseDataContext _context;
     private readonly IUserSessionService _userService;
     private readonly ServiceLogger _serviceLogger;
@@ -70,7 +72,7 @@ public class InviteCodeService
         await EnsureCurrentUserCanManageInviteCodesAsync(cancellationToken);
 
         var usage = await GetInviteCodeUsageAsync(inviteCodeId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
+            ?? throw new KeyNotFoundException(InviteCodeNotFoundMessage);
 
         return usage.GetRemainingUses(GetUtcNow());
     }
@@ -105,7 +107,7 @@ public class InviteCodeService
         var inviteCode = await _context.InviteCodes
             .AsNoTracking()
             .SingleOrDefaultAsync(i => i.Id == inviteCodeId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Invite code with id {inviteCodeId} not found.");
+            ?? throw new KeyNotFoundException(InviteCodeNotFoundMessage);
 
         return MappingUtils.MapInviteCodeDTO(inviteCode);
     }
