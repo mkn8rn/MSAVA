@@ -299,6 +299,32 @@ public class FilePersistenceServiceTests
     }
 
     [Test]
+    public async Task AuthorizeCreateInAccessGroupAsync_RedactsSessionUserIdWhenDatabaseUserIsMissing()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var missingSessionUserId = Guid.NewGuid();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, missingSessionUserId);
+
+            Func<Task> act = () => service.AuthorizeCreateInAccessGroupAsync(Guid.NewGuid());
+
+            var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+                .WithMessage("Session user was not found.");
+            exception.Which.Message.Should().NotContain(missingSessionUserId.ToString());
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CreateFileFromStreamAsync_RejectsAccessGroupOutsideCurrentUserMembership()
     {
         var content = Encoding.UTF8.GetBytes($"unauthorized-group-{Guid.NewGuid()}");

@@ -17,6 +17,8 @@ namespace MSAVA_BLL.Services.Files;
 
 public class FilePersistenceService
 {
+    private const string SessionUserNotFoundMessage = "Session user was not found.";
+
     private readonly BaseDataContext _context;
     private readonly FileManager _fileManager;
     private readonly IUserSessionService _userService;
@@ -253,7 +255,7 @@ public class FilePersistenceService
             .Where(user => user.Id == sessionUserId)
             .Select(user => new { user.IsBanned, user.IsWhitelisted })
             .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {sessionUserId} not found.");
+            ?? throw new KeyNotFoundException(SessionUserNotFoundMessage);
 
         if (sessionUser.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot create files.");
