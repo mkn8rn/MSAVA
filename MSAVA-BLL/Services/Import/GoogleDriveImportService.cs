@@ -13,6 +13,9 @@ namespace MSAVA_BLL.Services.Import;
 public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveDTO>
 {
     private const int MaximumConfirmationPageBodyLength = 64 * 1024;
+    private static readonly Regex DriveFileIdRegex = new(
+        @"^[A-Za-z0-9_-]{10,100}$",
+        RegexOptions.CultureInvariant);
 
     private static readonly HashSet<string> SupportedFileIdHosts = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -159,8 +162,8 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         if (string.IsNullOrWhiteSpace(urlOrId))
             return null;
 
-        if (Regex.IsMatch(urlOrId, @"^[A-Za-z0-9_\-]{10,100}$"))
-            return urlOrId;
+        if (TryNormalizeDriveFileId(urlOrId, out string? directFileId))
+            return directFileId;
 
         if (!Uri.TryCreate(urlOrId, UriKind.Absolute, out var uri))
             return null;
@@ -173,15 +176,33 @@ public class GoogleDriveImportService : IFileImportService<FetchFileGoogleDriveD
         var s = uri.AbsoluteUri;
 
         var m = Regex.Match(s, @"/d/([A-Za-z0-9_\-]+)");
-        if (m.Success) return m.Groups[1].Value;
+        if (m.Success) return NormalizeDriveFileId(m.Groups[1].Value);
 
         m = Regex.Match(s, @"[?&]id=([A-Za-z0-9_\-]+)");
-        if (m.Success) return m.Groups[1].Value;
+        if (m.Success) return NormalizeDriveFileId(m.Groups[1].Value);
 
         m = Regex.Match(s, @"/uc\?id=([A-Za-z0-9_\-]+)");
-        if (m.Success) return m.Groups[1].Value;
+        if (m.Success) return NormalizeDriveFileId(m.Groups[1].Value);
 
         return null;
+    }
+
+    private static string? NormalizeDriveFileId(string fileId)
+    {
+        return TryNormalizeDriveFileId(fileId, out string? normalizedFileId)
+            ? normalizedFileId
+            : null;
+    }
+
+    private static bool TryNormalizeDriveFileId(string fileId, out string? normalizedFileId)
+    {
+        normalizedFileId = null;
+
+        if (!DriveFileIdRegex.IsMatch(fileId))
+            return false;
+
+        normalizedFileId = fileId;
+        return true;
     }
 
     private static bool IsSupportedFileIdUri(Uri uri)
