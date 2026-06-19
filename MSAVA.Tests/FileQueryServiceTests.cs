@@ -35,6 +35,15 @@ public class FileQueryServiceTests
             .And.ParamName.Should().Be(parameterName);
     }
 
+    [Test]
+    public void FileQuerySearchPolicy_UsesSharedMetadataLengthLimits()
+    {
+        FileQuerySearchPolicy.MaximumTagSearchLength.Should().Be(FileMetadataPolicy.MaximumMetadataValueLength);
+        FileQuerySearchPolicy.MaximumCategorySearchLength.Should().Be(FileMetadataPolicy.MaximumMetadataValueLength);
+        FileQuerySearchPolicy.MaximumNameSearchLength.Should().Be(FileMetadataPolicy.MaximumFileNameLength);
+        FileQuerySearchPolicy.MaximumDescriptionSearchLength.Should().Be(FileMetadataPolicy.MaximumDescriptionLength);
+    }
+
     [TestCase("literal", "literal")]
     [TestCase("100%", "100\\%")]
     [TestCase("file_name", "file\\_name")]

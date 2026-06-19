@@ -1,6 +1,4 @@
-using MSAVA_Shared.Models;
-
-namespace MSAVA_BLL.Services.Files;
+namespace MSAVA_Shared.Models;
 
 public static class FileQuerySearchPolicy
 {
@@ -34,20 +32,9 @@ public static class FileQuerySearchPolicy
                 parameterName);
         }
 
-        if (ContainsControlCharacter(normalizedValue))
+        if (TextInputPolicy.ContainsControlCharacter(normalizedValue))
             throw new ArgumentException($"{fieldName} search text contains invalid characters.", parameterName);
 
         return normalizedValue;
-    }
-
-    private static bool ContainsControlCharacter(string value)
-    {
-        foreach (char character in value)
-        {
-            if (char.IsControl(character))
-                return true;
-        }
-
-        return false;
     }
 }
