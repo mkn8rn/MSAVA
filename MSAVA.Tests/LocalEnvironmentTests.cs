@@ -42,15 +42,15 @@ public class LocalEnvironmentTests
         env.Values.SerilogRetainedFileCountLimit.Should().BeNull();
     }
 
-    [TestCase("postgres_basedb_port", "0", "Environment variable 'postgres_basedb_port' must be a positive integer: '0'")]
-    [TestCase("postgres_basedb_port", "+5432", "Environment variable 'postgres_basedb_port' must be a positive integer: '+5432'")]
-    [TestCase("postgres_basedb_port", "-5432", "Environment variable 'postgres_basedb_port' must be a positive integer: '-5432'")]
-    [TestCase("serilog_retained_file_count_limit", "0", "Environment variable 'serilog_retained_file_count_limit' must be null or a positive integer: '0'")]
-    [TestCase("serilog_retained_file_count_limit", "-1", "Environment variable 'serilog_retained_file_count_limit' must be null or a positive integer: '-1'")]
-    [TestCase("serilog_retained_file_count_limit", "1.5", "Environment variable 'serilog_retained_file_count_limit' must be null or a positive integer: '1.5'")]
-    [TestCase("serilog_file_size_limit_bytes", "0", "Environment variable 'serilog_file_size_limit_bytes' must be a positive long integer: '0'")]
-    [TestCase("serilog_file_size_limit_bytes", "+2048", "Environment variable 'serilog_file_size_limit_bytes' must be a positive long integer: '+2048'")]
-    [TestCase("serilog_file_size_limit_bytes", "-2048", "Environment variable 'serilog_file_size_limit_bytes' must be a positive long integer: '-2048'")]
+    [TestCase("postgres_basedb_port", "0", "Configuration value 'postgres_basedb_port' must be a positive integer.")]
+    [TestCase("postgres_basedb_port", "+5432", "Configuration value 'postgres_basedb_port' must be a positive integer.")]
+    [TestCase("postgres_basedb_port", "-5432", "Configuration value 'postgres_basedb_port' must be a positive integer.")]
+    [TestCase("serilog_retained_file_count_limit", "0", "Configuration value 'serilog_retained_file_count_limit' must be null or a positive integer.")]
+    [TestCase("serilog_retained_file_count_limit", "-1", "Configuration value 'serilog_retained_file_count_limit' must be null or a positive integer.")]
+    [TestCase("serilog_retained_file_count_limit", "1.5", "Configuration value 'serilog_retained_file_count_limit' must be null or a positive integer.")]
+    [TestCase("serilog_file_size_limit_bytes", "0", "Configuration value 'serilog_file_size_limit_bytes' must be a positive long integer.")]
+    [TestCase("serilog_file_size_limit_bytes", "+2048", "Configuration value 'serilog_file_size_limit_bytes' must be a positive long integer.")]
+    [TestCase("serilog_file_size_limit_bytes", "-2048", "Configuration value 'serilog_file_size_limit_bytes' must be a positive long integer.")]
     public void Constructor_RejectsInvalidPositiveNumericValues(
         string key,
         string invalidValue,
@@ -64,16 +64,18 @@ public class LocalEnvironmentTests
 
         Action act = () => _ = new LocalEnvironment();
 
-        act.Should().Throw<InvalidOperationException>()
+        var exception = act.Should().Throw<InvalidOperationException>()
             .WithMessage(expectedMessage);
+
+        exception.Which.Message.Should().NotContain(invalidValue);
     }
 
-    [TestCase("serilog_information_level", "2", "Environment variable 'serilog_information_level' must be a named LogEventLevel value: '2'")]
-    [TestCase("serilog_information_level", "999", "Environment variable 'serilog_information_level' must be a named LogEventLevel value: '999'")]
-    [TestCase("serilog_information_level", "Informational", "Environment variable 'serilog_information_level' must be a named LogEventLevel value: 'Informational'")]
-    [TestCase("serilog_rolling_interval", "3", "Environment variable 'serilog_rolling_interval' must be a named RollingInterval value: '3'")]
-    [TestCase("serilog_rolling_interval", "+3", "Environment variable 'serilog_rolling_interval' must be a named RollingInterval value: '+3'")]
-    [TestCase("serilog_rolling_interval", "Daily", "Environment variable 'serilog_rolling_interval' must be a named RollingInterval value: 'Daily'")]
+    [TestCase("serilog_information_level", "2", "Configuration value 'serilog_information_level' must be a named LogEventLevel value.")]
+    [TestCase("serilog_information_level", "999", "Configuration value 'serilog_information_level' must be a named LogEventLevel value.")]
+    [TestCase("serilog_information_level", "Informational", "Configuration value 'serilog_information_level' must be a named LogEventLevel value.")]
+    [TestCase("serilog_rolling_interval", "3", "Configuration value 'serilog_rolling_interval' must be a named RollingInterval value.")]
+    [TestCase("serilog_rolling_interval", "+3", "Configuration value 'serilog_rolling_interval' must be a named RollingInterval value.")]
+    [TestCase("serilog_rolling_interval", "Daily", "Configuration value 'serilog_rolling_interval' must be a named RollingInterval value.")]
     public void Constructor_RejectsNumericAndUndefinedEnumValues(
         string key,
         string invalidValue,
@@ -87,8 +89,28 @@ public class LocalEnvironmentTests
 
         Action act = () => _ = new LocalEnvironment();
 
-        act.Should().Throw<InvalidOperationException>()
+        var exception = act.Should().Throw<InvalidOperationException>()
             .WithMessage(expectedMessage);
+
+        exception.Which.Message.Should().NotContain(invalidValue);
+    }
+
+    [Test]
+    public void Constructor_RejectsInvalidBooleanValueWithoutEchoingValue()
+    {
+        var values = CreateValidEnvironmentValues();
+        const string invalidValue = "yes-please";
+        values["serilog_roll_on_file_size_limit"] = invalidValue;
+
+        using var restore = new EnvironmentVariableRestore(values.Keys);
+        SetUpperCaseEnvironmentValues(values);
+
+        Action act = () => _ = new LocalEnvironment();
+
+        var exception = act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Configuration value 'serilog_roll_on_file_size_limit' must be true or false.");
+
+        exception.Which.Message.Should().NotContain(invalidValue);
     }
 
     [Test]
@@ -152,9 +174,11 @@ public class LocalEnvironmentTests
 
             Action act = () => _ = new LocalEnvironment();
 
-            act.Should()
+            var exception = act.Should()
                 .Throw<InvalidOperationException>()
-                .WithMessage("Required configuration value 'jwt_issuer_signing_key' is missing or empty.*");
+                .WithMessage("Required configuration value 'jwt_issuer_signing_key' is missing or empty. Set it as a process environment variable or add it to .env.development.");
+
+            exception.Which.Message.Should().NotContain(outputDirectory);
         }
         finally
         {

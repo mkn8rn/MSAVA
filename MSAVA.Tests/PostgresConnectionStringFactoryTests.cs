@@ -74,9 +74,11 @@ public class PostgresConnectionStringFactoryTests
 
         Action act = () => PostgresConnectionStringFactory.CreateBaseDbConnectionString(values);
 
-        act.Should()
+        var exception = act.Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("PostgresBaseDbSslMode could not be parsed as SslMode: 'DefinitelyNotSsl'.");
+            .WithMessage("PostgresBaseDbSslMode could not be parsed as SslMode.");
+
+        exception.Which.Message.Should().NotContain("DefinitelyNotSsl");
     }
 
     private static LocalEnvironmentValues CreateValues(

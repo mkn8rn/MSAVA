@@ -47,6 +47,6 @@ public static class PostgresConnectionStringFactory
             return sslMode;
 
         throw new InvalidOperationException(
-            $"{nameof(LocalEnvironmentValues.PostgresBaseDbSslMode)} could not be parsed as {nameof(SslMode)}: '{configuredValue}'.");
+            $"{nameof(LocalEnvironmentValues.PostgresBaseDbSslMode)} could not be parsed as {nameof(SslMode)}.");
     }
 }

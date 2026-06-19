@@ -16,13 +16,11 @@ namespace MSAVA_INF.Environment
         public LocalEnvironmentValues Values { get; }
         private readonly Dictionary<string, string> _values;
         private readonly string _envFileName;
-        private readonly string _envFilePathForErrors;
 
         public LocalEnvironment()
         {
             _envFileName = GetEnvFileName();
             string? envFilePath = ResolveEnvFilePath(_envFileName);
-            _envFilePathForErrors = envFilePath ?? Path.Combine(Directory.GetCurrentDirectory(), _envFileName);
             _values = envFilePath is null
                 ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 : LoadEnvFile(envFilePath);
@@ -58,7 +56,8 @@ namespace MSAVA_INF.Environment
             if (_values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                 return RejectPlaceholderValue(key, value);
 
-            throw new InvalidOperationException($"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {_envFilePathForErrors}.");
+            throw new InvalidOperationException(
+                $"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {_envFileName}.");
         }
 
         internal static string RejectPlaceholderValue(string key, string value)
@@ -86,7 +85,7 @@ namespace MSAVA_INF.Environment
             if (TryParseUnsignedInt(value, out var result) && result > 0)
                 return result;
 
-            throw new InvalidOperationException($"Environment variable '{key}' must be a positive integer: '{value}'");
+            throw new InvalidOperationException($"Configuration value '{key}' must be a positive integer.");
         }
 
         private long ParseRequiredPositiveLong(string key)
@@ -95,7 +94,7 @@ namespace MSAVA_INF.Environment
             if (TryParseUnsignedLong(value, out var result) && result > 0)
                 return result;
 
-            throw new InvalidOperationException($"Environment variable '{key}' must be a positive long integer: '{value}'");
+            throw new InvalidOperationException($"Configuration value '{key}' must be a positive long integer.");
         }
 
         private bool ParseRequiredBool(string key)
@@ -103,7 +102,7 @@ namespace MSAVA_INF.Environment
             var value = GetRequiredValue(key);
             if (bool.TryParse(value, out var result))
                 return result;
-            throw new InvalidOperationException($"Environment variable '{key}' could not be parsed as bool: '{value}'");
+            throw new InvalidOperationException($"Configuration value '{key}' must be true or false.");
         }
 
         private TEnum ParseRequiredEnum<TEnum>(string key) where TEnum : struct
@@ -117,7 +116,7 @@ namespace MSAVA_INF.Environment
                 return result;
             }
 
-            throw new InvalidOperationException($"Environment variable '{key}' must be a named {typeof(TEnum).Name} value: '{value}'");
+            throw new InvalidOperationException($"Configuration value '{key}' must be a named {typeof(TEnum).Name} value.");
         }
 
         private static bool IsNumericEnumLiteral(string value)
@@ -137,7 +136,7 @@ namespace MSAVA_INF.Environment
             if (TryParseUnsignedInt(normalizedValue, out var i) && i > 0)
                 return i;
 
-            throw new InvalidOperationException($"Environment variable '{key}' must be null or a positive integer: '{value}'");
+            throw new InvalidOperationException($"Configuration value '{key}' must be null or a positive integer.");
         }
 
         private static bool TryParseUnsignedInt(string value, out int result)
