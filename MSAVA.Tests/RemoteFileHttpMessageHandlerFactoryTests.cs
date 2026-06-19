@@ -125,6 +125,51 @@ public class RemoteFileHttpMessageHandlerFactoryTests
     }
 
     [Test]
+    public async Task EnsureResolvedHostIsAllowedAsync_RedactsHostWhenDnsReturnsNoAddresses()
+    {
+        bool resolverCalled = false;
+        const string sensitiveHost = "internal-name.example.test";
+        var uri = new Uri($"http://{sensitiveHost}/sample.txt");
+
+        Func<Task> act = () => RemoteFileHostPolicy.EnsureResolvedHostIsAllowedAsync(
+            uri,
+            (_, _) =>
+            {
+                resolverCalled = true;
+                return Task.FromResult(Array.Empty<IPAddress>());
+            },
+            "FileUrl",
+            CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage("FileUrl host did not resolve to an address.");
+        exception.Which.Message.Should().NotContain(sensitiveHost);
+        resolverCalled.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task ResolveConnectionAddressAsync_RedactsHostWhenDnsReturnsNoAddresses()
+    {
+        bool resolverCalled = false;
+        const string sensitiveHost = "internal-name.example.test";
+
+        Func<Task> act = async () => await RemoteFileHostPolicy.ResolveConnectionAddressAsync(
+            sensitiveHost,
+            (_, _) =>
+            {
+                resolverCalled = true;
+                return Task.FromResult(Array.Empty<IPAddress>());
+            },
+            "FileUrl",
+            CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<HttpRequestException>()
+            .WithMessage("FileUrl host did not resolve to an address.");
+        exception.Which.Message.Should().NotContain(sensitiveHost);
+        resolverCalled.Should().BeTrue();
+    }
+
+    [Test]
     public async Task EnsureResolvedHostIsAllowedAsync_AllowsPublicLiteralWithoutResolvingDns()
     {
         bool resolverCalled = false;

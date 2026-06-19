@@ -6,6 +6,7 @@ internal delegate Task<IPAddress[]> HostAddressResolver(string host, Cancellatio
 
 internal static class RemoteFileHostPolicy
 {
+    private const string HostDidNotResolveMessage = "FileUrl host did not resolve to an address.";
     private const int MaximumDnsHostLength = 253;
     private const int MaximumDnsLabelLength = 63;
 
@@ -52,7 +53,7 @@ internal static class RemoteFileHostPolicy
         EnsureDnsHostSyntaxIsAllowed(host, parameterName);
 
         IPAddress[] addresses = await resolver(host, cancellationToken);
-        EnsureResolvedAddressesAreAllowed(host, addresses, parameterName);
+        EnsureResolvedAddressesAreAllowed(addresses, parameterName);
     }
 
     internal static async Task<IPAddress> ResolveConnectionAddressAsync(
@@ -77,7 +78,7 @@ internal static class RemoteFileHostPolicy
         EnsureDnsHostSyntaxIsAllowed(normalizedHost, parameterName);
 
         IPAddress[] addresses = await resolver(normalizedHost, cancellationToken);
-        EnsureResolvedAddressesAreAllowed(normalizedHost, addresses, parameterName);
+        EnsureResolvedAddressesAreAllowed(addresses, parameterName);
 
         return addresses[0];
     }
@@ -89,13 +90,10 @@ internal static class RemoteFileHostPolicy
         return Dns.GetHostAddressesAsync(host, cancellationToken);
     }
 
-    private static void EnsureResolvedAddressesAreAllowed(
-        string host,
-        IPAddress[] addresses,
-        string parameterName)
+    private static void EnsureResolvedAddressesAreAllowed(IPAddress[] addresses, string parameterName)
     {
         if (addresses.Length == 0)
-            throw new HttpRequestException($"FileUrl host '{host}' did not resolve to an address.");
+            throw new HttpRequestException(HostDidNotResolveMessage);
 
         if (addresses.Any(IsPrivateOrReservedAddress))
         {
