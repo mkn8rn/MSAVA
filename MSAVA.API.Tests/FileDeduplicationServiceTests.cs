@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -462,6 +463,38 @@ public class FileDeduplicationServiceTests
             context.FileRefs.Should().ContainSingle(reference => reference.Id == referenceWithoutData.Id);
             context.FileData.Should().BeEmpty();
             metadataStore.GetByAccessGroup(targetGroup.Id).Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
+    public async Task GetRequiredFileDataAsync_RedactsReferenceIdWhenFileDataIsMissing()
+    {
+        var metadataDirectory = CreateTempDirectory();
+        var missingReferenceId = Guid.NewGuid();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+            var getRequiredFileDataAsync = typeof(FileDeduplicationService).GetMethod(
+                "GetRequiredFileDataAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            getRequiredFileDataAsync.Should().NotBeNull();
+            var task = (Task<SavedFileDataDB>)getRequiredFileDataAsync!.Invoke(
+                service,
+                [missingReferenceId, CancellationToken.None])!;
+
+            Func<Task> act = async () => await task;
+
+            var exception = await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("File reference cannot be reused because it has no file data row.");
+            exception.Which.Message.Should().NotContain(missingReferenceId.ToString());
         }
         finally
         {

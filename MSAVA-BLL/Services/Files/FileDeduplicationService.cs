@@ -19,6 +19,8 @@ namespace MSAVA_BLL.Services.Files;
 /// </summary>
 public partial class FileDeduplicationService : IFileDeduplicationService
 {
+    private const string FileReferenceHasNoFileDataMessage = "File reference cannot be reused because it has no file data row.";
+
     private readonly BaseDataContext _context;
     private readonly MetadataStore _metadataStore;
     private readonly IUserSessionService _userService;
@@ -328,8 +330,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
         var fileData = await _context.FileData
             .SingleOrDefaultAsync(fd => fd.FileReferenceId == fileReferenceId, cancellationToken);
 
-        return fileData ?? throw new InvalidOperationException(
-            $"File reference {fileReferenceId} cannot be reused because it has no file data row.");
+        return fileData ?? throw new InvalidOperationException(FileReferenceHasNoFileDataMessage);
     }
 
     private async Task<ReferenceAccessGroupResolution> ResolveReferenceAccessGroupAsync(
