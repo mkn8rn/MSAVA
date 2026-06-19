@@ -28,6 +28,20 @@ public class AuthenticationServiceTests
     }
 
     [Test]
+    public void JwtTokenStringModelConfiguration_UsesAuthInputPolicyLengthLimit()
+    {
+        using var context = CreateContext();
+
+        var tokenProperty = context.Model
+            .FindEntityType(typeof(JwtDB))
+            ?.FindProperty(nameof(JwtDB.TokenString));
+
+        tokenProperty.Should().NotBeNull();
+        tokenProperty!.GetMaxLength().Should().Be(AuthInputPolicy.MaximumTokenStringLength);
+        AuthInputPolicy.MaximumTokenStringLength.Should().Be(JwtDB.MaximumTokenStringLength);
+    }
+
+    [Test]
     public void AuthenticationService_DependsOnInviteCodeServiceInterface()
     {
         var constructor = typeof(AuthenticationService).GetConstructors().Should().ContainSingle().Subject;
@@ -408,6 +422,26 @@ public class AuthenticationServiceTests
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage($"{AuthInputPolicy.InvalidTokenStringMessage}*");
+        context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "target-token");
+        context.UserLogs.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task LogoutAsync_RejectsOversizeTokenStringBeforeLookup()
+    {
+        using var context = CreateContext();
+        var user = CreateUser("logout-user", "password", isBanned: false);
+        var targetJwt = CreateJwt(user, "target-token");
+        context.Users.Add(user);
+        context.Jwts.Add(targetJwt);
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+        string tokenString = new('t', AuthInputPolicy.MaximumTokenStringLength + 1);
+
+        Func<Task> act = () => service.LogoutAsync(tokenString);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage($"{AuthInputPolicy.OversizeTokenStringMessage}*");
         context.Jwts.Should().ContainSingle(jwt => jwt.TokenString == "target-token");
         context.UserLogs.Should().BeEmpty();
     }

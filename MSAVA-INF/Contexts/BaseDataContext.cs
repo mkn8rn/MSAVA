@@ -32,6 +32,10 @@ public class BaseDataContext : DbContext
             .HasMaxLength(UserDB.MaximumUsernameLength);
 
         modelBuilder.Entity<JwtDB>()
+            .Property(jwt => jwt.TokenString)
+            .HasMaxLength(JwtDB.MaximumTokenStringLength);
+
+        modelBuilder.Entity<JwtDB>()
             .HasOne(jwt => jwt.User)
             .WithMany()
             .HasForeignKey(jwt => jwt.UserId)

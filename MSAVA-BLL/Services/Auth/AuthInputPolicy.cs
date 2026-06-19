@@ -6,8 +6,12 @@ public static class AuthInputPolicy
 {
     public const int MaximumUsernameLength = UserDB.MaximumUsernameLength;
     public const int MaximumPasswordLength = 1024;
+    public const int MaximumTokenStringLength = JwtDB.MaximumTokenStringLength;
     public const string MissingTokenStringMessage = "Token string must be provided.";
     public const string InvalidTokenStringMessage = "Token string contains invalid characters.";
+
+    public static string OversizeTokenStringMessage =>
+        $"Token string must be {MaximumTokenStringLength} characters or fewer.";
 
     public static string NormalizeUsername(string username)
     {
@@ -46,6 +50,9 @@ public static class AuthInputPolicy
         if (string.IsNullOrWhiteSpace(tokenString))
             throw new ArgumentException(MissingTokenStringMessage, nameof(tokenString));
 
+        if (tokenString.Length > MaximumTokenStringLength)
+            throw new ArgumentException(OversizeTokenStringMessage, nameof(tokenString));
+
         if (ContainsInvalidTokenCharacter(tokenString))
             throw new ArgumentException(InvalidTokenStringMessage, nameof(tokenString));
 
@@ -55,6 +62,7 @@ public static class AuthInputPolicy
     public static bool IsTokenStringAllowed(string? tokenString)
     {
         return !string.IsNullOrWhiteSpace(tokenString) &&
+            tokenString.Length <= MaximumTokenStringLength &&
             !ContainsInvalidTokenCharacter(tokenString);
     }
 

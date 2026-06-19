@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MSAVA_API.Controllers;
+using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Services.Interfaces;
 using MSAVA_Shared.Models;
 
@@ -130,6 +131,26 @@ public class AuthenticationControllerTests
             }
         };
         controller.Request.Headers.Authorization = authorizationHeader;
+
+        var response = await controller.Logout();
+
+        response.Should().BeOfType<UnauthorizedResult>();
+        service.LogoutTokenString.Should().BeNull();
+    }
+
+    [Test]
+    public async Task Logout_ReturnsUnauthorizedWhenBearerTokenIsOversize()
+    {
+        var service = new TestAuthenticationService();
+        var controller = new AuthenticationController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+        controller.Request.Headers.Authorization =
+            "Bearer " + new string('a', AuthInputPolicy.MaximumTokenStringLength + 1);
 
         var response = await controller.Logout();
 

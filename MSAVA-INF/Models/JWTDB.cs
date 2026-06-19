@@ -8,6 +8,8 @@ namespace MSAVA_INF.Models
 {
     public class JwtDB : IIdentifiableDB
     {
+        public const int MaximumTokenStringLength = 4096;
+
         public Guid Id { get; set; }
         public required Guid UserId { get; set; }
         public UserDB? User { get; set; }
