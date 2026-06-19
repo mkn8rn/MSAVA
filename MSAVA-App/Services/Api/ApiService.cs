@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using MSAVA_App.Models;
 using MSAVA_Shared.Diagnostics;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Services.Api;
 public class ApiService
@@ -259,6 +260,13 @@ public class ApiService
             return null;
 
         string normalizedToken = token.Trim();
+        if (normalizedToken.Length > AuthenticationTokenPolicy.MaximumTokenStringLength)
+        {
+            throw new ArgumentException(
+                $"Access token must be {AuthenticationTokenPolicy.MaximumTokenStringLength} characters or fewer.",
+                parameterName);
+        }
+
         if (ContainsInvalidTokenCharacter(normalizedToken))
             throw new ArgumentException("Access token contains invalid characters.", parameterName);
 

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
 
@@ -174,6 +175,21 @@ public class ApiServiceTests
     }
 
     [Test]
+    public void CreateJsonRequestWithAccessToken_RejectsOversizeExplicitBearerToken()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        string token = new('a', AuthenticationTokenPolicy.MaximumTokenStringLength + 1);
+
+        Action act = () =>
+        {
+            using var _ = api.CreateJsonRequestWithAccessToken(HttpMethod.Get, "api/users/session", token);
+        };
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage($"Access token must be {AuthenticationTokenPolicy.MaximumTokenStringLength} characters or fewer.*");
+    }
+
+    [Test]
     public void CreateJsonRequest_DoesNotAttachBearerTokenForAnonymousRequest()
     {
         var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
@@ -208,6 +224,18 @@ public class ApiServiceTests
 
         act.Should().Throw<ArgumentException>()
             .WithMessage("Access token contains invalid characters.*");
+    }
+
+    [Test]
+    public void SetAccessToken_RejectsOversizeAccessToken()
+    {
+        var api = CreateApi(new HttpResponseMessage(HttpStatusCode.OK));
+        string token = new('a', AuthenticationTokenPolicy.MaximumTokenStringLength + 1);
+
+        Action act = () => api.SetAccessToken(token);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage($"Access token must be {AuthenticationTokenPolicy.MaximumTokenStringLength} characters or fewer.*");
     }
 
     [TestCase(null)]

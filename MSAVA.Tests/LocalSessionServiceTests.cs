@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MSAVA_App.Models;
 using MSAVA_App.Services.Api;
 using MSAVA_App.Services.Session;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_App.Tests;
 
@@ -143,6 +144,28 @@ public class LocalSessionServiceTests
         {
             requests.Add(RecordRequest(request));
             return Task.FromResult(CreateLoginResponse("bad\ntoken"));
+        });
+        var service = CreateService(handler);
+
+        var result = await service.LoginAsync("alice", "password");
+
+        result.Should().BeNull();
+        requests.Should().HaveCount(1);
+        requests[0].PathAndQuery.Should().Be("/api/auth/login");
+        service.AccessToken.Should().BeNull();
+        service.CurrentSession.Should().BeNull();
+        service.IsLoggedIn.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task LoginAsync_ReturnsNullWhenLoginResponseTokenIsOversize()
+    {
+        string token = new('a', AuthenticationTokenPolicy.MaximumTokenStringLength + 1);
+        var requests = new List<(HttpMethod Method, string PathAndQuery, string? Authorization)>();
+        var handler = new RecordingHttpMessageHandler((request, _) =>
+        {
+            requests.Add(RecordRequest(request));
+            return Task.FromResult(CreateLoginResponse(token));
         });
         var service = CreateService(handler);
 

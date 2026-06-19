@@ -39,6 +39,7 @@ public class AuthenticationServiceTests
         tokenProperty.Should().NotBeNull();
         tokenProperty!.GetMaxLength().Should().Be(AuthInputPolicy.MaximumTokenStringLength);
         AuthInputPolicy.MaximumTokenStringLength.Should().Be(JwtDB.MaximumTokenStringLength);
+        AuthInputPolicy.MaximumTokenStringLength.Should().Be(AuthenticationTokenPolicy.MaximumTokenStringLength);
     }
 
     [Test]

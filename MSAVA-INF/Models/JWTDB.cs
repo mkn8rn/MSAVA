@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_INF.Models
 {
     public class JwtDB : IIdentifiableDB
     {
-        public const int MaximumTokenStringLength = 4096;
+        public const int MaximumTokenStringLength = AuthenticationTokenPolicy.MaximumTokenStringLength;
 
         public Guid Id { get; set; }
         public required Guid UserId { get; set; }

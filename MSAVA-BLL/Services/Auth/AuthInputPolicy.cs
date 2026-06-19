@@ -1,4 +1,5 @@
 using MSAVA_INF.Models;
+using MSAVA_Shared.Models;
 
 namespace MSAVA_BLL.Services.Auth;
 
@@ -6,7 +7,7 @@ public static class AuthInputPolicy
 {
     public const int MaximumUsernameLength = UserDB.MaximumUsernameLength;
     public const int MaximumPasswordLength = 1024;
-    public const int MaximumTokenStringLength = JwtDB.MaximumTokenStringLength;
+    public const int MaximumTokenStringLength = AuthenticationTokenPolicy.MaximumTokenStringLength;
     public const string MissingTokenStringMessage = "Token string must be provided.";
     public const string InvalidTokenStringMessage = "Token string contains invalid characters.";
 
