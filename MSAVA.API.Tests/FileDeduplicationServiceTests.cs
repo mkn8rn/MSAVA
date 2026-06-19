@@ -60,6 +60,43 @@ public class FileDeduplicationServiceTests
     }
 
     [Test]
+    public async Task CheckAndGetReferenceAsync_DoesNotEchoOversizeInvalidHash()
+    {
+        var metadataDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var context = CreateContext();
+            using var metadataStore = new MetadataStore(Path.Combine(metadataDirectory, "metadata.db"));
+            var service = CreateService(context, metadataStore, Guid.NewGuid());
+            string invalidHash = new('a', 10_000);
+            var request = new HashCheckRequest
+            {
+                ContentHashHex = invalidHash,
+                FileExtension = "txt",
+                AccessGroupId = Guid.NewGuid(),
+                FileName = "invalid-hash-copy",
+                PublicViewing = false,
+                PublicDownload = false
+            };
+
+            var result = await service.CheckAndGetReferenceAsync(request);
+
+            result.Error.Should().Be("Invalid hash format. Expected 64 hexadecimal characters.");
+            result.FileExists.Should().BeFalse();
+            result.ReferenceId.Should().BeNull();
+            result.NewReferenceCreated.Should().BeFalse();
+            result.ContentHashHex.Should().BeEmpty();
+            context.FileRefs.Should().BeEmpty();
+            context.FileData.Should().BeEmpty();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(metadataDirectory);
+        }
+    }
+
+    [Test]
     public async Task CheckAndGetReferenceAsync_ReturnsFailureForMissingFileExtension()
     {
         var contentHash = SHA256.HashData(Encoding.UTF8.GetBytes($"dedupe-missing-extension-{Guid.NewGuid()}"));

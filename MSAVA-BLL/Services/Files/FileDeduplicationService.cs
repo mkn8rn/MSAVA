@@ -53,7 +53,7 @@ public partial class FileDeduplicationService : IFileDeduplicationService
 
         if (!TryNormalizeHash(request.ContentHashHex, out string hashHex, out var hashValidationError))
         {
-            return HashCheckResult.Failed(request.ContentHashHex ?? "", hashValidationError);
+            return HashCheckResult.Failed(string.Empty, hashValidationError);
         }
 
         if (!TryNormalizeExtension(request.FileExtension, out string extension, out var extensionValidationError))
