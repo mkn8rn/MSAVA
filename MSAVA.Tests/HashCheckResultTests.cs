@@ -14,6 +14,17 @@ public class HashCheckResultTests
         result.Error.Should().Be("Invalid hash format.");
     }
 
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase(" ")]
+    public void Failed_RejectsMissingError(string? error)
+    {
+        Action act = () => HashCheckResult.Failed("ABC123", error!);
+
+        var exception = act.Should().Throw<ArgumentException>().Which;
+        exception.ParamName.Should().Be("error");
+    }
+
     [Test]
     public void NotFound_RequiresUpload()
     {

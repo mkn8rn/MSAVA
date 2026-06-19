@@ -133,12 +133,17 @@ public record HashCheckResult
     /// <summary>
     /// Creates a result for an error condition.
     /// </summary>
-    public static HashCheckResult Failed(string hashHex, string error) => new()
+    public static HashCheckResult Failed(string hashHex, string error)
     {
-        FileExists = false,
-        ReferenceId = null,
-        NewReferenceCreated = false,
-        ContentHashHex = hashHex,
-        Error = error
-    };
+        ArgumentException.ThrowIfNullOrWhiteSpace(error);
+
+        return new()
+        {
+            FileExists = false,
+            ReferenceId = null,
+            NewReferenceCreated = false,
+            ContentHashHex = hashHex,
+            Error = error
+        };
+    }
 }
