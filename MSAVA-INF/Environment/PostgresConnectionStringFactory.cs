@@ -42,11 +42,22 @@ public static class PostgresConnectionStringFactory
     private static SslMode ParseSslMode(string value)
     {
         string configuredValue = RequireConfigured(value, nameof(LocalEnvironmentValues.PostgresBaseDbSslMode));
+        string normalizedValue = configuredValue.Trim();
 
-        if (Enum.TryParse<SslMode>(configuredValue, ignoreCase: true, out var sslMode))
+        if (!IsNumericEnumLiteral(normalizedValue) &&
+            Enum.TryParse<SslMode>(normalizedValue, ignoreCase: true, out var sslMode) &&
+            Enum.IsDefined(sslMode))
+        {
             return sslMode;
+        }
 
         throw new InvalidOperationException(
             $"{nameof(LocalEnvironmentValues.PostgresBaseDbSslMode)} could not be parsed as {nameof(SslMode)}.");
+    }
+
+    private static bool IsNumericEnumLiteral(string value)
+    {
+        return value.Length > 0 &&
+            (char.IsAsciiDigit(value[0]) || value[0] is '+' or '-');
     }
 }

@@ -67,10 +67,14 @@ public class PostgresConnectionStringFactoryTests
             .WithMessage("PostgresBaseDbPort must be between 1 and 65535.");
     }
 
-    [Test]
-    public void CreateBaseDbConnectionString_RejectsInvalidSslMode()
+    [TestCase("DefinitelyNotSsl")]
+    [TestCase("3")]
+    [TestCase("+3")]
+    [TestCase("-1")]
+    [TestCase("999")]
+    public void CreateBaseDbConnectionString_RejectsInvalidSslMode(string sslMode)
     {
-        var values = CreateValues(sslMode: "DefinitelyNotSsl");
+        var values = CreateValues(sslMode: sslMode);
 
         Action act = () => PostgresConnectionStringFactory.CreateBaseDbConnectionString(values);
 
@@ -78,7 +82,7 @@ public class PostgresConnectionStringFactoryTests
             .Throw<InvalidOperationException>()
             .WithMessage("PostgresBaseDbSslMode could not be parsed as SslMode.");
 
-        exception.Which.Message.Should().NotContain("DefinitelyNotSsl");
+        exception.Which.Message.Should().NotContain(sslMode);
     }
 
     private static LocalEnvironmentValues CreateValues(
