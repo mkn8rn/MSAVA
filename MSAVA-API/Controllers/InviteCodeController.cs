@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using MSAVA_BLL.Services.Interfaces;
-using MSAVA_BLL.Services.Auth;
 using MSAVA_Shared.Models;
 
 namespace MSAVA_API.Controllers;
@@ -39,13 +38,19 @@ public class InviteCodeController : ControllerBase
         [FromQuery][Required] int expiresInHours,
         CancellationToken cancellationToken = default)
     {
-        if (maxUses <= 0)
-            return BadRequest(InviteCodeInputPolicy.InvalidMaxUsesMessage);
+        if (!InviteCodePolicy.IsMaxUsesAllowed(maxUses))
+            return BadRequest(InviteCodePolicy.InvalidMaxUsesMessage);
 
-        if (expiresInHours <= 0 || expiresInHours > InviteCodeInputPolicy.MaximumLifetimeHours)
-            return BadRequest(InviteCodeInputPolicy.InvalidLifetimeMessage);
+        DateTime utcNow = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!InviteCodePolicy.TryCreateExpiration(
+            utcNow,
+            expiresInHours,
+            out DateTime expiresAt,
+            out string validationMessage))
+        {
+            return BadRequest(validationMessage);
+        }
 
-        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(expiresInHours);
         var id = await _inviteCodeService.CreateNewInviteCodeAsync(maxUses, expiresAt, cancellationToken);
         return Ok(id);
     }

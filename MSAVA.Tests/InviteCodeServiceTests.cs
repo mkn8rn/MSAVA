@@ -411,12 +411,12 @@ public class InviteCodeServiceTests
             new ThrowingUserSessionService(),
             new ServiceLogger(NullLogger<ServiceLogger>.Instance, context),
             new FixedTimeProvider(FixedNow));
-        var expiresAt = FixedNow.UtcDateTime.AddHours(InviteCodeInputPolicy.MaximumLifetimeHours + 1);
+        var expiresAt = FixedNow.UtcDateTime.AddHours(InviteCodePolicy.MaximumLifetimeHours + 1);
 
         Func<Task> act = () => service.CreateNewInviteCodeAsync(maxUses: 1, expiresAt);
 
         await act.Should().ThrowAsync<ArgumentOutOfRangeException>()
-            .WithMessage($"{InviteCodeInputPolicy.InvalidLifetimeMessage}*");
+            .WithMessage($"{InviteCodePolicy.InvalidLifetimeMessage}*");
         context.InviteCodes.Should().BeEmpty();
     }
 
@@ -428,7 +428,7 @@ public class InviteCodeServiceTests
         context.Users.Add(owner);
         await context.SaveChangesAsync();
         var service = CreateService(context, owner, new FixedTimeProvider(FixedNow));
-        var expiresAt = FixedNow.UtcDateTime.AddHours(InviteCodeInputPolicy.MaximumLifetimeHours);
+        var expiresAt = FixedNow.UtcDateTime.AddHours(InviteCodePolicy.MaximumLifetimeHours);
 
         var inviteCodeId = await service.CreateNewInviteCodeAsync(maxUses: 1, expiresAt);
 

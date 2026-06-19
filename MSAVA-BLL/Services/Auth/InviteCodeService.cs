@@ -35,10 +35,10 @@ public class InviteCodeService
         DateTime expiresAt,
         CancellationToken cancellationToken = default)
     {
-        InviteCodeInputPolicy.EnsureMaxUsesAllowed(maxUses);
+        InviteCodePolicy.EnsureMaxUsesAllowed(maxUses);
 
         DateTime utcNow = GetUtcNow();
-        InviteCodeInputPolicy.EnsureExpirationAllowed(expiresAt, utcNow);
+        InviteCodePolicy.EnsureExpirationAllowed(expiresAt, utcNow);
 
         SessionDTO session = await GetAuthorizedAdminSessionAsync(cancellationToken);
 

@@ -103,7 +103,7 @@ public class InviteCodeControllerTests
         var response = await controller.CreateInviteCode(maxUses, expiresInHours: 1);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().Be(InviteCodeInputPolicy.InvalidMaxUsesMessage);
+        badRequest.Value.Should().Be(InviteCodePolicy.InvalidMaxUsesMessage);
         context.InviteCodes.Should().BeEmpty();
     }
 
@@ -122,8 +122,23 @@ public class InviteCodeControllerTests
         var response = await controller.CreateInviteCode(maxUses: 1, expiresInHours);
 
         var badRequest = response.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().Be(InviteCodeInputPolicy.InvalidLifetimeMessage);
+        badRequest.Value.Should().Be(InviteCodePolicy.InvalidLifetimeMessage);
         context.InviteCodes.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateInviteCode_AllowsMaximumLifetimeHours()
+    {
+        var service = new RecordingInviteCodeService();
+        var controller = new InviteCodeController(service, new FixedTimeProvider(FixedNow));
+
+        var response = await controller.CreateInviteCode(
+            maxUses: 1,
+            expiresInHours: InviteCodePolicy.MaximumLifetimeHours);
+
+        var ok = response.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(service.CreatedInviteCodeId);
+        service.CreateExpiresAt.Should().Be(FixedNow.UtcDateTime.AddHours(InviteCodePolicy.MaximumLifetimeHours));
     }
 
     [Test]
