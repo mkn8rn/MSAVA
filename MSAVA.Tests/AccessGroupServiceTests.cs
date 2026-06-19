@@ -209,6 +209,22 @@ public class AccessGroupServiceTests
     }
 
     [Test]
+    public async Task CreateAccessGroup_RedactsSessionUserIdWhenSessionUserIsMissing()
+    {
+        using var context = CreateContext();
+        var missingSessionUserId = Guid.NewGuid();
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, missingSessionUserId, isAdmin: false, logger);
+
+        Func<Task> act = () => service.CreateAccessGroupAsync("Editors");
+
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("Session user was not found.");
+        exception.Which.Message.Should().NotContain(missingSessionUserId.ToString());
+        context.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task AddUserToAccessGroupAsync_AddsUserWhenSessionUserOwnsGroup()
     {
         using var context = CreateContext();
@@ -273,6 +289,51 @@ public class AccessGroupServiceTests
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Only admins and access group owners can add users to an access group.");
         target.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task AddUserToAccessGroupAsync_RedactsAccessGroupIdWhenAccessGroupIsMissing()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        var target = CreateUser("target");
+        context.Users.AddRange(owner, target);
+        await context.SaveChangesAsync();
+        var missingAccessGroupId = Guid.NewGuid();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        Func<Task> act = () => service.AddUserToAccessGroupAsync(target.Id, missingAccessGroupId);
+
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("Access group was not found.");
+        exception.Which.Message.Should().NotContain(missingAccessGroupId.ToString());
+        target.AccessGroups.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task AddUserToAccessGroupAsync_RedactsTargetUserIdWhenTargetUserIsMissing()
+    {
+        using var context = CreateContext();
+
+        var owner = CreateUser("owner");
+        var accessGroup = CreateAccessGroup(owner, "Private");
+        context.Users.Add(owner);
+        context.AccessGroups.Add(accessGroup);
+        await context.SaveChangesAsync();
+        var missingTargetUserId = Guid.NewGuid();
+
+        var logger = new ServiceLogger(NullLogger<ServiceLogger>.Instance, context);
+        var service = CreateService(context, owner.Id, isAdmin: false, logger);
+
+        Func<Task> act = () => service.AddUserToAccessGroupAsync(missingTargetUserId, accessGroup.Id);
+
+        var exception = await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("User was not found.");
+        exception.Which.Message.Should().NotContain(missingTargetUserId.ToString());
+        accessGroup.Users.Should().ContainSingle(user => user.Id == owner.Id);
     }
 
     [Test]

@@ -12,6 +12,10 @@ namespace MSAVA_BLL.Services.Auth;
 public class AccessGroupService
     : IAccessGroupService
 {
+    private const string SessionUserNotFoundMessage = "Session user was not found.";
+    private const string AccessGroupNotFoundMessage = "Access group was not found.";
+    private const string UserNotFoundMessage = "User was not found.";
+
     private readonly BaseDataContext _context;
     private readonly IUserSessionService _userService;
     private readonly ServiceLogger _serviceLogger;
@@ -54,7 +58,7 @@ public class AccessGroupService
         SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == session.UserId, cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {session.UserId} not found.");
+            ?? throw new KeyNotFoundException(SessionUserNotFoundMessage);
 
         if (await OwnerHasAccessGroupNameAsync(user.Id, accessGroupName, cancellationToken))
             throw new InvalidOperationException($"Access group '{accessGroupName}' already exists for this owner.");
@@ -118,7 +122,7 @@ public class AccessGroupService
         SessionDTO session = await GetActiveSessionAsync(cancellationToken);
 
         var accessGroup = await _context.AccessGroups.SingleOrDefaultAsync(g => g.Id == accessGroupId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Access group with id {accessGroupId} not found.");
+            ?? throw new KeyNotFoundException(AccessGroupNotFoundMessage);
 
         if (!session.IsAdmin && accessGroup.OwnerId != session.UserId)
             throw new UnauthorizedAccessException("Only admins and access group owners can add users to an access group.");
@@ -126,7 +130,7 @@ public class AccessGroupService
         var user = await _context.Users
             .Include(u => u.AccessGroups)
             .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken)
-            ?? throw new KeyNotFoundException($"User with id {userId} not found.");
+            ?? throw new KeyNotFoundException(UserNotFoundMessage);
 
         if (user.IsBanned)
             throw new UnauthorizedAccessException("Banned users cannot be added to access groups.");
