@@ -17,6 +17,8 @@ public static class FileQuerySearchPolicy
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parameterName);
         ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        if (maximumLength <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumLength), "Search text maximum length must be greater than zero.");
 
         if (value is null)
             return null;

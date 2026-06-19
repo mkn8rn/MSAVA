@@ -58,6 +58,21 @@ public class FileQueryServiceTests
             .WithMessage("Value search text contains invalid characters.*");
     }
 
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void NormalizeSearchText_RejectsInvalidMaximumLength(int maximumLength)
+    {
+        Action act = () => FileQuerySearchPolicy.NormalizeSearchText(
+            "value",
+            "value",
+            "Value",
+            maximumLength);
+
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .WithMessage("Search text maximum length must be greater than zero.*")
+            .And.ParamName.Should().Be("maximumLength");
+    }
+
     [TestCase("tag", FileQuerySearchPolicy.MaximumTagSearchLength, "Tag")]
     [TestCase("category", FileQuerySearchPolicy.MaximumCategorySearchLength, "Category")]
     [TestCase("name", FileQuerySearchPolicy.MaximumNameSearchLength, "Name")]
