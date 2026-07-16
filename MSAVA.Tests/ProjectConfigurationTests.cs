@@ -63,6 +63,53 @@ public class ProjectConfigurationTests
     }
 
     [Test]
+    public void ApiProject_ReferencesSupprocomSecretsPackage()
+    {
+        string projectPath = Path.Combine(FindRepositoryRoot(), "MSAVA-API", "MSAVA-API.csproj");
+        var project = XDocument.Load(projectPath);
+
+        var packageReferences = project
+            .Descendants("PackageReference")
+            .Select(item => (string?)item.Attribute("Include"))
+            .ToList();
+
+        packageReferences.Should().Contain("Supprocom.Secrets",
+            "API startup owns the Supprocom.Secrets configuration source registration");
+    }
+
+    [Test]
+    public void CentralPackageVersions_PinSupprocomSecretsToExactPublicVersion()
+    {
+        string packagePath = Path.Combine(FindRepositoryRoot(), "Directory.Packages.props");
+        var packages = XDocument.Load(packagePath);
+
+        var version = packages
+            .Descendants("PackageVersion")
+            .Single(item => string.Equals(
+                (string?)item.Attribute("Include"),
+                "Supprocom.Secrets",
+                StringComparison.Ordinal))
+            .Attribute("Version")
+            ?.Value;
+
+        version.Should().Be("0.1.2",
+            "MSAVA must consume the published package requested by CO, not a local source or later package");
+    }
+
+    [Test]
+    public void ApiProject_UsesSupprocomEnvironmentTemplateConvention()
+    {
+        string environmentDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-API", "Environment");
+
+        File.Exists(Path.Combine(environmentDirectory, ".env.template")).Should().BeTrue();
+        File.Exists(Path.Combine(environmentDirectory, ".env.development.template")).Should().BeTrue();
+        File.Exists(Path.Combine(environmentDirectory, ".dev.env.template")).Should().BeFalse(
+            "MSAVA development configuration is a .env.development replacement, not a .dev.env overlay");
+        File.Exists(Path.Combine(environmentDirectory, ".env")).Should().BeFalse();
+        File.Exists(Path.Combine(environmentDirectory, ".env.development")).Should().BeFalse();
+    }
+
+    [Test]
     public void SharedModels_DoNotExposeBearerTokenFields()
     {
         string sharedModelsDirectory = Path.Combine(FindRepositoryRoot(), "MSAVA-Shared", "Models");
@@ -788,13 +835,30 @@ public class ProjectConfigurationTests
             return true;
         }
 
-        if (fileName.StartsWith(".env", StringComparison.OrdinalIgnoreCase) &&
-            !fileName.Equals(".env.example", StringComparison.OrdinalIgnoreCase))
+        if (IsActiveDotenvFileName(fileName))
         {
             return true;
         }
 
         return false;
+    }
+
+    private static bool IsActiveDotenvFileName(string fileName)
+    {
+        if (IsTrackedDotenvTemplate(fileName))
+            return false;
+
+        return fileName.Equals(".env", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals(".env.development", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals(".dev.env", StringComparison.OrdinalIgnoreCase) ||
+            fileName.StartsWith(".env.", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTrackedDotenvTemplate(string fileName)
+    {
+        return fileName.Equals(".env.template", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals(".env.development.template", StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals(".dev.env.template", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<string> FindUntimedBuildOrTestWorkflowSteps(string workflow)

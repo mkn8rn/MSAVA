@@ -1,288 +1,164 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using MSAVA_INF.Models;
-using Serilog.Events;
 using Serilog;
+using Serilog.Events;
 
-namespace MSAVA_INF.Environment
+namespace MSAVA_INF.Environment;
+
+public class LocalEnvironment : ILocalEnvironment
 {
-    public class LocalEnvironment : ILocalEnvironment
+    private const int MinimumJwtSigningKeyBytes = 32;
+
+    public LocalEnvironment(IConfiguration configuration)
     {
-        private const int MinimumJwtSigningKeyBytes = 32;
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        public LocalEnvironmentValues Values { get; }
-        private readonly Dictionary<string, string> _values;
-        private readonly string _envFileName;
-
-        public LocalEnvironment()
+        Values = new LocalEnvironmentValues
         {
-            _envFileName = GetEnvFileName();
-            string? envFilePath = ResolveEnvFilePath(_envFileName);
-            _values = envFilePath is null
-                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                : LoadEnvFile(envFilePath);
-            Values = new LocalEnvironmentValues
-            {
-                JwtIssuerSigningKey = GetRequiredValue("jwt_issuer_signing_key"),
-                JwtIssuerName = GetRequiredValue("jwt_issuer_name"),
-                JwtIssuerAudience = GetRequiredValue("jwt_issuer_audience"),
-                AdminUsername = GetRequiredValue("admin_username"),
-                AdminPassword = GetRequiredValue("admin_password"),
-                PostgresBaseDbUser = GetRequiredValue("postgres_basedb_user"),
-                PostgresBaseDbPassword = GetRequiredValue("postgres_basedb_password"),
-                PostgresBaseDbHost = GetRequiredValue("postgres_basedb_host"),
-                PostgresBaseDbPort = ParseRequiredPositiveInt("postgres_basedb_port"),
-                PostgresBaseDbDbName = GetRequiredValue("postgres_basedb_dbname"),
-                PostgresBaseDbSslMode = GetRequiredValue("postgres_basedb_ssl_mode"),
-                SerilogInformationLevel = ParseRequiredEnum<LogEventLevel>("serilog_information_level"),
-                SerilogRollingInterval = ParseRequiredEnum<RollingInterval>("serilog_rolling_interval"),
-                SerilogRetainedFileCountLimit = ParseNullablePositiveInt("serilog_retained_file_count_limit"),
-                SerilogFileSizeLimitBytes = ParseRequiredPositiveLong("serilog_file_size_limit_bytes"),
-                SerilogRollOnFileSizeLimit = ParseRequiredBool("serilog_roll_on_file_size_limit")
-            };
-        }
+            JwtIssuerSigningKey = GetRequiredValue(configuration, "jwt_issuer_signing_key"),
+            JwtIssuerName = GetRequiredValue(configuration, "jwt_issuer_name"),
+            JwtIssuerAudience = GetRequiredValue(configuration, "jwt_issuer_audience"),
+            AdminUsername = GetRequiredValue(configuration, "admin_username"),
+            AdminPassword = GetRequiredValue(configuration, "admin_password"),
+            PostgresBaseDbUser = GetRequiredValue(configuration, "postgres_basedb_user"),
+            PostgresBaseDbPassword = GetRequiredValue(configuration, "postgres_basedb_password"),
+            PostgresBaseDbHost = GetRequiredValue(configuration, "postgres_basedb_host"),
+            PostgresBaseDbPort = ParseRequiredPositiveInt(configuration, "postgres_basedb_port"),
+            PostgresBaseDbDbName = GetRequiredValue(configuration, "postgres_basedb_dbname"),
+            PostgresBaseDbSslMode = GetRequiredValue(configuration, "postgres_basedb_ssl_mode"),
+            SerilogInformationLevel = ParseRequiredEnum<LogEventLevel>(configuration, "serilog_information_level"),
+            SerilogRollingInterval = ParseRequiredEnum<RollingInterval>(configuration, "serilog_rolling_interval"),
+            SerilogRetainedFileCountLimit = ParseNullablePositiveInt(configuration, "serilog_retained_file_count_limit"),
+            SerilogFileSizeLimitBytes = ParseRequiredPositiveLong(configuration, "serilog_file_size_limit_bytes"),
+            SerilogRollOnFileSizeLimit = ParseRequiredBool(configuration, "serilog_roll_on_file_size_limit")
+        };
+    }
 
-        private string GetRequiredValue(string key)
+    public LocalEnvironmentValues Values { get; }
+
+    public byte[] GetSigningKeyBytes()
+    {
+        string key = Values.JwtIssuerSigningKey;
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException("'jwt_issuer_signing_key' is missing or empty.");
+
+        byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+        if (keyBytes.Length < MinimumJwtSigningKeyBytes)
         {
-            var environmentValue = System.Environment.GetEnvironmentVariable(key)
-                ?? System.Environment.GetEnvironmentVariable(key.ToUpperInvariant());
-
-            if (!string.IsNullOrWhiteSpace(environmentValue))
-                return RejectPlaceholderValue(key, environmentValue);
-
-            if (_values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
-                return RejectPlaceholderValue(key, value);
-
             throw new InvalidOperationException(
-                $"Required configuration value '{key}' is missing or empty. Set it as a process environment variable or add it to {_envFileName}.");
+                $"'jwt_issuer_signing_key' must be at least {MinimumJwtSigningKeyBytes} UTF-8 bytes for HMAC SHA-256 signing.");
         }
 
-        internal static string RejectPlaceholderValue(string key, string value)
-        {
-            if (IsExamplePlaceholder(value))
-            {
-                throw new InvalidOperationException(
-                    $"Required configuration value '{key}' still contains an example placeholder. Replace it with a real deployment value.");
-            }
+        return keyBytes;
+    }
 
-            return value;
+    internal static string RejectPlaceholderValue(string key, string value)
+    {
+        if (IsExamplePlaceholder(value))
+        {
+            throw new InvalidOperationException(
+                $"Required configuration value '{key}' still contains an example placeholder. Replace it with a real deployment value.");
         }
 
-        private static bool IsExamplePlaceholder(string value)
+        return value;
+    }
+
+    private static string GetRequiredValue(IConfiguration configuration, string key)
+    {
+        string? value = configuration[key];
+        if (!string.IsNullOrWhiteSpace(value))
+            return RejectPlaceholderValue(key, value);
+
+        throw new InvalidOperationException(
+            $"Required configuration value '{key}' is missing or empty.");
+    }
+
+    private static int ParseRequiredPositiveInt(IConfiguration configuration, string key)
+    {
+        string value = GetRequiredValue(configuration, key);
+        if (TryParseUnsignedInt(value, out int result) && result > 0)
+            return result;
+
+        throw new InvalidOperationException($"Configuration value '{key}' must be a positive integer.");
+    }
+
+    private static long ParseRequiredPositiveLong(IConfiguration configuration, string key)
+    {
+        string value = GetRequiredValue(configuration, key);
+        if (TryParseUnsignedLong(value, out long result) && result > 0)
+            return result;
+
+        throw new InvalidOperationException($"Configuration value '{key}' must be a positive long integer.");
+    }
+
+    private static bool ParseRequiredBool(IConfiguration configuration, string key)
+    {
+        string value = GetRequiredValue(configuration, key);
+        if (bool.TryParse(value, out bool result))
+            return result;
+
+        throw new InvalidOperationException($"Configuration value '{key}' must be true or false.");
+    }
+
+    private static TEnum ParseRequiredEnum<TEnum>(IConfiguration configuration, string key)
+        where TEnum : struct, Enum
+    {
+        string value = GetRequiredValue(configuration, key);
+        string normalizedValue = value.Trim();
+        if (!IsNumericEnumLiteral(normalizedValue) &&
+            Enum.TryParse(normalizedValue, ignoreCase: true, out TEnum result) &&
+            Enum.IsDefined(result))
         {
-            string normalizedValue = value.Trim();
-            return normalizedValue.StartsWith("replace-with-", StringComparison.OrdinalIgnoreCase) ||
-                normalizedValue.Equals("change-me", StringComparison.OrdinalIgnoreCase) ||
-                normalizedValue.Equals("changeme", StringComparison.OrdinalIgnoreCase);
+            return result;
         }
 
-        private int ParseRequiredPositiveInt(string key)
-        {
-            var value = GetRequiredValue(key);
-            if (TryParseUnsignedInt(value, out var result) && result > 0)
-                return result;
+        throw new InvalidOperationException($"Configuration value '{key}' must be a named {typeof(TEnum).Name} value.");
+    }
 
-            throw new InvalidOperationException($"Configuration value '{key}' must be a positive integer.");
-        }
+    private static int? ParseNullablePositiveInt(IConfiguration configuration, string key)
+    {
+        string normalizedValue = GetRequiredValue(configuration, key).Trim();
 
-        private long ParseRequiredPositiveLong(string key)
-        {
-            var value = GetRequiredValue(key);
-            if (TryParseUnsignedLong(value, out var result) && result > 0)
-                return result;
-
-            throw new InvalidOperationException($"Configuration value '{key}' must be a positive long integer.");
-        }
-
-        private bool ParseRequiredBool(string key)
-        {
-            var value = GetRequiredValue(key);
-            if (bool.TryParse(value, out var result))
-                return result;
-            throw new InvalidOperationException($"Configuration value '{key}' must be true or false.");
-        }
-
-        private TEnum ParseRequiredEnum<TEnum>(string key) where TEnum : struct
-        {
-            var value = GetRequiredValue(key);
-            string normalizedValue = value.Trim();
-            if (!IsNumericEnumLiteral(normalizedValue) &&
-                Enum.TryParse<TEnum>(normalizedValue, true, out var result) &&
-                Enum.IsDefined(typeof(TEnum), result))
-            {
-                return result;
-            }
-
-            throw new InvalidOperationException($"Configuration value '{key}' must be a named {typeof(TEnum).Name} value.");
-        }
-
-        private static bool IsNumericEnumLiteral(string value)
-        {
-            return value.Length > 0 &&
-                (char.IsAsciiDigit(value[0]) || value[0] is '+' or '-');
-        }
-
-        private int? ParseNullablePositiveInt(string key)
-        {
-            var value = GetRequiredValue(key);
-            string normalizedValue = value.Trim();
-
-            if (normalizedValue.Equals("null", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            if (TryParseUnsignedInt(normalizedValue, out var i) && i > 0)
-                return i;
-
-            throw new InvalidOperationException($"Configuration value '{key}' must be null or a positive integer.");
-        }
-
-        private static bool TryParseUnsignedInt(string value, out int result)
-        {
-            return int.TryParse(
-                value.Trim(),
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out result);
-        }
-
-        private static bool TryParseUnsignedLong(string value, out long result)
-        {
-            return long.TryParse(
-                value.Trim(),
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out result);
-        }
-
-        public static bool IsDevelopment()
-        {
-            var aspnetEnv = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            if (!string.IsNullOrWhiteSpace(aspnetEnv))
-                return IsDevelopmentEnvironmentName(aspnetEnv);
-
-            var dotnetEnv = System.Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
-            return IsDevelopmentEnvironmentName(dotnetEnv);
-        }
-
-        private static bool IsDevelopmentEnvironmentName(string? environmentName)
-        {
-            return string.Equals(
-                environmentName,
-                "Development",
-                StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static Dictionary<string, string> LoadEnvFile(string path)
-        {
-            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (!File.Exists(path))
-                return dict;
-            foreach (var line in File.ReadAllLines(path))
-            {
-                var trimmed = line.Trim();
-                if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("#"))
-                    continue;
-                var idx = trimmed.IndexOf('=');
-                if (idx <= 0) continue;
-                var key = trimmed.Substring(0, idx).Trim();
-                var value = trimmed.Substring(idx + 1).Trim();
-                dict[key] = value;
-            }
-            return dict;
-        }
-
-        public byte[] GetSigningKeyBytes()
-        {
-            string key = Values.JwtIssuerSigningKey;
-            if (string.IsNullOrWhiteSpace(key))
-                throw new InvalidOperationException($"'jwt_issuer_signing_key' is missing or empty in {_envFileName}");
-
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key);
-            if (keyBytes.Length < MinimumJwtSigningKeyBytes)
-            {
-                throw new InvalidOperationException(
-                    $"'jwt_issuer_signing_key' must be at least {MinimumJwtSigningKeyBytes} UTF-8 bytes for HMAC SHA-256 signing.");
-            }
-
-            return keyBytes;
-        }
-
-        private static string GetEnvFileName()
-        {
-            return IsDevelopment() ? ".env.development" : ".env";
-        }
-
-        private static string? ResolveEnvFilePath(string envFileName)
-        {
-            foreach (string candidatePath in GetEnvFileCandidates(envFileName))
-            {
-                if (File.Exists(candidatePath))
-                    return candidatePath;
-            }
-
+        if (normalizedValue.Equals("null", StringComparison.OrdinalIgnoreCase))
             return null;
-        }
 
-        private static IEnumerable<string> GetEnvFileCandidates(string envFileName)
-        {
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (TryParseUnsignedInt(normalizedValue, out int result) && result > 0)
+            return result;
 
-            foreach (string directory in GetSearchDirectories())
-            {
-                foreach (string candidatePath in GetDirectoryCandidates(directory, envFileName))
-                {
-                    if (seen.Add(candidatePath))
-                        yield return candidatePath;
-                }
-            }
-        }
+        throw new InvalidOperationException($"Configuration value '{key}' must be null or a positive integer.");
+    }
 
-        private static IEnumerable<string> GetSearchDirectories()
-        {
-            string currentDirectory = Directory.GetCurrentDirectory();
-            if (IsBuildOutputOrIntermediateDirectory(currentDirectory))
-                yield break;
+    private static bool IsExamplePlaceholder(string value)
+    {
+        string normalizedValue = value.Trim();
+        return normalizedValue.StartsWith("replace-with-", StringComparison.OrdinalIgnoreCase) ||
+            normalizedValue.Equals("change-me", StringComparison.OrdinalIgnoreCase) ||
+            normalizedValue.Equals("changeme", StringComparison.OrdinalIgnoreCase);
+    }
 
-            foreach (string directory in EnumerateDirectoryAndAncestors(currentDirectory))
-                yield return directory;
-        }
+    private static bool IsNumericEnumLiteral(string value)
+    {
+        return value.Length > 0 &&
+            (char.IsAsciiDigit(value[0]) || value[0] is '+' or '-');
+    }
 
-        private static IEnumerable<string> EnumerateDirectoryAndAncestors(string path)
-        {
-            var directory = new DirectoryInfo(path);
+    private static bool TryParseUnsignedInt(string value, out int result)
+    {
+        return int.TryParse(
+            value.Trim(),
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out result);
+    }
 
-            while (directory is not null)
-            {
-                yield return directory.FullName;
-                directory = directory.Parent;
-            }
-        }
-
-        private static bool IsBuildOutputOrIntermediateDirectory(string path)
-        {
-            var directory = new DirectoryInfo(path);
-
-            while (directory is not null)
-            {
-                if (string.Equals(directory.Name, "bin", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(directory.Name, "obj", StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-
-                directory = directory.Parent;
-            }
-
-            return false;
-        }
-
-        private static IEnumerable<string> GetDirectoryCandidates(string directory, string envFileName)
-        {
-            yield return Path.Combine(directory, envFileName);
-            yield return Path.Combine(directory, "MSAVA-INF", envFileName);
-        }
+    private static bool TryParseUnsignedLong(string value, out long result)
+    {
+        return long.TryParse(
+            value.Trim(),
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out result);
     }
 }

@@ -25,14 +25,22 @@ using MSAVA_BLL.Services.Auth;
 using MSAVA_BLL.Services.Files;
 using MSAVA_BLL.Services.Import;
 using MSAVA_Shared.Models;
+using Supprocom.Secrets;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 string logDirectory = Path.Combine(AppContext.BaseDirectory, "Logs");
 Directory.CreateDirectory(logDirectory);
 
-// Register local environment
-var env = new LocalEnvironment();
+builder.Configuration.AddSupprocomSecrets(options =>
+{
+    options.EnvironmentName = builder.Environment.EnvironmentName;
+    options.File.DevelopmentName = ".env.development";
+    options.File.DevelopmentComposition = SecretFileComposition.Replace;
+});
+
+// Register validated local environment view
+var env = new LocalEnvironment(builder.Configuration);
 builder.Services.AddSingleton<ILocalEnvironment>(env);
 
 Log.Logger = new LoggerConfiguration()

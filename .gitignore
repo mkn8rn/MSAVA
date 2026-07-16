@@ -30,7 +30,9 @@ docs/internal/
 # dotenv files
 .env
 .env.*
-!.env.example
+!.env.template
+!.env.development.template
+!.dev.env.template
 
 ## Original below: https://gist.github.com/takekazuomi/10955889
 ## Ignore Visual Studio temporary files, build results, and

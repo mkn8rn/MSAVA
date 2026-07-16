@@ -1,6 +1,8 @@
+using Microsoft.Extensions.Configuration;
 using MSAVA_INF.Environment;
 using Serilog;
 using Serilog.Events;
+using Supprocom.Secrets;
 
 namespace MSAVA_App.Tests;
 
@@ -8,14 +10,11 @@ namespace MSAVA_App.Tests;
 public class LocalEnvironmentTests
 {
     [Test]
-    public void Constructor_ReadsRequiredValuesFromProcessEnvironment()
+    public void Constructor_ReadsRequiredValuesFromConfiguration()
     {
-        var values = CreateValidEnvironmentValues();
+        var config = CreateConfiguration(CreateValidEnvironmentValues());
 
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-        SetUpperCaseEnvironmentValues(values);
-
-        var env = new LocalEnvironment();
+        var env = new LocalEnvironment(config);
 
         env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
         env.Values.PostgresBaseDbPort.Should().Be(5433);
@@ -33,11 +32,9 @@ public class LocalEnvironmentTests
     {
         var values = CreateValidEnvironmentValues();
         values["serilog_retained_file_count_limit"] = "null";
+        var config = CreateConfiguration(values);
 
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-        SetUpperCaseEnvironmentValues(values);
-
-        var env = new LocalEnvironment();
+        var env = new LocalEnvironment(config);
 
         env.Values.SerilogRetainedFileCountLimit.Should().BeNull();
     }
@@ -58,11 +55,9 @@ public class LocalEnvironmentTests
     {
         var values = CreateValidEnvironmentValues();
         values[key] = invalidValue;
+        var config = CreateConfiguration(values);
 
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-        SetUpperCaseEnvironmentValues(values);
-
-        Action act = () => _ = new LocalEnvironment();
+        Action act = () => _ = new LocalEnvironment(config);
 
         var exception = act.Should().Throw<InvalidOperationException>()
             .WithMessage(expectedMessage);
@@ -83,11 +78,9 @@ public class LocalEnvironmentTests
     {
         var values = CreateValidEnvironmentValues();
         values[key] = invalidValue;
+        var config = CreateConfiguration(values);
 
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-        SetUpperCaseEnvironmentValues(values);
-
-        Action act = () => _ = new LocalEnvironment();
+        Action act = () => _ = new LocalEnvironment(config);
 
         var exception = act.Should().Throw<InvalidOperationException>()
             .WithMessage(expectedMessage);
@@ -101,11 +94,9 @@ public class LocalEnvironmentTests
         var values = CreateValidEnvironmentValues();
         const string invalidValue = "yes-please";
         values["serilog_roll_on_file_size_limit"] = invalidValue;
+        var config = CreateConfiguration(values);
 
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-        SetUpperCaseEnvironmentValues(values);
-
-        Action act = () => _ = new LocalEnvironment();
+        Action act = () => _ = new LocalEnvironment(config);
 
         var exception = act.Should().Throw<InvalidOperationException>()
             .WithMessage("Configuration value 'serilog_roll_on_file_size_limit' must be true or false.");
@@ -114,119 +105,16 @@ public class LocalEnvironmentTests
     }
 
     [Test]
-    public void Constructor_ReadsDevelopmentEnvFileFromRepositoryInfrastructureDirectory()
+    public void Constructor_RejectsMissingRequiredValueWithoutMentioningSecretFilePaths()
     {
         var values = CreateValidEnvironmentValues();
-        string repositoryRoot = Path.Combine(Path.GetTempPath(), "msava-env-tests", Guid.NewGuid().ToString("N"));
-        string infrastructureDirectory = Path.Combine(repositoryRoot, "MSAVA-INF");
-        string apiDirectory = Path.Combine(repositoryRoot, "MSAVA-API");
-        string originalCurrentDirectory = Directory.GetCurrentDirectory();
+        values.Remove("jwt_issuer_signing_key");
+        var config = CreateConfiguration(values);
 
-        using var restore = new EnvironmentVariableRestore(values.Keys.Append("ASPNETCORE_ENVIRONMENT"));
-        ClearEnvironmentValues(values.Keys);
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+        Action act = () => _ = new LocalEnvironment(config);
 
-        try
-        {
-            Directory.CreateDirectory(infrastructureDirectory);
-            Directory.CreateDirectory(apiDirectory);
-            File.WriteAllLines(
-                Path.Combine(infrastructureDirectory, ".env.development"),
-                values.Select(value => $"{value.Key}={value.Value}"));
-
-            Directory.SetCurrentDirectory(apiDirectory);
-
-            var env = new LocalEnvironment();
-
-            env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
-            env.Values.AdminUsername.Should().Be("test-admin");
-            env.Values.PostgresBaseDbDbName.Should().Be("msava-test");
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalCurrentDirectory);
-
-            if (Directory.Exists(repositoryRoot))
-                Directory.Delete(repositoryRoot, recursive: true);
-        }
-    }
-
-    [Test]
-    public void Constructor_ReadsDevelopmentEnvFileWhenDotnetEnvironmentIsDevelopment()
-    {
-        var values = CreateValidEnvironmentValues();
-        string repositoryRoot = Path.Combine(Path.GetTempPath(), "msava-env-tests", Guid.NewGuid().ToString("N"));
-        string infrastructureDirectory = Path.Combine(repositoryRoot, "MSAVA-INF");
-        string apiDirectory = Path.Combine(repositoryRoot, "MSAVA-API");
-        string originalCurrentDirectory = Directory.GetCurrentDirectory();
-
-        using var restore = new EnvironmentVariableRestore(
-            values.Keys.Append("ASPNETCORE_ENVIRONMENT").Append("DOTNET_ENVIRONMENT"));
-        ClearEnvironmentValues(values.Keys);
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", null);
-        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Development");
-
-        try
-        {
-            Directory.CreateDirectory(infrastructureDirectory);
-            Directory.CreateDirectory(apiDirectory);
-            File.WriteAllLines(
-                Path.Combine(infrastructureDirectory, ".env.development"),
-                values.Select(value => $"{value.Key}={value.Value}"));
-
-            Directory.SetCurrentDirectory(apiDirectory);
-
-            var env = new LocalEnvironment();
-
-            env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
-            env.Values.AdminUsername.Should().Be("test-admin");
-            env.Values.PostgresBaseDbDbName.Should().Be("msava-test");
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalCurrentDirectory);
-
-            if (Directory.Exists(repositoryRoot))
-                Directory.Delete(repositoryRoot, recursive: true);
-        }
-    }
-
-    [Test]
-    public void Constructor_IgnoresDevelopmentEnvFileInBuildOutputDirectory()
-    {
-        var values = CreateValidEnvironmentValues();
-        string temporaryRoot = Path.Combine(Path.GetTempPath(), "msava-env-tests", Guid.NewGuid().ToString("N"));
-        string outputDirectory = Path.Combine(temporaryRoot, "bin", "Debug", "net10.0");
-        string originalCurrentDirectory = Directory.GetCurrentDirectory();
-
-        using var restore = new EnvironmentVariableRestore(values.Keys.Append("ASPNETCORE_ENVIRONMENT"));
-        ClearEnvironmentValues(values.Keys);
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
-
-        try
-        {
-            Directory.CreateDirectory(outputDirectory);
-            File.WriteAllLines(
-                Path.Combine(outputDirectory, ".env.development"),
-                values.Select(value => $"{value.Key}={value.Value}"));
-
-            Directory.SetCurrentDirectory(outputDirectory);
-
-            Action act = () => _ = new LocalEnvironment();
-
-            var exception = act.Should()
-                .Throw<InvalidOperationException>()
-                .WithMessage("Required configuration value 'jwt_issuer_signing_key' is missing or empty. Set it as a process environment variable or add it to .env.development.");
-
-            exception.Which.Message.Should().NotContain(outputDirectory);
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalCurrentDirectory);
-
-            if (Directory.Exists(temporaryRoot))
-                Directory.Delete(temporaryRoot, recursive: true);
-        }
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Required configuration value 'jwt_issuer_signing_key' is missing or empty.");
     }
 
     [Test]
@@ -234,11 +122,8 @@ public class LocalEnvironmentTests
     {
         var values = CreateValidEnvironmentValues();
         values["jwt_issuer_signing_key"] = "too-short";
-
-        using var restore = new EnvironmentVariableRestore(values.Keys);
-        SetUpperCaseEnvironmentValues(values);
-
-        var env = new LocalEnvironment();
+        var config = CreateConfiguration(values);
+        var env = new LocalEnvironment(config);
 
         Action act = () => env.GetSigningKeyBytes();
 
@@ -269,9 +154,180 @@ public class LocalEnvironmentTests
         result.Should().Be(configuredValue);
     }
 
-    private static Dictionary<string, string> CreateValidEnvironmentValues()
+    [Test]
+    public void SupprocomSecrets_CreatesProductionActiveEnvFromTemplateAndReadsEqualsInValues()
     {
-        return new Dictionary<string, string>
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            WriteEnvironmentTemplate(
+                Path.Combine(directory, ".env.template"),
+                CreateValidEnvironmentValues(new()
+                {
+                    ["jwt_issuer_name"] = "MSAVA Production",
+                    ["admin_password"] = "value=with=equals"
+                }));
+
+            var config = CreateSupprocomConfiguration(directory, "Production");
+            var env = new LocalEnvironment(config);
+
+            env.Values.JwtIssuerName.Should().Be("MSAVA Production");
+            env.Values.AdminPassword.Should().Be("value=with=equals");
+            File.Exists(Path.Combine(directory, ".env")).Should().BeTrue();
+            File.Exists(Path.Combine(directory, ".env.development")).Should().BeFalse();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(directory);
+        }
+    }
+
+    [Test]
+    public void SupprocomSecrets_UsesDevelopmentTemplateAsReplacementForBaseEnv()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            WriteEnvironmentTemplate(
+                Path.Combine(directory, ".env.template"),
+                CreateValidEnvironmentValues(new() { ["jwt_issuer_name"] = "MSAVA Production" }));
+            WriteEnvironmentTemplate(
+                Path.Combine(directory, ".env.development.template"),
+                CreateValidEnvironmentValues(new() { ["jwt_issuer_name"] = "MSAVA Development" }));
+
+            var config = CreateSupprocomConfiguration(directory, "Development");
+            var env = new LocalEnvironment(config);
+
+            env.Values.JwtIssuerName.Should().Be("MSAVA Development");
+            File.Exists(Path.Combine(directory, ".env")).Should().BeFalse(
+                "MSAVA development configuration replaces the base file instead of overlaying it");
+            File.Exists(Path.Combine(directory, ".env.development")).Should().BeTrue();
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(directory);
+        }
+    }
+
+    [Test]
+    public void SupprocomSecrets_ProcessEnvironmentOverridesTemplateValues()
+    {
+        string directory = CreateTempDirectory();
+        const string key = "JWT_ISSUER_NAME";
+
+        using var restore = new EnvironmentVariableRestore([key]);
+        Environment.SetEnvironmentVariable(key, "MSAVA Process Environment");
+
+        try
+        {
+            WriteEnvironmentTemplate(
+                Path.Combine(directory, ".env.template"),
+                CreateValidEnvironmentValues(new() { ["jwt_issuer_name"] = "MSAVA File" }));
+
+            var config = CreateSupprocomConfiguration(directory, "Production");
+            var env = new LocalEnvironment(config);
+
+            env.Values.JwtIssuerName.Should().Be("MSAVA Process Environment");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(directory);
+        }
+    }
+
+    [Test]
+    public void SupprocomSecrets_ConfigurationLookupIsCaseInsensitive()
+    {
+        string directory = CreateTempDirectory();
+        Dictionary<string, string> values = CreateValidEnvironmentValues();
+        values.Remove("jwt_issuer_name");
+        values["JWT_ISSUER_NAME"] = "MSAVA Uppercase File Key";
+
+        try
+        {
+            WriteEnvironmentTemplate(Path.Combine(directory, ".env.template"), values);
+
+            var config = CreateSupprocomConfiguration(directory, "Production");
+            var env = new LocalEnvironment(config);
+
+            env.Values.JwtIssuerName.Should().Be("MSAVA Uppercase File Key");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(directory);
+        }
+    }
+
+    [Test]
+    public void SupprocomSecrets_IgnoresCommentsAndBlankLines()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            string templatePath = Path.Combine(directory, ".env.template");
+            File.WriteAllLines(
+                templatePath,
+                ["# leading comment", "", .. CreateValidEnvironmentValues().Select(value => $"{value.Key}={value.Value}"), "", "   # trailing comment"]);
+
+            var config = CreateSupprocomConfiguration(directory, "Production");
+            var env = new LocalEnvironment(config);
+
+            env.Values.JwtIssuerName.Should().Be("MSAVA Tests");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(directory);
+        }
+    }
+
+    [Test]
+    public void SupprocomSecrets_ReportsMalformedDotenvWithoutUsingMsavaParser()
+    {
+        string directory = CreateTempDirectory();
+
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, ".env"), "not an assignment");
+
+            Action act = () => _ = CreateSupprocomConfiguration(directory, "Production");
+
+            act.Should().Throw<SupprocomSecretsException>()
+                .Where(exception => exception.Code == "InvalidDotenvAssignment")
+                .WithMessage("Invalid assignment*Expected KEY=value.");
+        }
+        finally
+        {
+            DeleteDirectoryIfPresent(directory);
+        }
+    }
+
+    private static IConfigurationRoot CreateConfiguration(Dictionary<string, string> values)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values!)
+            .Build();
+    }
+
+    private static IConfigurationRoot CreateSupprocomConfiguration(string directory, string environmentName)
+    {
+        return new ConfigurationBuilder()
+            .AddSupprocomSecrets(options =>
+            {
+                options.EnvironmentName = environmentName;
+                options.File.Directory = directory;
+                options.File.DevelopmentName = ".env.development";
+                options.File.DevelopmentComposition = SecretFileComposition.Replace;
+            })
+            .Build();
+    }
+
+    private static Dictionary<string, string> CreateValidEnvironmentValues(
+        Dictionary<string, string>? overrides = null)
+    {
+        var values = new Dictionary<string, string>
         {
             ["jwt_issuer_signing_key"] = "test-signing-key-with-at-least-32-characters",
             ["jwt_issuer_name"] = "MSAVA Tests",
@@ -290,24 +346,33 @@ public class LocalEnvironmentTests
             ["serilog_file_size_limit_bytes"] = "2048",
             ["serilog_roll_on_file_size_limit"] = "true"
         };
+
+        if (overrides is null)
+            return values;
+
+        foreach (var (key, value) in overrides)
+            values[key] = value;
+
+        return values;
     }
 
-    private static void SetUpperCaseEnvironmentValues(Dictionary<string, string> values)
+    private static void WriteEnvironmentTemplate(string path, Dictionary<string, string> values)
     {
-        foreach (var (key, value) in values)
-        {
-            Environment.SetEnvironmentVariable(key, null);
-            Environment.SetEnvironmentVariable(key.ToUpperInvariant(), value);
-        }
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllLines(path, values.Select(value => $"{value.Key}={value.Value}"));
     }
 
-    private static void ClearEnvironmentValues(IEnumerable<string> keys)
+    private static string CreateTempDirectory()
     {
-        foreach (string key in keys)
-        {
-            Environment.SetEnvironmentVariable(key, null);
-            Environment.SetEnvironmentVariable(key.ToUpperInvariant(), null);
-        }
+        string path = Path.Combine(Path.GetTempPath(), "msava-env-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static void DeleteDirectoryIfPresent(string path)
+    {
+        if (Directory.Exists(path))
+            Directory.Delete(path, recursive: true);
     }
 
     private sealed class EnvironmentVariableRestore : IDisposable
@@ -316,11 +381,8 @@ public class LocalEnvironmentTests
 
         public EnvironmentVariableRestore(IEnumerable<string> keys)
         {
-            foreach (var key in keys)
-            {
+            foreach (string key in keys)
                 Track(key);
-                Track(key.ToUpperInvariant());
-            }
         }
 
         public void Dispose()
